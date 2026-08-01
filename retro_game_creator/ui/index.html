@@ -1,0 +1,429 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Game Base Ref Creator 98</title>
+  <link rel="stylesheet" href="vendor/98.css" />
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <div id="desktop">
+    <div class="desktop-icons" id="desktop-icons">
+      <button type="button" class="desktop-icon" data-open="form" title="Creation Studio">
+        <div class="icon-glyph">🕹️</div>
+        <span>Studio 98</span>
+      </button>
+      <button type="button" class="desktop-icon" data-open="library" title="Archives">
+        <div class="icon-glyph">📁</div>
+        <span>Archives (C:)</span>
+      </button>
+      <button type="button" class="desktop-icon" data-open="control" title="Control Panel">
+        <div class="icon-glyph">⚙️</div>
+        <span>Control Panel</span>
+      </button>
+    </div>
+
+    <div id="windows-layer">
+      <!-- Creation Studio -->
+      <div class="window app-window" id="win-form" data-window="form" style="left:24px;top:24px;width:440px;">
+        <div class="title-bar">
+          <div class="title-bar-text">Creation Studio — New Document</div>
+          <div class="title-bar-controls">
+            <button aria-label="Minimize" data-action="minimize"></button>
+            <button aria-label="Maximize" data-action="noop"></button>
+            <button aria-label="Close" data-action="close"></button>
+          </div>
+        </div>
+        <div class="window-body">
+          <fieldset class="mission-banner">
+            <legend>Studio Mission</legend>
+            <p>
+              Enter any vintage video game, target platform, and creation type.
+              By default the Studio calls <strong>Google Gemini</strong> (set
+              <code>GEMINI_API_KEY</code> or paste a key in Control Panel). You can
+              switch to a local Hugging Face model anytime.
+            </p>
+          </fieldset>
+
+          <form id="create-form">
+            <div class="field-row-stacked">
+              <label for="game-input">
+                <span>Game Name:</span>
+                <span class="label-hint">(e.g., Defender of the Crown, Doom, Monkey Island)</span>
+              </label>
+              <input id="game-input" type="text" value="Defender of the Crown" placeholder="e.g. Defender of the Crown" required />
+            </div>
+            <div class="field-row-stacked">
+              <label for="platform-input">
+                <span>Platform:</span>
+                <span class="label-hint">(e.g., Commodore Amiga, MS-DOS, SNES, C64)</span>
+              </label>
+              <div class="platform-row">
+                <input id="platform-input" type="text" value="Commodore Amiga" placeholder="e.g. Commodore Amiga" required />
+                <select id="platform-select" title="Platform presets" aria-label="Platform presets">
+                  <option value="">-- Presets --</option>
+                </select>
+              </div>
+            </div>
+            <div class="field-row-stacked">
+              <label for="creation-type">Desired Creation:</label>
+              <select id="creation-type">
+                <option value="Quick Reference Card">Quick Reference Card &amp; Keybindings</option>
+                <option value="Player Manual &amp; Strategy Guide">Player Manual &amp; Strategy Guide</option>
+                <option value="Review Aggregation &amp; Retrospective">Review Aggregation &amp; Retrospective</option>
+                <option value="Plot &amp; Lore Summary">Plot &amp; Lore Summary</option>
+                <option value="Secret Codes &amp; Cheatsheet">Secret Codes, Cheats &amp; Passwords</option>
+                <option value="Boss &amp; Enemy Compendium">Boss &amp; Enemy Compendium</option>
+                <option value="Soundtrack, Trivia &amp; Historical Companion">Soundtrack, Trivia &amp; Historical Companion</option>
+              </select>
+            </div>
+
+            <div class="form-actions">
+              <button type="button" id="btn-generate" class="default">⚡ CREATE DESIRED CREATION</button>
+              <button type="button" id="btn-preload">Check / Load Backend</button>
+            </div>
+          </form>
+
+          <div class="status-bar" id="studio-status-bar">
+            <p class="status-bar-field" id="gen-status-text">Ready</p>
+            <p class="status-bar-field" id="studio-model-field">Backend: Gemini</p>
+            <p class="status-bar-field" id="studio-theme-field">Theme Engine: Auto Box Art Palette</p>
+          </div>
+        </div>
+      </div>
+
+      <!-- Viewer -->
+      <div class="window app-window" id="win-viewer" data-window="viewer" style="left:480px;top:24px;width:720px;max-height:calc(100% - 80px);">
+        <div class="title-bar">
+          <div class="title-bar-text" id="viewer-title">Viewer</div>
+          <div class="title-bar-controls">
+            <button aria-label="Minimize" data-action="minimize"></button>
+            <button aria-label="Maximize" data-action="noop"></button>
+            <button aria-label="Close" data-action="close"></button>
+          </div>
+        </div>
+        <div class="window-body viewer-body">
+          <div class="viewer-tabs" role="tablist">
+            <button type="button" class="viewer-tab active" data-tab="doc" role="tab">The Document</button>
+            <button type="button" class="viewer-tab" data-tab="grounding" role="tab" id="tab-grounding">Sources (0)</button>
+            <button type="button" class="viewer-tab" data-tab="print" role="tab">Reference Layout</button>
+            <button type="button" class="viewer-tab" data-tab="ascii" role="tab">Plain ASCII</button>
+          </div>
+          <div class="viewer-toolbar">
+            <button type="button" id="btn-export-txt">Export TXT</button>
+            <button type="button" id="btn-export-json">Export JSON</button>
+            <button type="button" id="btn-export-png">Export PNG</button>
+            <button type="button" id="btn-export-pdf">Export PDF</button>
+            <button type="button" id="btn-copy-ascii">Copy ASCII</button>
+            <button type="button" id="btn-voice">Voice Reader</button>
+          </div>
+          <div class="viewer-theme-bar">
+            <label class="theme-label" for="theme-override">
+              Palette Theme
+              <select id="theme-override">
+                <option value="auto">Auto (from document)</option>
+                <optgroup label="Vintage Computers">
+                  <option value="apple2-green">Apple II Phosphor Green</option>
+                  <option value="apple2-amber">Apple II Phosphor Amber</option>
+                  <option value="sinclair-spectrum">Timex Sinclair / ZX Spectrum</option>
+                  <option value="c64">Commodore 64 Classic Blue</option>
+                  <option value="workbench">Commodore Amiga Workbench 1.3</option>
+                  <option value="atari2600">Atari 2600 Woodgrain &amp; Sunset</option>
+                  <option value="atari-st">Atari ST TOS Desktop</option>
+                  <option value="amstrad-cpc">Amstrad CPC Color Palette</option>
+                  <option value="bbc-micro">BBC Micro / Acorn Palette</option>
+                  <option value="vectrex">Vectrex Vector Monitor</option>
+                  <option value="dos-vga">MS-DOS Cyber VGA Green</option>
+                </optgroup>
+                <optgroup label="Classic Consoles &amp; Handhelds">
+                  <option value="gameboy">Game Boy Monochromatic Green</option>
+                  <option value="nes">NES Gray</option>
+                  <option value="snes-parchment">SNES 16-Bit Parchment</option>
+                  <option value="sega-genesis">Sega Genesis / Mega Drive Gold</option>
+                  <option value="dreamcast">Sega Dreamcast Orange</option>
+                  <option value="ps1-classic">PlayStation 1 Classic Gray</option>
+                  <option value="ps2-darkness">PlayStation 2 Deep Space</option>
+                  <option value="gamecube">Nintendo GameCube Indigo</option>
+                </optgroup>
+                <optgroup label="Modern Consoles &amp; Systems">
+                  <option value="xbox-original">Original Xbox Matrix Green</option>
+                  <option value="xbox-360">Xbox 360 Blade Emerald</option>
+                  <option value="xbox-series">Xbox Series X Dark Minimal</option>
+                  <option value="wii-menu">Nintendo Wii Menu Cyan</option>
+                  <option value="switch-neon">Nintendo Switch Joy-Con Neon</option>
+                  <option value="ps3-xmb">PlayStation 3 XMB Crimson</option>
+                  <option value="ps4-ps5">PlayStation 4 / PS5 Midnight Blue</option>
+                  <option value="win98">Windows 98 Standard</option>
+                </optgroup>
+              </select>
+            </label>
+            <span id="theme-boxart" class="theme-boxart"></span>
+          </div>
+          <div id="doc-canvas" class="doc-canvas">
+            <p class="muted">Open a document from Archives or generate a new one.</p>
+          </div>
+        </div>
+        <div class="status-bar">
+          <p class="status-bar-field" id="viewer-status">No document loaded</p>
+          <p class="status-bar-field" id="viewer-palette">Palette: —</p>
+        </div>
+      </div>
+
+      <!-- Archives -->
+      <div class="window app-window" id="win-library" data-window="library" hidden style="left:80px;top:80px;width:560px;">
+        <div class="title-bar">
+          <div class="title-bar-text">Retro Archives</div>
+          <div class="title-bar-controls">
+            <button aria-label="Minimize" data-action="minimize"></button>
+            <button aria-label="Maximize" data-action="noop"></button>
+            <button aria-label="Close" data-action="close"></button>
+          </div>
+        </div>
+        <div class="window-body">
+          <div class="field-row">
+            <label for="archive-search">Search</label>
+            <input id="archive-search" type="text" placeholder="Filter by game…" />
+          </div>
+          <div class="archive-actions">
+            <button type="button" id="btn-import">Import JSON…</button>
+            <button type="button" id="btn-export-all">Export All…</button>
+          </div>
+          <ul id="archive-list" class="archive-list"></ul>
+        </div>
+      </div>
+
+      <!-- Control Panel -->
+      <div class="window app-window" id="win-control" data-window="control" hidden style="left:120px;top:60px;width:540px;">
+        <div class="title-bar">
+          <div class="title-bar-text">Control Panel</div>
+          <div class="title-bar-controls">
+            <button aria-label="Minimize" data-action="minimize"></button>
+            <button aria-label="Maximize" data-action="noop"></button>
+            <button aria-label="Close" data-action="close"></button>
+          </div>
+        </div>
+        <div class="window-body">
+          <div class="control-tabs" role="tablist">
+            <button type="button" class="control-tab active" data-control-tab="ai" role="tab">AI Model</button>
+            <button type="button" class="control-tab" data-control-tab="defaults" role="tab">Game Defaults</button>
+            <button type="button" class="control-tab" data-control-tab="display" role="tab">Display &amp; Sound</button>
+          </div>
+
+          <div id="control-pane-ai" class="control-pane" data-control-pane="ai">
+            <fieldset>
+              <legend>AI Backend</legend>
+              <div class="field-row-stacked">
+                <label for="backend-provider">Provider</label>
+                <select id="backend-provider">
+                  <option value="gemini">Google Gemini (API — fast)</option>
+                  <option value="huggingface">Hugging Face local (slow / offline)</option>
+                </select>
+              </div>
+            </fieldset>
+
+            <fieldset id="gemini-settings">
+              <legend>Gemini</legend>
+              <p class="hint">
+                Get a key at
+                <a href="https://aistudio.google.com/apikey" target="_blank" rel="noreferrer">aistudio.google.com/apikey</a>.
+                You can also set <code>GEMINI_API_KEY</code> in the environment.
+              </p>
+              <div class="field-row-stacked">
+                <label for="gemini-model">Model</label>
+                <input id="gemini-model" type="text" spellcheck="false" value="gemini-2.5-flash" />
+              </div>
+              <div class="field-row-stacked">
+                <label for="gemini-suggested">Suggested Gemini models</label>
+                <select id="gemini-suggested"></select>
+              </div>
+              <div class="field-row-stacked">
+                <label for="gemini-key">API key</label>
+                <input id="gemini-key" type="password" placeholder="Paste key (leave blank to keep existing)" />
+              </div>
+              <p class="hint" id="gemini-key-status"></p>
+              <div class="field-row">
+                <input type="checkbox" id="gemini-search" checked />
+                <label for="gemini-search">Google Search grounding</label>
+              </div>
+              <div class="field-row">
+                <label for="gemini-temp">Temperature</label>
+                <input id="gemini-temp" type="number" min="0" max="2" step="0.05" value="0.4" />
+              </div>
+            </fieldset>
+
+            <fieldset id="hf-settings" hidden>
+              <legend>Hugging Face (local)</legend>
+              <p class="hint">
+                Requires <code>pip install -r requirements-local.txt</code>.
+                Default weights: <code>microsoft/Phi-3.5-mini-instruct</code>.
+              </p>
+              <div class="field-row-stacked">
+                <label for="model-repo">Model repo id</label>
+                <input id="model-repo" type="text" spellcheck="false" />
+              </div>
+              <div class="field-row-stacked">
+                <label for="model-suggested">Suggested models</label>
+                <select id="model-suggested"></select>
+              </div>
+              <div class="field-row">
+                <label for="model-device">Device</label>
+                <select id="model-device">
+                  <option value="auto">auto</option>
+                  <option value="cpu">cpu</option>
+                  <option value="cuda">cuda</option>
+                  <option value="mps">mps</option>
+                </select>
+                <label for="model-dtype">dtype</label>
+                <select id="model-dtype">
+                  <option value="auto">auto</option>
+                  <option value="float16">float16</option>
+                  <option value="bfloat16">bfloat16</option>
+                  <option value="float32">float32</option>
+                </select>
+              </div>
+              <div class="field-row">
+                <label for="model-tokens">Max tokens</label>
+                <input id="model-tokens" type="number" min="256" max="16384" step="256" />
+                <label for="model-temp">Temperature</label>
+                <input id="model-temp" type="number" min="0" max="2" step="0.05" />
+              </div>
+              <div class="field-row-stacked">
+                <label for="model-token">HF token (optional, gated models)</label>
+                <input id="model-token" type="password" placeholder="hf_… or leave blank" />
+              </div>
+            </fieldset>
+
+            <fieldset>
+              <legend>Shared</legend>
+              <div class="field-row-stacked">
+                <label for="system-extra">Extra system instructions</label>
+                <textarea id="system-extra" rows="3" placeholder="Optional custom prompt additions…"></textarea>
+              </div>
+              <p class="model-status" id="model-status-line">Backend: Gemini</p>
+              <div class="form-actions">
+                <button type="button" id="btn-save-model">Save AI Settings</button>
+              </div>
+            </fieldset>
+          </div>
+
+          <div id="control-pane-defaults" class="control-pane" data-control-pane="defaults" hidden>
+            <fieldset>
+              <legend>Creation Studio defaults</legend>
+              <p class="hint">
+                When set, Creation Studio opens with this preset’s game, platform, and creation type.
+              </p>
+              <div class="field-row-stacked">
+                <label for="default-preset">Default preset</label>
+                <select id="default-preset">
+                  <option value="">— none (keep studio fields as-is) —</option>
+                </select>
+              </div>
+            </fieldset>
+
+            <fieldset>
+              <legend>Viewer palette default</legend>
+              <p class="hint">
+                The Viewer always starts with this palette theme (including Auto from document).
+              </p>
+              <div class="field-row-stacked">
+                <label for="default-theme">Default palette theme</label>
+                <select id="default-theme">
+                  <option value="auto">Auto (from document)</option>
+                </select>
+              </div>
+            </fieldset>
+
+            <div class="form-actions">
+              <button type="button" id="btn-save-defaults">Save Game Defaults</button>
+            </div>
+          </div>
+
+          <div id="control-pane-display" class="control-pane" data-control-pane="display" hidden>
+            <fieldset>
+              <legend>Sound</legend>
+              <div class="field-row">
+                <input type="checkbox" id="opt-sound" />
+                <label for="opt-sound">Sound effects</label>
+              </div>
+            </fieldset>
+
+            <fieldset>
+              <legend>Display</legend>
+              <div class="field-row">
+                <input type="checkbox" id="opt-crt" />
+                <label for="opt-crt">CRT scanlines</label>
+              </div>
+              <div class="field-row-stacked">
+                <label for="ui-scale">UI scale (fonts, windows, desktop)</label>
+                <div class="field-row scale-row">
+                  <select id="ui-scale">
+                    <option value="0.75">75%</option>
+                    <option value="0.9">90%</option>
+                    <option value="1" selected>100% (default)</option>
+                    <option value="1.1">110%</option>
+                    <option value="1.25">125%</option>
+                    <option value="1.5">150%</option>
+                    <option value="1.75">175%</option>
+                    <option value="2">200%</option>
+                  </select>
+                  <span id="ui-scale-label" class="hint">100%</span>
+                </div>
+                <p class="hint">
+                  Scales the entire desktop UI. Useful on high-DPI displays or if text feels small.
+                </p>
+              </div>
+            </fieldset>
+
+            <div class="form-actions">
+              <button type="button" id="btn-save-settings">Save Display &amp; Sound</button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div id="crt-overlay" hidden></div>
+
+    <div id="taskbar">
+      <button type="button" id="start-btn">Start</button>
+      <div id="taskbar-windows"></div>
+      <div id="taskbar-clock"></div>
+    </div>
+
+    <div id="start-menu" hidden>
+      <div class="start-banner">Game Base Ref Creator 98</div>
+      <button type="button" data-open="form">🕹️ Creation Studio</button>
+      <button type="button" data-open="library">📁 Archives</button>
+      <button type="button" data-open="control">⚙️ Control Panel</button>
+      <button type="button" data-open="viewer">🎮 Viewer</button>
+    </div>
+
+    <div id="busy-overlay" hidden>
+      <div class="window" id="busy-window" role="dialog" aria-live="polite" aria-busy="true">
+        <div class="title-bar">
+          <div class="title-bar-text" id="busy-title">Please wait…</div>
+        </div>
+        <div class="window-body">
+          <p id="busy-message">Working…</p>
+          <div class="progress-indicator segmented" id="busy-indicator">
+            <span class="progress-indicator-bar" id="busy-bar"></span>
+          </div>
+          <div class="busy-meta">
+            <span id="busy-elapsed">0:00</span>
+            <span id="busy-percent-label"></span>
+          </div>
+          <p class="busy-hint">Gemini usually finishes in seconds. Local models can take minutes.</p>
+        </div>
+      </div>
+    </div>
+
+    <div id="error-toast" hidden></div>
+  </div>
+
+  <script src="vendor/html-to-image.js"></script>
+  <script src="vendor/jspdf.umd.min.js"></script>
+  <script src="catalog.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>

@@ -1,0 +1,29 @@
+# Third-party notices
+
+## 98.css
+
+This project vendors [98.css](https://github.com/jdan/98.css) v0.1.21
+by Jordan Scales (jdan), licensed under the MIT License.
+
+Copyright (c) Jordan Scales
+
+## html-to-image
+
+This project vendors [html-to-image](https://github.com/bubkoo/html-to-image) v1.11.13
+for PNG/PDF document capture, licensed under the MIT License.
+
+Copyright (c) 2017-2023 bubkoo
+
+## jsPDF
+
+This project vendors [jsPDF](https://github.com/parallax/jsPDF) v2.5.2
+for PDF export, licensed under the MIT License.
+
+Copyright (c) 2010-2021 James Hall, https://github.com/parallax/jsPDF
+
+## Microsoft Phi-3.5
+
+Default weights are downloaded at runtime from
+[microsoft/Phi-3.5-mini-instruct](https://huggingface.co/microsoft/Phi-3.5-mini-instruct)
+on Hugging Face. Model license and usage terms are those published by Microsoft
+on the model card; this application does not redistribute model weights.

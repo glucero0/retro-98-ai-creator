@@ -1,0 +1,38 @@
+# Example configuration — copy to config.yaml or edit via Control Panel.
+# Put GEMINI_API_KEY in .env (see .env.example).
+
+backend:
+  provider: gemini
+
+gemini:
+  model: gemini-2.5-flash
+  api_key: null
+  google_search: true
+  temperature: 0.4
+
+model:
+  repo_id: microsoft/Phi-3.5-mini-instruct
+  revision: main
+  device: auto
+  torch_dtype: auto
+  max_new_tokens: 2048
+  temperature: 0.4
+  top_p: 0.9
+  trust_remote_code: false
+  hf_token: null
+
+generation:
+  system_extra: ""
+
+ui:
+  sound_enabled: true
+  crt_enabled: false
+  ui_scale: 1.0
+  default_preset: null
+  default_theme: auto
+  window_width: 1280
+  window_height: 800
+  title: "Game Base Ref Creator 98"
+
+paths:
+  archives: archives.json

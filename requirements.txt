@@ -1,0 +1,7 @@
+# Core runtime (Gemini API — default)
+pywebview>=5.3
+PyYAML>=6.0
+google-genai>=1.0
+
+# Optional local Hugging Face backend:
+#   pip install -r requirements-local.txt

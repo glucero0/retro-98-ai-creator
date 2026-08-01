@@ -1,0 +1,48 @@
+# Byte-compiled / cache
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+*.egg-info/
+.eggs/
+dist/
+build/
+*.egg
+
+# Virtual environments
+.venv/
+venv/
+env/
+ENV/
+
+# IDE / OS
+.idea/
+.vscode/
+*.swp
+.DS_Store
+Thumbs.db
+
+# Local secrets & generated data (keep in project dir, do not commit)
+.env
+config.yaml
+archives.json
+.retro-game-creator/
+
+# Hugging Face / torch caches (never commit weights)
+.cache/
+*.bin
+*.safetensors
+*.gguf
+*.pt
+*.pth
+
+# Test / coverage
+.pytest_cache/
+.coverage
+htmlcov/
+.mypy_cache/
+.ruff_cache/
+
+# Logs
+*.log

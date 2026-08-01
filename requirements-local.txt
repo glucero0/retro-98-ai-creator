@@ -1,0 +1,9 @@
+# Optional local Hugging Face / Phi backend (slow on CPU, large download)
+-r requirements.txt
+torch>=2.2
+transformers>=4.43
+accelerate>=0.33
+sentencepiece>=0.2
+protobuf>=4.25
+huggingface-hub>=0.24
+tqdm>=4.66

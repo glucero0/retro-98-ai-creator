@@ -1,0 +1,54 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "retro-game-creator"
+version = "0.1.0"
+description = "Windows 98–themed retro game documentation studio (Gemini API + optional local HF models)"
+readme = "README.md"
+license = { text = "MIT" }
+requires-python = ">=3.10"
+authors = [{ name = "Game Base Ref Creator contributors" }]
+keywords = ["retro", "gaming", "documentation", "gemini", "huggingface", "win98", "98.css"]
+classifiers = [
+  "Development Status :: 3 - Alpha",
+  "Environment :: Win32 (MS Windows)",
+  "Environment :: MacOS X",
+  "Environment :: X11 Applications",
+  "Intended Audience :: End Users/Desktop",
+  "License :: OSI Approved :: MIT License",
+  "Programming Language :: Python :: 3",
+  "Topic :: Games/Entertainment",
+]
+dependencies = [
+  "pywebview>=5.3",
+  "PyYAML>=6.0",
+  "google-genai>=1.0",
+]
+
+[project.optional-dependencies]
+dev = ["pytest>=8.0", "ruff>=0.5"]
+local = [
+  "torch>=2.2",
+  "transformers>=4.43",
+  "accelerate>=0.33",
+  "sentencepiece>=0.2",
+  "protobuf>=4.25",
+  "huggingface-hub>=0.24",
+  "tqdm>=4.66",
+]
+
+[project.scripts]
+retro-game-creator = "retro_game_creator.app:main"
+
+[project.urls]
+Homepage = "https://github.com/glucero0/Game-Base-Ref-Creator"
+Issues = "https://github.com/glucero0/Game-Base-Ref-Creator/issues"
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["retro_game_creator*"]
+
+[tool.setuptools.package-data]
+retro_game_creator = ["ui/**/*", "data/**/*"]
