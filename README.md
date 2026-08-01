@@ -2,7 +2,7 @@
 
 Windows 98–themed desktop app that generates period-accurate retro game documentation (manuals, cheat sheets, lore summaries, and more).
 
-Same Win98 / **98.css** look as the original web studio — now a Python GUI. **Default backend: Google Gemini** (fast API). Optional **local Hugging Face** models remain available for offline / open-weight use.
+**Default backend: Google Gemini** (fast API). Optional **local Hugging Face** models remain available for offline / open-weight use.
 
 ## Features
 
