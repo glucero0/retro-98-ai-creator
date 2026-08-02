@@ -24,10 +24,10 @@ ENV/
 Thumbs.db
 
 # Local secrets & generated data (keep in project dir, do not commit)
-.env
 config.yaml
+config.local.yaml
 archives.json
-.retro-game-creator/
+.game-base-ref-creator/
 
 # Hugging Face / torch caches (never commit weights)
 .cache/

@@ -11,8 +11,92 @@ from typing import Any
 from .fallbacks import build_emergency_creation, get_dynamic_fallback_meta
 
 
+class GameNotFoundError(RuntimeError):
+    """Raised when the model (correctly) reports the game cannot be identified."""
+
+    def __init__(self, user_game: str = "") -> None:
+        self.user_game = (user_game or "").strip()
+        msg = "Game Not Found"
+        if self.user_game:
+            msg = f'Game Not Found — no confident match for "{self.user_game}".'
+        super().__init__(msg)
+
+
+class AmbiguousGameError(RuntimeError):
+    """Raised when multiple real titles match the user query."""
+
+    def __init__(
+        self,
+        user_game: str = "",
+        candidates: list[dict[str, str]] | None = None,
+    ) -> None:
+        self.user_game = (user_game or "").strip()
+        self.candidates = list(candidates or [])
+        n = len(self.candidates)
+        msg = f"Ambiguous game title — {n} match{'es' if n != 1 else ''}."
+        if self.user_game:
+            msg = f'Ambiguous — {n} matches for "{self.user_game}".'
+        super().__init__(msg)
+
+
 def _now_iso() -> str:
     return datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
+
+
+def is_game_not_found(parsed: dict[str, Any] | None) -> bool:
+    """True when model output indicates the title could not be identified."""
+    if not isinstance(parsed, dict):
+        return False
+    if parsed.get("notFound") is True:
+        return True
+    game = str(parsed.get("game") or "").strip().lower()
+    return game in {"game not found", "not found", "unknown game"}
+
+
+def normalize_candidates(raw: Any) -> list[dict[str, str]]:
+    """Normalize model candidate list into [{game, year, platform, note}, ...]."""
+    if not isinstance(raw, list):
+        return []
+    out: list[dict[str, str]] = []
+    seen: set[str] = set()
+    for item in raw:
+        if isinstance(item, str):
+            name = item.strip()
+            year = platform = note = ""
+        elif isinstance(item, dict):
+            name = str(item.get("game") or item.get("title") or item.get("name") or "").strip()
+            year = str(item.get("year") or item.get("releaseYear") or "").strip()
+            platform = str(item.get("platform") or "").strip()
+            note = str(item.get("note") or item.get("subtitle") or item.get("desc") or "").strip()
+        else:
+            continue
+        if not name:
+            continue
+        key = name.casefold()
+        if key in seen:
+            continue
+        seen.add(key)
+        out.append({"game": name, "year": year, "platform": platform, "note": note})
+    return out
+
+
+def is_ambiguous(parsed: dict[str, Any] | None) -> bool:
+    """True when model output indicates multiple matching titles."""
+    if not isinstance(parsed, dict):
+        return False
+    candidates = normalize_candidates(parsed.get("candidates"))
+    if len(candidates) < 2:
+        return False
+    # Prefer Search Results over Not Found when the model also listed candidates
+    if parsed.get("ambiguous") is True:
+        return True
+    if str(parsed.get("game") or "").strip().lower() in {
+        "ambiguous",
+        "multiple matches",
+        "search results",
+    }:
+        return True
+    return False
 
 
 def extract_json_object(text: str) -> dict[str, Any] | None:
@@ -94,9 +178,27 @@ def finalize_creation(
     *,
     model_info: dict[str, Any] | None = None,
     grounding_sources: list[dict[str, str]] | None = None,
+    exact_title: bool = False,
 ) -> dict[str, Any]:
-    """Parse model JSON (or emergency fallback) and attach ids / metadata."""
+    """Parse model JSON (or emergency fallback) and attach ids / metadata.
+
+    Raises GameNotFoundError when the model reports the title is unrecognized.
+    Raises AmbiguousGameError when multiple titles match the query.
+    """
+    # Known franchise base names → Search Results (do not trust model notFound here)
+    if not exact_title:
+        from .franchise_disambiguation import resolve_franchise_ambiguity
+
+        franchise_hits = resolve_franchise_ambiguity(game)
+        if franchise_hits and len(franchise_hits) >= 2:
+            raise AmbiguousGameError(game, franchise_hits)
+
     parsed = extract_json_object(text)
+    if is_ambiguous(parsed):
+        raise AmbiguousGameError(game, normalize_candidates(parsed.get("candidates")))
+    if is_game_not_found(parsed):
+        raise GameNotFoundError(game)
+
     if not parsed or not isinstance(parsed.get("game"), str) or not parsed.get("game", "").strip():
         parsed = build_emergency_creation(game, platform, creation_type)
     else:
@@ -108,6 +210,9 @@ def finalize_creation(
         parsed.setdefault("sections", [])
         parsed.setdefault("overview", "")
         parsed.setdefault("accuracyNote", "")
+        parsed.pop("notFound", None)
+        parsed.pop("ambiguous", None)
+        parsed.pop("candidates", None)
         if "meta" not in parsed or not isinstance(parsed["meta"], dict):
             parsed["meta"] = get_dynamic_fallback_meta(parsed["game"], platform)
         if "theme" not in parsed or not isinstance(parsed["theme"], dict):

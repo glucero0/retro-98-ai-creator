@@ -2,7 +2,7 @@
 
 from pathlib import Path
 
-from retro_game_creator.config import (
+from game_base_ref_creator.config import (
     DEFAULT_HF_MODEL,
     DEFAULTS,
     PROJECT_ROOT,
@@ -10,8 +10,8 @@ from retro_game_creator.config import (
     expand_path,
     load_config,
 )
-from retro_game_creator.creation_utils import extract_json_object
-from retro_game_creator.gemini_provider import normalize_gemini_model
+from game_base_ref_creator.creation_utils import extract_json_object
+from game_base_ref_creator.gemini_provider import normalize_gemini_model
 
 
 def test_default_backend_is_gemini():

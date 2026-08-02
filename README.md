@@ -2,12 +2,13 @@
 
 Windows 98–themed desktop app that generates period-accurate retro game documentation (manuals, cheat sheets, lore summaries, and more).
 
-**Default backend: Google Gemini** (fast API). Optional **local Hugging Face** models remain available for offline / open-weight use.
+**Default backend: Google Gemini** (fast API). **OpenRouter** and optional **local Hugging Face** models are also available.
 
 ## Features
 
 - Win98 desktop UI powered by [98.css](https://jdan.github.io/98.css/)
 - **Gemini** generation with optional Google Search grounding
+- **OpenRouter** generation (many cloud models via one API key)
 - Optional local HF models (Phi-3.5, Qwen, etc.)
 - Swap backends and models from Control Panel or `config.yaml`
 - Archives library with JSON import/export
@@ -32,21 +33,22 @@ source .venv/bin/activate
 
 pip install -r requirements.txt
 
-# Set your key (or paste it in Control Panel — saved to .env)
-# Windows PowerShell:
-$env:GEMINI_API_KEY="your_key_here"
-# Or create .env with: GEMINI_API_KEY=your_key_here
-
-python -m retro_game_creator
+python -m game_base_ref_creator
 ```
+
+Then open **Control Panel** → paste your Gemini API key → **Save Settings** (writes `config.yaml`).
 
 ## Gemini setup
 
 1. Create a key at https://aistudio.google.com/apikey  
-2. Either:
-   - put `GEMINI_API_KEY=...` in a project `.env` (gitignored), or  
-   - open **Control Panel** → paste the key → **Save Settings** (writes `.env`)
+2. Open **Control Panel** → paste the key → **Save Settings**  
 3. Default model is `gemini-2.5-flash` (changeable in Control Panel / `config.yaml`)
+
+## OpenRouter setup
+
+1. Create a key at https://openrouter.ai/keys  
+2. Control Panel → **Provider: OpenRouter** → paste the key → pick a model → **Save Settings**  
+3. Google Search grounding is Gemini-only; OpenRouter uses the model’s own knowledge (no Gemini grounding tool)
 
 ## Local Hugging Face backend (optional)
 
@@ -58,16 +60,21 @@ Then in Control Panel set **Provider** to **Hugging Face local**, pick a repo (d
 
 ## config.yaml (excerpt)
 
-Project settings live in `config.yaml` (Control Panel saves here). Secrets stay in `.env`. Archives are stored in `archives.json` (gitignored).
+All settings (including the Gemini API key) live in `config.yaml`. Control Panel saves here. The file is gitignored. Archives are stored in `archives.json` (also gitignored).
 
 ```yaml
 backend:
-  provider: gemini   # or huggingface
+  provider: gemini   # or openrouter | huggingface
 
 gemini:
   model: gemini-2.5-flash
-  api_key: null      # prefer GEMINI_API_KEY in .env
+  api_key: your_key_here
   google_search: true
+  temperature: 0.4
+
+openrouter:
+  model: google/gemini-2.5-flash
+  api_key: your_openrouter_key
   temperature: 0.4
 
 model:               # used when provider: huggingface

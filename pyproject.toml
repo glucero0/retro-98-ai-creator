@@ -3,7 +3,7 @@ requires = ["setuptools>=68", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "retro-game-creator"
+name = "game-base-ref-creator"
 version = "0.1.0"
 description = "Windows 98–themed retro game documentation studio (Gemini API + optional local HF models)"
 readme = "README.md"
@@ -40,7 +40,7 @@ local = [
 ]
 
 [project.scripts]
-retro-game-creator = "retro_game_creator.app:main"
+game-base-ref-creator = "game_base_ref_creator.app:main"
 
 [project.urls]
 Homepage = "https://github.com/glucero0/Game-Base-Ref-Creator"
@@ -48,7 +48,7 @@ Issues = "https://github.com/glucero0/Game-Base-Ref-Creator/issues"
 
 [tool.setuptools.packages.find]
 where = ["."]
-include = ["retro_game_creator*"]
+include = ["game_base_ref_creator*"]
 
 [tool.setuptools.package-data]
-retro_game_creator = ["ui/**/*", "data/**/*"]
+game_base_ref_creator = ["ui/**/*", "data/**/*"]

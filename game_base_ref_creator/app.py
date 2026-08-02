@@ -3,14 +3,13 @@
 from __future__ import annotations
 
 import logging
-import os
 import sys
 import threading
 from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 
 from .api import Api
-from .config import PROJECT_ROOT, load_config, save_config
+from .config import load_config, save_config
 
 logging.basicConfig(
     level=logging.INFO,
@@ -19,26 +18,6 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 UI_DIR = Path(__file__).resolve().parent / "ui"
-
-
-def _load_dotenv() -> None:
-    """Load .env / .env.local if present (GEMINI_API_KEY, etc.)."""
-    for name in (".env.local", ".env"):
-        path = PROJECT_ROOT / name
-        if not path.exists():
-            continue
-        try:
-            for line in path.read_text(encoding="utf-8").splitlines():
-                line = line.strip()
-                if not line or line.startswith("#") or "=" not in line:
-                    continue
-                key, _, val = line.partition("=")
-                key = key.strip()
-                val = val.strip().strip('"').strip("'")
-                if key and key not in os.environ:
-                    os.environ[key] = val
-        except OSError:
-            pass
 
 
 class _UIRequestHandler(SimpleHTTPRequestHandler):
@@ -58,7 +37,6 @@ def _start_ui_server() -> tuple[ThreadingHTTPServer, str]:
 
 
 def main() -> int:
-    _load_dotenv()
     try:
         import webview
     except ImportError:
@@ -78,6 +56,7 @@ def main() -> int:
     server, url = _start_ui_server()
     api = Api()
     width = max(900, int(ui_cfg.get("window_width") or 1280))
+
     height = max(600, int(ui_cfg.get("window_height") or 800))
     window = webview.create_window(
         title=ui_cfg.get("title") or "Game Base Ref Creator 98",

@@ -2,6 +2,39 @@
 
 from __future__ import annotations
 
+import json
+from pathlib import Path
+
+_CREATION_TYPES_PATH = Path(__file__).resolve().parent / "data" / "creation_types.json"
+
+
+def _load_creation_types() -> list[dict[str, str]]:
+    """Load Desired Creation catalog (id, label, description) from data file."""
+    with _CREATION_TYPES_PATH.open(encoding="utf-8") as fh:
+        raw = json.load(fh)
+    out: list[dict[str, str]] = []
+    for item in raw:
+        description = str(item.get("description") or item.get("desc") or "").strip()
+        entry = {
+            "id": str(item["id"]),
+            "label": str(item["label"]),
+            "description": description,
+            # Legacy UI key used by older catalog mirrors
+            "desc": description,
+        }
+        out.append(entry)
+    return out
+
+
+def creation_description_for(creation_type: str) -> str:
+    """Return the authoritative description for a Desired Creation id."""
+    needle = (creation_type or "").strip()
+    for entry in CREATION_TYPES:
+        if entry["id"] == needle:
+            return entry.get("description") or ""
+    return ""
+
+
 POPULAR_GAME_PRESETS: list[dict[str, str]] = [
     {
         "game": "Defender of the Crown",
@@ -115,43 +148,7 @@ PLATFORM_OPTIONS: list[str] = [
     "Arcade (Coin-Op Cabinet)",
 ]
 
-CREATION_TYPES: list[dict[str, str]] = [
-    {
-        "id": "Quick Reference Card",
-        "label": "Quick Reference Card & Keybindings",
-        "desc": "Keybindings, joystick controls, quick start steps, disk swap instructions, and sound setup.",
-    },
-    {
-        "id": "Player Manual & Strategy Guide",
-        "label": "Player Manual & Strategy Guide",
-        "desc": "Lore background, game mechanics, character stats, interface guide, and beginner walkthrough.",
-    },
-    {
-        "id": "Review Aggregation & Retrospective",
-        "label": "Review Aggregation & Retrospective",
-        "desc": "1980s/90s magazine reviews, ratings, pros/cons, and modern retrospective.",
-    },
-    {
-        "id": "Plot & Lore Summary",
-        "label": "Plot & Lore Summary",
-        "desc": "Opening cinematic lore, act-by-act narrative breakdown, key character profiles, and endings explained.",
-    },
-    {
-        "id": "Secret Codes & Cheatsheet",
-        "label": "Secret Codes, Cheats & Passwords",
-        "desc": "Invincibility codes, level passwords, developer easter eggs, debug keys, and POKE codes.",
-    },
-    {
-        "id": "Boss & Enemy Compendium",
-        "label": "Boss & Enemy Compendium",
-        "desc": "Enemy stats, attack patterns, weakness tables, boss fight strategies, and loot tables.",
-    },
-    {
-        "id": "Soundtrack, Trivia & Historical Companion",
-        "label": "Soundtrack, Trivia & Historical Companion",
-        "desc": "Sound chip hardware feats, composer info, box art design history, and regional port differences.",
-    },
-]
+CREATION_TYPES: list[dict[str, str]] = _load_creation_types()
 
 INITIAL_PRESET_CREATIONS: list[dict] = [
     {

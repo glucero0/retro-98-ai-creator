@@ -10,6 +10,8 @@
     open: { form: true, viewer: true, library: false, control: false },
     minimized: { form: false, viewer: false, library: false, control: false },
     generating: false,
+    modelLoading: false,
+    preloadJobId: null,
     soundEnabled: true,
     crtEnabled: false,
     uiScale: 1,
@@ -18,8 +20,10 @@
     speechPlaying: false,
     controlTab: "ai",
     presets: [],
-    defaultPreset: "",
+    creationTypes: [],
+    defaultPlatform: "",
     defaultTheme: "auto",
+    appTheme: "win98",
   };
 
   const FONT_STACKS = {
@@ -289,6 +293,337 @@
   THEMES.dos = THEMES["dos-vga"];
   THEMES.xbox = THEMES["xbox-original"];
 
+  function resolveAppThemeKey(key) {
+    const k = (key || "").trim();
+    if (k && THEMES[k]) return k;
+    return "win98";
+  }
+
+  function _hexToRgb(hex) {
+    const h = String(hex || "").replace("#", "").trim();
+    if (h.length === 3) {
+      return {
+        r: parseInt(h[0] + h[0], 16),
+        g: parseInt(h[1] + h[1], 16),
+        b: parseInt(h[2] + h[2], 16),
+      };
+    }
+    if (h.length >= 6) {
+      return {
+        r: parseInt(h.slice(0, 2), 16),
+        g: parseInt(h.slice(2, 4), 16),
+        b: parseInt(h.slice(4, 6), 16),
+      };
+    }
+    return { r: 0, g: 128, b: 128 };
+  }
+
+  function _mixHex(a, b, t) {
+    const A = _hexToRgb(a);
+    const B = _hexToRgb(b);
+    const m = (x, y) => Math.round(x + (y - x) * t);
+    const to = (n) => n.toString(16).padStart(2, "0");
+    return "#" + to(m(A.r, B.r)) + to(m(A.g, B.g)) + to(m(A.b, B.b));
+  }
+
+  function _luminance(hex) {
+    const { r, g, b } = _hexToRgb(hex);
+    return (0.299 * r + 0.587 * g + 0.114 * b) / 255;
+  }
+
+  /** Theme-reflective tiled SVG wallpaper (data URI). */
+  function buildAppWallpaper(key, t) {
+    const bg = t.bgColor || "#008080";
+    const accent = t.accentColor || "#000080";
+    const header = t.headerBg || accent;
+    const card = t.cardBg || "#c0c0c0";
+    const mid = _mixHex(bg, accent, 0.35);
+    const deep = _mixHex(bg, "#000000", 0.35);
+    let body = "";
+
+    switch (key) {
+      case "win98":
+      case "atari-st":
+        body =
+          `<defs><linearGradient id="g" x1="0" y1="0" x2="1" y2="1">` +
+          `<stop offset="0%" stop-color="${_mixHex(bg, "#ffffff", 0.18)}"/>` +
+          `<stop offset="55%" stop-color="${bg}"/>` +
+          `<stop offset="100%" stop-color="${deep}"/>` +
+          `</linearGradient></defs>` +
+          `<rect width="240" height="240" fill="url(#g)"/>` +
+          `<circle cx="200" cy="40" r="48" fill="${accent}" opacity="0.08"/>` +
+          `<circle cx="30" cy="200" r="60" fill="${header}" opacity="0.1"/>`;
+        break;
+      case "workbench":
+        body =
+          `<rect width="240" height="240" fill="${bg}"/>` +
+          `<path d="M0 0h24v24H0zm48 0h24v24H48zm48 0h24v24H96zm48 0h24v24H144zm48 0h24v24H192z` +
+          `M24 24h24v24H24zm48 0h24v24H72zm48 0h24v24H120zm48 0h24v24H168zm48 0h24v24H216z` +
+          `M0 48h24v24H0zm48 0h24v24H48zm48 0h24v24H96zm48 0h24v24H144zm48 0h24v24H192z` +
+          `M24 72h24v24H24zm48 0h24v24H72zm48 0h24v24H120zm48 0h24v24H168zm48 0h24v24H216z` +
+          `M0 96h24v24H0zm48 0h24v24H48zm48 0h24v24H96zm48 0h24v24H144zm48 0h24v24H192z` +
+          `M24 120h24v24H24zm48 0h24v24H72zm48 0h24v24H120zm48 0h24v24H168zm48 0h24v24H216z` +
+          `M0 144h24v24H0zm48 0h24v24H48zm48 0h24v24H96zm48 0h24v24H144zm48 0h24v24H192z` +
+          `M24 168h24v24H24zm48 0h24v24H72zm48 0h24v24H120zm48 0h24v24H168zm48 0h24v24H216z` +
+          `M0 192h24v24H0zm48 0h24v24H48zm48 0h24v24H96zm48 0h24v24H144zm48 0h24v24H192z` +
+          `M24 216h24v24H24zm48 0h24v24H72zm48 0h24v24H120zm48 0h24v24H168zm48 0h24v24H216z" ` +
+          `fill="${card}" opacity="0.12"/>` +
+          `<rect x="16" y="16" width="88" height="56" fill="none" stroke="${accent}" stroke-width="3" opacity="0.45"/>`;
+        break;
+      case "c64":
+      case "amstrad-cpc":
+        body =
+          `<rect width="240" height="240" fill="${bg}"/>` +
+          `<rect x="12" y="12" width="216" height="216" fill="none" stroke="${accent}" stroke-width="10" opacity="0.55"/>` +
+          `<rect x="28" y="28" width="184" height="184" fill="${card}" opacity="0.18"/>` +
+          `<text x="120" y="128" text-anchor="middle" fill="${accent}" font-family="monospace" font-size="18" opacity="0.35">READY.</text>`;
+        break;
+      case "apple2-green":
+      case "apple2-amber":
+      case "dos-vga":
+      case "vectrex":
+      case "xbox-original":
+        body =
+          `<rect width="240" height="240" fill="${bg}"/>` +
+          Array.from({ length: 30 }, (_, i) => {
+            const y = i * 8;
+            return `<line x1="0" y1="${y}" x2="240" y2="${y}" stroke="${accent}" stroke-width="1" opacity="0.18"/>`;
+          }).join("") +
+          `<rect x="20" y="40" width="200" height="140" fill="none" stroke="${accent}" stroke-width="2" opacity="0.35"/>` +
+          `<circle cx="120" cy="110" r="36" fill="none" stroke="${accent}" stroke-width="2" opacity="0.25"/>`;
+        break;
+      case "gameboy":
+        body =
+          `<rect width="240" height="240" fill="${bg}"/>` +
+          Array.from({ length: 12 }, (_, y) =>
+            Array.from({ length: 12 }, (_, x) => {
+              const on = (x + y) % 2 === 0;
+              return `<rect x="${x * 20}" y="${y * 20}" width="20" height="20" fill="${on ? accent : card}" opacity="${on ? 0.35 : 0.2}"/>`;
+            }).join("")
+          ).join("");
+        break;
+      case "atari2600":
+        body =
+          `<defs><linearGradient id="wood" x1="0" y1="0" x2="0" y2="1">` +
+          `<stop offset="0%" stop-color="${_mixHex(bg, "#5a3010", 0.4)}"/>` +
+          `<stop offset="100%" stop-color="${bg}"/>` +
+          `</linearGradient></defs>` +
+          `<rect width="240" height="240" fill="url(#wood)"/>` +
+          Array.from({ length: 16 }, (_, i) => {
+            const y = 20 + i * 14;
+            return `<path d="M0 ${y} Q60 ${y - 4} 120 ${y} T240 ${y}" fill="none" stroke="${accent}" stroke-width="2" opacity="0.22"/>`;
+          }).join("") +
+          `<rect x="0" y="0" width="240" height="36" fill="${header}" opacity="0.55"/>`;
+        break;
+      case "nes":
+        body =
+          `<rect width="240" height="240" fill="${bg}"/>` +
+          Array.from({ length: 8 }, (_, row) =>
+            Array.from({ length: 6 }, (_, col) => {
+              const x = col * 40 + (row % 2) * 20;
+              const y = row * 30;
+              return `<rect x="${x}" y="${y}" width="38" height="28" fill="${card}" stroke="${accent}" stroke-width="1" opacity="0.28"/>`;
+            }).join("")
+          ).join("");
+        break;
+      case "snes-parchment":
+        body =
+          `<rect width="240" height="240" fill="${bg}"/>` +
+          `<rect x="24" y="24" width="192" height="192" fill="${card}" opacity="0.85"/>` +
+          `<rect x="36" y="36" width="168" height="168" fill="none" stroke="${accent}" stroke-width="3" opacity="0.5"/>` +
+          `<path d="M50 70h140M50 100h140M50 130h110" stroke="${header}" stroke-width="2" opacity="0.25"/>`;
+        break;
+      case "sega-genesis":
+        body =
+          `<rect width="240" height="240" fill="${bg}"/>` +
+          Array.from({ length: 6 }, (_, i) => {
+            const x = 20 + i * 36;
+            return `<polygon points="${x},120 ${x + 18},40 ${x + 36},120 ${x + 18},200" fill="${accent}" opacity="0.18"/>`;
+          }).join("") +
+          `<rect x="0" y="108" width="240" height="24" fill="${header}" opacity="0.45"/>`;
+        break;
+      case "dreamcast":
+        body =
+          `<defs><radialGradient id="dc" cx="30%" cy="25%" r="75%">` +
+          `<stop offset="0%" stop-color="${_mixHex(accent, "#ffffff", 0.35)}"/>` +
+          `<stop offset="55%" stop-color="${accent}"/>` +
+          `<stop offset="100%" stop-color="${bg}"/>` +
+          `</radialGradient></defs>` +
+          `<rect width="240" height="240" fill="url(#dc)"/>` +
+          `<circle cx="180" cy="170" r="70" fill="${card}" opacity="0.2"/>`;
+        break;
+      case "ps1-classic":
+      case "ps2-darkness":
+      case "ps3-xmb":
+      case "ps4-ps5":
+        body =
+          `<defs><radialGradient id="ps" cx="50%" cy="40%" r="70%">` +
+          `<stop offset="0%" stop-color="${mid}"/>` +
+          `<stop offset="100%" stop-color="${bg}"/>` +
+          `</radialGradient></defs>` +
+          `<rect width="240" height="240" fill="url(#ps)"/>` +
+          `<circle cx="120" cy="100" r="70" fill="none" stroke="${accent}" stroke-width="8" opacity="0.2"/>` +
+          `<circle cx="120" cy="100" r="40" fill="none" stroke="${accent}" stroke-width="4" opacity="0.25"/>` +
+          `<path d="M0 200 Q120 140 240 200" fill="none" stroke="${header}" stroke-width="16" opacity="0.2"/>`;
+        break;
+      case "xbox-360":
+      case "wii-menu":
+        body =
+          `<defs><linearGradient id="lite" x1="0" y1="0" x2="0" y2="1">` +
+          `<stop offset="0%" stop-color="${_mixHex(bg, "#ffffff", 0.15)}"/>` +
+          `<stop offset="100%" stop-color="${bg}"/>` +
+          `</linearGradient></defs>` +
+          `<rect width="240" height="240" fill="url(#lite)"/>` +
+          `<circle cx="190" cy="50" r="55" fill="${accent}" opacity="0.12"/>` +
+          `<rect x="30" y="150" width="120" height="40" rx="8" fill="${accent}" opacity="0.15"/>`;
+        break;
+      case "xbox-series":
+      case "switch-neon":
+        body =
+          `<rect width="240" height="240" fill="${bg}"/>` +
+          `<rect x="0" y="0" width="28" height="240" fill="${accent}" opacity="0.55"/>` +
+          `<rect x="212" y="0" width="28" height="240" fill="${header}" opacity="0.55"/>` +
+          `<rect x="48" y="40" width="144" height="160" rx="10" fill="${card}" opacity="0.25"/>`;
+        break;
+      case "gamecube":
+        body =
+          `<rect width="240" height="240" fill="${bg}"/>` +
+          `<polygon points="120,20 210,70 210,170 120,220 30,170 30,70" fill="${card}" opacity="0.22"/>` +
+          `<polygon points="120,50 180,85 180,155 120,190 60,155 60,85" fill="none" stroke="${accent}" stroke-width="4" opacity="0.4"/>`;
+        break;
+      case "sinclair-spectrum":
+        body =
+          `<rect width="240" height="240" fill="${bg}"/>` +
+          ["#d00000", "#00d000", "#0000d0", "#d0d000", "#d000d0", "#00d0d0", "#000000", "#ffffff"]
+            .map((c, i) => `<rect x="${i * 30}" y="200" width="30" height="40" fill="${c}" opacity="0.85"/>`)
+            .join("") +
+          `<rect x="20" y="30" width="200" height="140" fill="${card}" opacity="0.9"/>`;
+        break;
+      case "bbc-micro":
+        body =
+          `<rect width="240" height="240" fill="${bg}"/>` +
+          `<rect x="16" y="16" width="208" height="160" fill="${card}" opacity="0.15"/>` +
+          Array.from({ length: 10 }, (_, i) =>
+            `<text x="28" y="${40 + i * 14}" fill="${accent}" font-family="monospace" font-size="11" opacity="0.4">> ${"*".repeat((i % 5) + 3)}</text>`
+          ).join("");
+        break;
+      default:
+        body =
+          `<defs><linearGradient id="d" x1="0" y1="0" x2="1" y2="1">` +
+          `<stop offset="0%" stop-color="${mid}"/>` +
+          `<stop offset="100%" stop-color="${deep}"/>` +
+          `</linearGradient></defs>` +
+          `<rect width="240" height="240" fill="url(#d)"/>` +
+          `<circle cx="60" cy="60" r="50" fill="${accent}" opacity="0.12"/>` +
+          `<circle cx="190" cy="180" r="70" fill="${header}" opacity="0.14"/>`;
+    }
+
+    const svgDoc =
+      `<svg xmlns="http://www.w3.org/2000/svg" width="240" height="240" viewBox="0 0 240 240">` +
+      body +
+      `</svg>`;
+    return 'url("data:image/svg+xml,' + encodeURIComponent(svgDoc) + '")';
+  }
+
+  function applyAppTheme(themeKey) {
+    const key = resolveAppThemeKey(themeKey);
+    const t = THEMES[key] || THEMES.win98;
+    state.appTheme = key;
+
+    const root = document.documentElement;
+    const mid = _mixHex(t.bgColor, "#ffffff", 0.12);
+    const deep = _mixHex(t.bgColor, "#000000", 0.28);
+    const wallpaper = buildAppWallpaper(key, t);
+    const lightDesktop = _luminance(t.bgColor) > 0.55;
+
+    // Window surface: prefer cardBg; nudge pure white toward classic silver for chrome feel
+    let windowBg = t.cardBg || "#c0c0c0";
+    if (_normHex(windowBg) === "ffffff") {
+      windowBg = _mixHex(windowBg, "#c0c0c0", 0.55);
+    }
+    const text = t.textColor || "#222222";
+    const title = t.headerBg || t.accentColor || "#000080";
+    const accent = t.accentColor || "#000080";
+    const titleMid = _mixHex(title, accent, 0.4);
+    const titleText = _luminance(title) > 0.55 ? "#111111" : "#ffffff";
+    const titleInactive = _mixHex(title, "#808080", 0.55);
+    const titleInactiveMid = _mixHex(titleInactive, "#ffffff", 0.18);
+    const titleTextInactive =
+      _luminance(titleInactive) > 0.55 ? "#333333" : "#d4d4d4";
+    const lightWin = _luminance(windowBg) > 0.45;
+    const buttonFace = lightWin
+      ? _mixHex(windowBg, "#dfdfdf", 0.25)
+      : _mixHex(windowBg, "#ffffff", 0.12);
+    const buttonText = _luminance(buttonFace) > 0.5 ? "#222222" : "#f0f0f0";
+    const inputBg = lightWin
+      ? _mixHex(windowBg, "#ffffff", 0.65)
+      : _mixHex(windowBg, "#000000", 0.25);
+    const inputText = _luminance(inputBg) > 0.5 ? "#111111" : text;
+    const muted = _mixHex(text, windowBg, 0.42);
+    const taskbar = lightWin
+      ? _mixHex(windowBg, "#b0b0b0", 0.2)
+      : _mixHex(windowBg, "#ffffff", 0.08);
+    const accentText = _luminance(accent) > 0.55 ? "#111111" : "#ffffff";
+    const highlight = lightWin
+      ? _mixHex("#ffffd0", accent, 0.12)
+      : _mixHex(windowBg, accent, 0.28);
+    const borderLight = lightWin ? "#ffffff" : _mixHex(windowBg, "#ffffff", 0.38);
+    const borderMid = lightWin ? "#dfdfdf" : _mixHex(windowBg, "#ffffff", 0.2);
+    const borderDark = lightWin ? "#808080" : _mixHex(windowBg, "#000000", 0.35);
+    const borderDarker = lightWin ? "#0a0a0a" : _mixHex(windowBg, "#000000", 0.7);
+
+    root.style.setProperty("--desktop-bg", t.bgColor);
+    root.style.setProperty("--desktop-bg-mid", mid);
+    root.style.setProperty("--desktop-bg-deep", deep);
+    root.style.setProperty("--desktop-wallpaper", wallpaper);
+    root.style.setProperty("--app-accent", accent);
+    root.style.setProperty("--app-header", title);
+    root.style.setProperty("--app-card", t.cardBg);
+    root.style.setProperty("--app-text", text);
+    root.style.setProperty("--icon-fg", lightDesktop ? "#111111" : "#ffffff");
+    root.style.setProperty(
+      "--icon-shadow",
+      lightDesktop ? "rgba(255,255,255,0.7)" : "#000000"
+    );
+    root.style.setProperty("--icon-glyph-bg", buttonFace);
+
+    root.style.setProperty("--ui-window", windowBg);
+    root.style.setProperty("--ui-text", text);
+    root.style.setProperty("--ui-muted", muted);
+    root.style.setProperty("--ui-title", title);
+    root.style.setProperty("--ui-title-mid", titleMid);
+    root.style.setProperty("--ui-title-text", titleText);
+    root.style.setProperty("--ui-title-inactive", titleInactive);
+    root.style.setProperty("--ui-title-inactive-mid", titleInactiveMid);
+    root.style.setProperty("--ui-title-text-inactive", titleTextInactive);
+    root.style.setProperty("--ui-accent", accent);
+    root.style.setProperty("--ui-accent-text", accentText);
+    root.style.setProperty("--ui-button", buttonFace);
+    root.style.setProperty("--ui-button-text", buttonText);
+    root.style.setProperty("--ui-input", inputBg);
+    root.style.setProperty("--ui-input-text", inputText);
+    root.style.setProperty("--ui-taskbar", taskbar);
+    root.style.setProperty("--ui-highlight", highlight);
+    root.style.setProperty("--ui-border-light", borderLight);
+    root.style.setProperty("--ui-border-mid", borderMid);
+    root.style.setProperty("--ui-border-dark", borderDark);
+    root.style.setProperty("--ui-border-darker", borderDarker);
+
+    const desktop = $("#desktop");
+    if (desktop) desktop.setAttribute("data-app-theme", key);
+    document.documentElement.setAttribute("data-app-theme", key);
+
+    if ($("#app-theme") && [...$("#app-theme").options].some((o) => o.value === key)) {
+      $("#app-theme").value = key;
+    }
+  }
+
+  function _normHex(hex) {
+    return String(hex || "")
+      .replace("#", "")
+      .trim()
+      .toLowerCase();
+  }
 
   let audioCtx = null;
   function beep(freq, dur, type) {
@@ -353,6 +688,240 @@
     startedAt: 0,
     title: "Please wait…",
   };
+
+  function showConfirm(title, message) {
+    return new Promise((resolve) => {
+      const overlay = $("#confirm-overlay");
+      const titleEl = $("#confirm-title");
+      const msgEl = $("#confirm-message");
+      const yesBtn = $("#confirm-yes");
+      const noBtn = $("#confirm-no");
+      if (!overlay || !yesBtn || !noBtn) {
+        resolve(window.confirm(message || title));
+        return;
+      }
+      if (titleEl) titleEl.textContent = title || "Confirm";
+      if (msgEl) msgEl.textContent = message || "";
+      overlay.hidden = false;
+
+      const finish = (value) => {
+        overlay.hidden = true;
+        yesBtn.removeEventListener("click", onYes);
+        noBtn.removeEventListener("click", onNo);
+        resolve(value);
+      };
+      const onYes = () => finish(true);
+      const onNo = () => finish(false);
+      yesBtn.addEventListener("click", onYes);
+      noBtn.addEventListener("click", onNo);
+      yesBtn.focus();
+    });
+  }
+
+  /**
+   * Search Results dialog for ambiguous game titles.
+   * Resolves to the selected candidate object, or null if cancelled.
+   */
+  function showSearchResults(query, candidates) {
+    return new Promise((resolve) => {
+      const overlay = $("#search-results-overlay");
+      const titleEl = $("#search-results-title");
+      const msgEl = $("#search-results-message");
+      const listEl = $("#search-results-list");
+      const cancelBtn = $("#search-results-cancel");
+      const items = Array.isArray(candidates) ? candidates : [];
+
+      if (!overlay || !listEl || !cancelBtn) {
+        resolve(null);
+        return;
+      }
+
+      if (titleEl) titleEl.textContent = "Search Results";
+      if (msgEl) {
+        const q = (query || "").trim();
+        msgEl.textContent = q
+          ? `Multiple games match "${q}". Select the title you meant:`
+          : "Multiple games match. Select the title you meant:";
+      }
+
+      const finish = (value) => {
+        overlay.hidden = true;
+        cancelBtn.removeEventListener("click", onCancel);
+        listEl.innerHTML = "";
+        resolve(value);
+      };
+      const onCancel = () => finish(null);
+
+      listEl.innerHTML = "";
+      items.forEach((c, idx) => {
+        const li = document.createElement("li");
+        li.setAttribute("role", "option");
+        const btn = document.createElement("button");
+        btn.type = "button";
+        const name = (c && c.game) || "";
+        const metaParts = [];
+        if (c && c.year) metaParts.push(String(c.year));
+        if (c && c.platform) metaParts.push(String(c.platform));
+        if (c && c.note) metaParts.push(String(c.note));
+        const titleSpan = document.createElement("span");
+        titleSpan.className = "sr-title";
+        titleSpan.textContent = name;
+        btn.appendChild(titleSpan);
+        if (metaParts.length) {
+          const metaSpan = document.createElement("span");
+          metaSpan.className = "sr-meta";
+          metaSpan.textContent = metaParts.join(" · ");
+          btn.appendChild(metaSpan);
+        }
+        btn.addEventListener("click", () => finish(c));
+        if (idx === 0) btn.dataset.first = "1";
+        li.appendChild(btn);
+        listEl.appendChild(li);
+      });
+
+      overlay.hidden = false;
+      cancelBtn.addEventListener("click", onCancel);
+      const firstBtn = listEl.querySelector("button[data-first]") || cancelBtn;
+      firstBtn.focus();
+    });
+  }
+
+  function setCreateBlocked(blocked) {
+    const btn = $("#btn-generate");
+    if (!btn) return;
+    if (blocked || state.generating || state.modelLoading) {
+      btn.disabled = true;
+    } else {
+      btn.disabled = false;
+    }
+  }
+
+  function finishModelDownload(ok, errMsg) {
+    if (!state.modelLoading && !busy.visible) {
+      // Already finished (guard against double completion from poll + bridge push)
+      return;
+    }
+    state.modelLoading = false;
+    state.preloadJobId = null;
+    endBusy("Ready");
+    setCreateBlocked(false);
+    const hint = $("#busy-hint");
+    if (hint) {
+      hint.textContent =
+        "Gemini usually finishes in seconds. Local models can take minutes.";
+    }
+    if (ok) {
+      showToast("Local model ready");
+      closeWindow("control");
+      beep(880, 0.08, "triangle");
+    } else {
+      showToast(errMsg || "Model download / load failed");
+      beep(200, 0.2, "sawtooth");
+    }
+  }
+
+  async function startLocalModelDownload() {
+    const a = api();
+    if (!a) {
+      showToast("Python bridge not ready.");
+      return;
+    }
+    if (state.modelLoading) {
+      showToast("A model download is already in progress…");
+      return;
+    }
+    state.modelLoading = true;
+    setCreateBlocked(true);
+    const hint = $("#busy-hint");
+    if (hint) {
+      hint.textContent =
+        "Downloading / loading the local model. Create is blocked until this finishes.";
+    }
+    beginBusy("Downloading model", "Starting Hugging Face download / load…", {
+      delayMs: 0,
+    });
+
+    let res;
+    try {
+      res = await a.preload_model();
+    } catch (err) {
+      finishModelDownload(false, String(err));
+      return;
+    }
+
+    if (!res || !res.ok) {
+      finishModelDownload(false, (res && res.error) || "Backend check failed");
+      return;
+    }
+
+    if (res.job_id) {
+      state.preloadJobId = res.job_id;
+      await pollJob(res.job_id, "preload");
+    } else {
+      finishModelDownload(true);
+    }
+  }
+
+  async function saveControlPanelSettings(opts) {
+    opts = opts || {};
+    const a = api();
+    if (!a) {
+      showToast("Python bridge not ready.");
+      return;
+    }
+    if (!ensureApiKeyBeforeSave()) return;
+
+    if (opts.applyDisplay) applyDisplaySettingsFromControls();
+    if (opts.applyDefaults) {
+      applyGameDefaults({ applyPlatform: true, applyTheme: true });
+    }
+
+    const provider =
+      ($("#backend-provider") && $("#backend-provider").value) || "gemini";
+    const offerDownload = provider === "huggingface" && !!opts.offerDownload;
+    const res = await a.save_settings(collectSettings(offerDownload));
+
+    if (res.config) {
+      state.config = res.config;
+      try {
+        const boot = await a.get_bootstrap();
+        state.config = boot.config || res.config;
+        fillControlPanel(boot);
+      } catch (_) {
+        fillControlPanel({
+          config: res.config,
+          suggestedModels: [],
+          suggestedGeminiModels: [],
+          suggestedOpenRouterModels: [],
+          modelStatus: res.modelStatus,
+        });
+        updateApiKeyIndicators();
+      }
+      if ($("#gemini-key")) $("#gemini-key").value = "";
+      if ($("#openrouter-key")) $("#openrouter-key").value = "";
+    }
+
+    // Always close Control Panel after a successful Save.
+    closeWindow("control");
+    showToast(res.message || "Saved");
+    beep(750, 0.05);
+
+    if (!offerDownload) return;
+
+    const go = await showConfirm(
+      "Download local model?",
+      "Settings were saved.\n\n" +
+        "Download and load the Hugging Face model now?\n\n" +
+        "Yes — start the download (Create stays blocked until it finishes).\n" +
+        "No — skip download for now."
+    );
+    if (!go) {
+      showToast("Saved — local model not downloaded yet.");
+      return;
+    }
+
+    await startLocalModelDownload();
+  }
 
   function formatElapsed(ms) {
     const s = Math.floor(ms / 1000);
@@ -462,13 +1031,26 @@
     setProgress(finalMessage || "Ready");
   }
 
-  function syncPlatformSelect() {
-    const input = $("#platform-input");
+  function setStudioPlatform(platform) {
     const sel = $("#platform-select");
-    if (!input || !sel) return;
-    const val = input.value;
-    const match = Array.from(sel.options).some((o) => o.value === val);
-    sel.value = match ? val : "";
+    if (!sel) return;
+    const val = (platform || "").trim();
+    if (!val) {
+      sel.value = "";
+      return;
+    }
+    if (![...sel.options].some((o) => o.value === val)) {
+      const opt = document.createElement("option");
+      opt.value = val;
+      opt.textContent = val;
+      sel.appendChild(opt);
+    }
+    sel.value = val;
+  }
+
+  function getStudioPlatform() {
+    const sel = $("#platform-select");
+    return sel ? sel.value.trim() : "";
   }
 
   // ── Window manager ─────────────────────────────────────────────────
@@ -497,6 +1079,37 @@
     }
     focusWindow(id);
     beep(660, 0.04);
+  }
+
+  async function cancelControlPanel() {
+    // Discard unsaved Control Panel edits by restoring last saved config.
+    const a = api();
+    if (a) {
+      try {
+        const boot = await a.get_bootstrap();
+        state.config = boot.config || state.config;
+        fillControlPanel(boot);
+      } catch (_) {
+        if (state.config) {
+          fillControlPanel({
+            config: state.config,
+            suggestedModels: [],
+            suggestedGeminiModels: [],
+            suggestedOpenRouterModels: [],
+          });
+        }
+      }
+    } else if (state.config) {
+      fillControlPanel({
+        config: state.config,
+        suggestedModels: [],
+        suggestedGeminiModels: [],
+        suggestedOpenRouterModels: [],
+      });
+    }
+    if ($("#gemini-key")) $("#gemini-key").value = "";
+    if ($("#openrouter-key")) $("#openrouter-key").value = "";
+    closeWindow("control");
   }
 
   function closeWindow(id) {
@@ -1164,14 +1777,39 @@
   function syncBackendPanels() {
     const provider = ($("#backend-provider") && $("#backend-provider").value) || "gemini";
     const gemini = $("#gemini-settings");
+    const openrouter = $("#openrouter-settings");
     const hf = $("#hf-settings");
     if (gemini) gemini.hidden = provider !== "gemini";
+    if (openrouter) openrouter.hidden = provider !== "openrouter";
     if (hf) hf.hidden = provider !== "huggingface";
   }
 
+  function fillModelSelect(sel, selected, suggestions) {
+    if (!sel) return;
+    const list = suggestions || [];
+    sel.innerHTML = "";
+    list.forEach((m) => {
+      const opt = document.createElement("option");
+      opt.value = m.repo_id;
+      opt.textContent = m.label + (m.notes ? " — " + m.notes : "");
+      sel.appendChild(opt);
+    });
+    if (selected && ![...sel.options].some((o) => o.value === selected)) {
+      const opt = document.createElement("option");
+      opt.value = selected;
+      opt.textContent = selected;
+      sel.appendChild(opt);
+    }
+    if (list.length || sel.options.length) {
+      sel.value = selected;
+    }
+  }
+
   function fillControlPanel(boot) {
+    if (boot && boot.config) state.config = boot.config;
     const model = (boot.config && boot.config.model) || {};
     const gemini = (boot.config && boot.config.gemini) || {};
+    const openrouter = (boot.config && boot.config.openrouter) || {};
     const backend = (boot.config && boot.config.backend) || {};
     const ui = (boot.config && boot.config.ui) || {};
     const gen = (boot.config && boot.config.generation) || {};
@@ -1180,35 +1818,35 @@
       $("#backend-provider").value = backend.provider || "gemini";
     }
 
-    if ($("#gemini-model")) {
-      $("#gemini-model").value = gemini.model || "gemini-2.5-flash";
-    }
     if ($("#gemini-temp")) {
       $("#gemini-temp").value = gemini.temperature ?? 0.4;
     }
     if ($("#gemini-search")) {
       $("#gemini-search").checked = gemini.google_search !== false;
     }
-    if ($("#gemini-key-status")) {
-      $("#gemini-key-status").textContent = gemini.api_key_set
-        ? "API key is set (env or saved). Leave the field blank to keep it."
-        : "No API key detected yet.";
-    }
 
-    const gSug = $("#gemini-suggested");
-    if (gSug) {
-      gSug.innerHTML = '<option value="">— pick a suggested Gemini model —</option>';
-      (boot.suggestedGeminiModels || []).forEach((m) => {
-        const opt = document.createElement("option");
-        opt.value = m.repo_id;
-        opt.textContent = m.label + (m.notes ? " — " + m.notes : "");
-        gSug.appendChild(opt);
-      });
-    }
+    fillModelSelect(
+      $("#gemini-model"),
+      gemini.model || "gemini-2.5-flash",
+      boot.suggestedGeminiModels || []
+    );
 
-    if ($("#model-repo")) {
-      $("#model-repo").value = model.repo_id || "microsoft/Phi-3.5-mini-instruct";
+    if ($("#openrouter-temp")) {
+      $("#openrouter-temp").value = openrouter.temperature ?? 0.4;
     }
+    fillModelSelect(
+      $("#openrouter-model"),
+      openrouter.model || "google/gemini-2.5-flash",
+      boot.suggestedOpenRouterModels || []
+    );
+
+    updateApiKeyIndicators();
+
+    fillModelSelect(
+      $("#model-repo"),
+      model.repo_id || "microsoft/Phi-3.5-mini-instruct",
+      boot.suggestedModels || []
+    );
     if ($("#model-device")) $("#model-device").value = model.device || "auto";
     if ($("#model-dtype")) $("#model-dtype").value = model.torch_dtype || "auto";
     if ($("#model-tokens")) $("#model-tokens").value = model.max_new_tokens || 2048;
@@ -1233,11 +1871,17 @@
       sel.value = scaleVal;
     }
 
-    fillDefaultPresetSelect(boot.presets || state.presets);
+    fillDefaultPlatformSelect(
+      (boot && boot.platforms) ||
+        (window.RGC_CATALOG && window.RGC_CATALOG.platforms) ||
+        []
+    );
     fillDefaultThemeSelect();
-    state.defaultPreset = ui.default_preset || "";
+    fillAppThemeSelect();
+    state.defaultPlatform = ui.default_platform || "";
     state.defaultTheme = ui.default_theme || "auto";
-    if ($("#default-preset")) $("#default-preset").value = state.defaultPreset || "";
+    state.appTheme = resolveAppThemeKey(ui.app_theme || "win98");
+    if ($("#default-platform")) $("#default-platform").value = state.defaultPlatform || "";
     if ($("#default-theme")) {
       const themeSel = $("#default-theme");
       if (![...themeSel.options].some((o) => o.value === state.defaultTheme)) {
@@ -1245,22 +1889,18 @@
       }
       themeSel.value = state.defaultTheme;
     }
-    // Sync theme/status only — don't overwrite studio fields mid-session
-    applyGameDefaults({ applyPresetFields: false, applyTheme: true });
-
-    const sug = $("#model-suggested");
-    if (sug) {
-      sug.innerHTML = '<option value="">— pick a suggested HF model —</option>';
-      (boot.suggestedModels || []).forEach((m) => {
-        const opt = document.createElement("option");
-        opt.value = m.repo_id;
-        opt.textContent = m.label + (m.notes ? " — " + m.notes : "");
-        sug.appendChild(opt);
-      });
+    if ($("#app-theme")) {
+      const appSel = $("#app-theme");
+      if (![...appSel.options].some((o) => o.value === state.appTheme)) {
+        state.appTheme = "win98";
+      }
+      appSel.value = state.appTheme;
     }
+    applyAppTheme(state.appTheme);
+    // Sync theme/status only — don't overwrite studio fields mid-session
+    applyGameDefaults({ applyPlatform: false, applyTheme: true });
 
     syncBackendPanels();
-    updateModelStatusLine(boot.modelStatus);
     updateStudioBackendLabel(boot);
   }
 
@@ -1277,6 +1917,12 @@
         ($("#model-repo") && $("#model-repo").value) ||
         "local HF";
       modelField.textContent = "Backend: Hugging Face · " + repo;
+    } else if (provider === "openrouter") {
+      const model =
+        (boot && boot.config && boot.config.openrouter && boot.config.openrouter.model) ||
+        ($("#openrouter-model") && $("#openrouter-model").value) ||
+        "google/gemini-2.5-flash";
+      modelField.textContent = "Backend: OpenRouter · " + model;
     } else {
       const model =
         (boot && boot.config && boot.config.gemini && boot.config.gemini.model) ||
@@ -1286,18 +1932,131 @@
     }
   }
 
-  function updateModelStatusLine(status) {
-    const s = status || {};
-    const provider = s.provider || (($("#backend-provider") && $("#backend-provider").value) || "gemini");
-    const line =
-      (provider === "gemini" ? "Gemini" : "HF") +
-      ": " +
-      (s.state || "idle") +
-      (s.loaded_repo ? " · " + s.loaded_repo : "") +
-      (s.device ? " @ " + s.device : "") +
-      (s.detail ? " — " + s.detail : "");
-    const el = $("#model-status-line");
-    if (el) el.textContent = line;
+  function savedBackendProvider() {
+    return (
+      (state.config &&
+        state.config.backend &&
+        state.config.backend.provider) ||
+      "gemini"
+    );
+  }
+
+  function providerLabel(provider) {
+    if (provider === "openrouter") return "OpenRouter";
+    if (provider === "huggingface") return "Hugging Face";
+    return "Gemini";
+  }
+
+  function updateApiKeyIndicators() {
+    const selected =
+      ($("#backend-provider") && $("#backend-provider").value) || "gemini";
+    const saved = savedBackendProvider();
+    const providerChanged = selected !== saved;
+
+    const geminiSet = !!(
+      state.config &&
+      state.config.gemini &&
+      state.config.gemini.api_key_set
+    );
+    const openrouterSet = !!(
+      state.config &&
+      state.config.openrouter &&
+      state.config.openrouter.api_key_set
+    );
+
+    const geminiBadge = $("#gemini-key-badge");
+    const geminiStatus = $("#gemini-key-status");
+    const geminiInput = $("#gemini-key");
+    if (geminiBadge) {
+      geminiBadge.textContent = geminiSet ? "Saved" : "Not set";
+      geminiBadge.classList.toggle("key-badge-set", geminiSet);
+      geminiBadge.classList.toggle("key-badge-missing", !geminiSet);
+    }
+    if (geminiInput) {
+      geminiInput.placeholder = geminiSet
+        ? "Leave blank to keep saved key"
+        : "Paste Gemini API key";
+    }
+    if (geminiStatus) {
+      if (selected === "gemini" && providerChanged) {
+        geminiStatus.textContent =
+          "Provider changed — paste a Gemini API key before saving.";
+      } else if (geminiSet) {
+        geminiStatus.textContent =
+          "A Gemini API key is already saved. Leave the field blank to keep it.";
+      } else {
+        geminiStatus.textContent = "No Gemini API key saved yet.";
+      }
+    }
+
+    const orBadge = $("#openrouter-key-badge");
+    const orStatus = $("#openrouter-key-status");
+    const orInput = $("#openrouter-key");
+    if (orBadge) {
+      orBadge.textContent = openrouterSet ? "Saved" : "Not set";
+      orBadge.classList.toggle("key-badge-set", openrouterSet);
+      orBadge.classList.toggle("key-badge-missing", !openrouterSet);
+    }
+    if (orInput) {
+      orInput.placeholder = openrouterSet
+        ? "Leave blank to keep saved key"
+        : "Paste OpenRouter API key";
+    }
+    if (orStatus) {
+      if (selected === "openrouter" && providerChanged) {
+        orStatus.textContent =
+          "Provider changed — paste an OpenRouter API key before saving.";
+      } else if (openrouterSet) {
+        orStatus.textContent =
+          "An OpenRouter API key is already saved. Leave the field blank to keep it.";
+      } else {
+        orStatus.textContent = "No OpenRouter API key saved yet.";
+      }
+    }
+  }
+
+  function providerApiKeyReady(provider) {
+    if (provider === "huggingface") return true;
+
+    const typed =
+      provider === "openrouter"
+        ? (($("#openrouter-key") && $("#openrouter-key").value.trim()) || "")
+        : (($("#gemini-key") && $("#gemini-key").value.trim()) || "");
+
+    // Switching providers always requires pasting a key for the new provider.
+    if (provider !== savedBackendProvider()) {
+      return !!typed;
+    }
+
+    if (typed) return true;
+    if (provider === "openrouter") {
+      return !!(
+        state.config &&
+        state.config.openrouter &&
+        state.config.openrouter.api_key_set
+      );
+    }
+    return !!(state.config && state.config.gemini && state.config.gemini.api_key_set);
+  }
+
+  function ensureApiKeyBeforeSave() {
+    const provider =
+      ($("#backend-provider") && $("#backend-provider").value) || "gemini";
+    if (providerApiKeyReady(provider)) return true;
+
+    const changed = provider !== savedBackendProvider();
+    const label = providerLabel(provider);
+    showToast(
+      changed
+        ? "Paste a " + label + " API key before switching providers."
+        : "Paste a " + label + " API key before saving."
+    );
+    if (provider === "openrouter" && $("#openrouter-key")) {
+      $("#openrouter-key").focus();
+    } else if (provider === "gemini" && $("#gemini-key")) {
+      $("#gemini-key").focus();
+    }
+    return false;
   }
 
   function collectSettings(reload) {
@@ -1310,6 +2069,15 @@
         api_key: ($("#gemini-key") && $("#gemini-key").value.trim()) || "",
         google_search: $("#gemini-search") ? $("#gemini-search").checked : true,
         temperature: $("#gemini-temp") ? Number($("#gemini-temp").value) || 0 : 0.4,
+      },
+      openrouter: {
+        model:
+          ($("#openrouter-model") && $("#openrouter-model").value.trim()) ||
+          "google/gemini-2.5-flash",
+        api_key: ($("#openrouter-key") && $("#openrouter-key").value.trim()) || "",
+        temperature: $("#openrouter-temp")
+          ? Number($("#openrouter-temp").value) || 0
+          : 0.4,
       },
       model: {
         repo_id: ($("#model-repo") && $("#model-repo").value.trim()) || "microsoft/Phi-3.5-mini-instruct",
@@ -1327,8 +2095,9 @@
         sound_enabled: $("#opt-sound").checked,
         crt_enabled: $("#opt-crt").checked,
         ui_scale: readUiScaleFromControl(),
-        default_preset: ($("#default-preset") && $("#default-preset").value) || null,
+        default_platform: ($("#default-platform") && $("#default-platform").value) || null,
         default_theme: ($("#default-theme") && $("#default-theme").value) || "auto",
+        app_theme: ($("#app-theme") && $("#app-theme").value) || state.appTheme || "win98",
       },
     };
   }
@@ -1352,11 +2121,10 @@
   function setControlTab(tab) {
     const allowed = { ai: true, display: true, defaults: true };
     state.controlTab = allowed[tab] ? tab : "ai";
-    document.querySelectorAll(".control-tab").forEach((btn) => {
-      btn.classList.toggle(
-        "active",
-        btn.getAttribute("data-control-tab") === state.controlTab
-      );
+    document.querySelectorAll('.control-tabs [role="tab"]').forEach((tabEl) => {
+      const selected =
+        tabEl.getAttribute("data-control-tab") === state.controlTab;
+      tabEl.setAttribute("aria-selected", selected ? "true" : "false");
     });
     document.querySelectorAll(".control-pane").forEach((pane) => {
       const id = pane.getAttribute("data-control-pane");
@@ -1369,21 +2137,52 @@
     state.crtEnabled = $("#opt-crt").checked;
     $("#crt-overlay").hidden = !state.crtEnabled;
     applyUiScale(readUiScaleFromControl());
+    const themeKey =
+      ($("#app-theme") && $("#app-theme").value) || state.appTheme || "win98";
+    applyAppTheme(themeKey);
   }
 
-  function fillDefaultPresetSelect(presets) {
-    const sel = $("#default-preset");
+  function fillAppThemeSelect() {
+    const src = $("#theme-override");
+    const dst = $("#app-theme");
+    if (!src || !dst) return;
+    const prev = dst.value || state.appTheme || "win98";
+    dst.innerHTML = "";
+    // Same list as Palette Theme, but no "Auto" — app shell needs a concrete theme
+    Array.from(src.children).forEach((node) => {
+      if (node.tagName === "OPTION" && node.value === "auto") return;
+      dst.appendChild(node.cloneNode(true));
+    });
+    const key = resolveAppThemeKey(prev);
+    if (![...dst.options].some((o) => o.value === key)) {
+      const opt = document.createElement("option");
+      opt.value = key;
+      opt.textContent = (THEMES[key] && THEMES[key].themeName) || key;
+      dst.appendChild(opt);
+    }
+    dst.value = key;
+  }
+
+  function fillDefaultPlatformSelect(platforms) {
+    const sel = $("#default-platform");
     if (!sel) return;
-    const list = presets || state.presets || [];
-    const prev = sel.value || state.defaultPreset || "";
-    sel.innerHTML = '<option value="">— none (keep studio fields as-is) —</option>';
+    const list = platforms || [];
+    const prev = sel.value || state.defaultPlatform || "";
+    sel.innerHTML = '<option value="">— none (keep studio platform as-is) —</option>';
     list.forEach((p) => {
       const opt = document.createElement("option");
-      opt.value = p.game;
-      opt.textContent = p.game + " (" + p.platform + ")";
+      opt.value = p;
+      opt.textContent = p;
       sel.appendChild(opt);
     });
     if (prev && [...sel.options].some((o) => o.value === prev)) {
+      sel.value = prev;
+    } else if (prev) {
+      // Keep a saved custom/legacy platform even if not in the catalog list
+      const opt = document.createElement("option");
+      opt.value = prev;
+      opt.textContent = prev;
+      sel.appendChild(opt);
       sel.value = prev;
     }
   }
@@ -1399,11 +2198,6 @@
     } else {
       dst.value = "auto";
     }
-  }
-
-  function findPresetByGame(game) {
-    if (!game) return null;
-    return (state.presets || []).find((p) => p.game === game) || null;
   }
 
   function themeDisplayName(themeKey) {
@@ -1425,17 +2219,18 @@
 
   function applyGameDefaults(opts) {
     opts = opts || {};
-    const presetKey =
-      ($("#default-preset") && $("#default-preset").value) || state.defaultPreset || "";
+    const platform =
+      ($("#default-platform") && $("#default-platform").value) ||
+      state.defaultPlatform ||
+      "";
     const themeKey =
       ($("#default-theme") && $("#default-theme").value) || state.defaultTheme || "auto";
 
-    state.defaultPreset = presetKey;
+    state.defaultPlatform = platform;
     state.defaultTheme = themeKey || "auto";
 
-    if (opts.applyPresetFields !== false && presetKey) {
-      const preset = findPresetByGame(presetKey);
-      if (preset) applyPreset(preset, true);
+    if (opts.applyPlatform !== false && platform) {
+      setStudioPlatform(platform);
     }
 
     if (opts.applyTheme !== false) {
@@ -1448,13 +2243,16 @@
     updateStudioThemeField();
   }
 
-  function applyPreset(p, silent) {
-    if (!p) return;
-    $("#game-input").value = p.game;
-    $("#platform-input").value = p.platform;
-    $("#creation-type").value = p.suggestedCreation;
-    syncPlatformSelect();
-    if (!silent) beep(800, 0.03);
+  function syncCreationDescription() {
+    const sel = $("#creation-type");
+    const field = $("#creation-type-desc");
+    if (!field) return;
+    const id = sel ? sel.value : "";
+    const types = state.creationTypes || [];
+    const match = types.find((t) => t.id === id);
+    field.value =
+      (match && (match.description || match.desc)) ||
+      "";
   }
 
   function fillCatalogs(boot) {
@@ -1471,17 +2269,19 @@
       (window.RGC_CATALOG && window.RGC_CATALOG.presets) ||
       [];
     state.presets = presets;
+    state.creationTypes = creationTypes;
 
     const platformSelect = $("#platform-select");
     if (platformSelect) {
-      platformSelect.innerHTML = '<option value="">-- Presets --</option>';
+      const previous = platformSelect.value || getStudioPlatform() || "Commodore Amiga";
+      platformSelect.innerHTML = '<option value="">— select platform —</option>';
       platforms.forEach((p) => {
         const opt = document.createElement("option");
         opt.value = p;
         opt.textContent = p;
         platformSelect.appendChild(opt);
       });
-      syncPlatformSelect();
+      setStudioPlatform(previous);
     }
 
     const sel = $("#creation-type");
@@ -1500,8 +2300,9 @@
         sel.value = creationTypes[0].id;
       }
     }
+    syncCreationDescription();
 
-    fillDefaultPresetSelect(presets);
+    fillDefaultPlatformSelect(platforms);
     fillDefaultThemeSelect();
   }
 
@@ -1521,10 +2322,6 @@
     }
     if (title) busy.title = title;
     updateBusy(message, percent);
-    updateModelStatusLine({
-      state: "busy",
-      detail: message,
-    });
   };
 
   function applyGenerationResult(creation) {
@@ -1534,7 +2331,7 @@
     state._lastHandledId = creation.id;
 
     state.generating = false;
-    $("#btn-generate").disabled = false;
+    setCreateBlocked(false);
     endBusy("Ready");
     state.creations = [creation].concat(
       state.creations.filter((c) => c.id !== creation.id)
@@ -1550,28 +2347,71 @@
 
   function applyGenerationError(err) {
     state.generating = false;
-    $("#btn-generate").disabled = false;
+    setCreateBlocked(false);
     endBusy("Ready");
     showToast(String(err));
     beep(200, 0.2, "sawtooth");
   }
 
+  let _choiceHandledKey = "";
+
+  async function applyNeedsChoice(payload) {
+    if (!payload || payload.kind !== "ambiguous") return;
+    const candidates = Array.isArray(payload.candidates) ? payload.candidates : [];
+    const key =
+      String(payload.query || "") +
+      "|" +
+      candidates.map((c) => (c && c.game) || "").join("|");
+    if (_choiceHandledKey === key) return;
+    _choiceHandledKey = key;
+
+    state.generating = false;
+    setCreateBlocked(false);
+    endBusy("Ready");
+
+    if (candidates.length < 2) {
+      showToast('Game Not Found — could not disambiguate "' + (payload.query || "") + '".');
+      beep(200, 0.2, "sawtooth");
+      return;
+    }
+
+    beep(660, 0.06, "triangle");
+    const picked = await showSearchResults(payload.query, candidates);
+    if (!picked || !picked.game) {
+      showToast("Cancelled — pick a game from Search Results when ready.");
+      return;
+    }
+
+    const gameInput = $("#game-input");
+    if (gameInput) gameInput.value = picked.game;
+    // Keep the user's Studio platform; only fill if empty
+    if (!getStudioPlatform() && picked.platform) {
+      setStudioPlatform(picked.platform);
+    }
+
+    await startGeneration({ exactTitle: true });
+  }
+
   /**
-   * Poll Python get_job until done/error. This is the reliable completion path
+   * Poll Python get_job until done/error/needs_choice. This is the reliable completion path
    * on Windows WebView2 where evaluate_js from worker threads often fails.
    */
   async function pollJob(jobId, kind) {
     const a = api();
     if (!a || !jobId) return;
     const started = Date.now();
-    const maxMs = kind === "preload" ? 60 * 60 * 1000 : 60 * 60 * 1000;
+    const maxMs = 60 * 60 * 1000;
 
     while (Date.now() - started < maxMs) {
       let job;
       try {
         job = await a.get_job(jobId);
       } catch (err) {
-        applyGenerationError("Lost connection to Python bridge: " + err);
+        if (kind === "preload") {
+          finishModelDownload(false, "Lost connection to Python bridge: " + err);
+        } else {
+          applyGenerationError("Lost connection to Python bridge: " + err);
+        }
         return;
       }
 
@@ -1588,17 +2428,14 @@
         if (kind === "generate") {
           applyGenerationResult(job.result);
         } else if (kind === "preload") {
-          endBusy("Ready");
-          if (job.result && job.result.modelStatus) {
-            updateModelStatusLine(job.result.modelStatus);
-          } else {
-            try {
-              updateModelStatusLine(await a.get_model_status());
-            } catch (_) {
-              /* ignore */
-            }
-          }
-          showToast("Model ready");
+          finishModelDownload(true);
+        }
+        return;
+      }
+
+      if (job.status === "needs_choice") {
+        if (kind === "generate") {
+          await applyNeedsChoice(job.result);
         }
         return;
       }
@@ -1607,8 +2444,7 @@
         if (kind === "generate") {
           applyGenerationError(job.error || "Generation failed");
         } else {
-          endBusy("Ready");
-          showToast(job.error || "Model load failed");
+          finishModelDownload(false, job.error || "Model load failed");
         }
         return;
       }
@@ -1619,13 +2455,88 @@
     if (kind === "generate") {
       applyGenerationError("Timed out waiting for generation.");
     } else {
-      endBusy("Ready");
-      showToast("Timed out waiting for model load.");
+      finishModelDownload(false, "Timed out waiting for model load.");
     }
   }
 
   function sleep(ms) {
     return new Promise((resolve) => setTimeout(resolve, ms));
+  }
+
+  let startGenerationLock = false;
+
+  async function startGeneration(opts) {
+    const exactTitle = !!(opts && opts.exactTitle);
+    if (startGenerationLock || state.generating) {
+      showToast("A generation is already running…");
+      return;
+    }
+    if (state.modelLoading) {
+      showToast("Wait for the local model download / load to finish.");
+      return;
+    }
+    // Fresh user-initiated search may need a new Search Results dialog
+    if (!exactTitle) _choiceHandledKey = "";
+    startGenerationLock = true;
+
+    try {
+      const a = api();
+      if (!a) {
+        showToast("Python bridge not ready. Launch via: python -m game_base_ref_creator");
+        return;
+      }
+
+      if (!$("#creation-type").options.length) {
+        fillCatalogs(null);
+      }
+
+      const game = $("#game-input").value.trim();
+      const platform = getStudioPlatform();
+      const creationType = $("#creation-type").value;
+      if (!game || !platform || !creationType) {
+        showToast("Game, platform, and creation type are required.");
+        return;
+      }
+
+      state.generating = true;
+      $("#btn-generate").disabled = true;
+      beginBusy("Generating document", "Calling Gemini / backend…", {
+        delayMs: 0,
+      });
+      beep(400, 0.05);
+
+      try {
+        await a.ping();
+      } catch (err) {
+        applyGenerationError("Python bridge not responding: " + err);
+        return;
+      }
+
+      let res;
+      try {
+        res = await a.create_creation(game, platform, creationType, exactTitle);
+      } catch (err) {
+        applyGenerationError(err);
+        return;
+      }
+
+      if (!res || !res.ok) {
+        applyGenerationError((res && res.error) || "Generation failed to start");
+        return;
+      }
+      if (!res.job_id) {
+        applyGenerationError("Backend did not return a job id.");
+        return;
+      }
+      updateBusy(
+        exactTitle
+          ? "Generating for selected title…"
+          : "Job started — loading model / generating…"
+      );
+      pollJob(res.job_id, "generate");
+    } finally {
+      startGenerationLock = false;
+    }
   }
 
   window.__onGenerationComplete = function (creation) {
@@ -1643,27 +2554,39 @@
     applyGenerationError(err);
   };
 
+  window.__onNeedsChoice = function (payload) {
+    if (!state.generating && !busy.visible) return;
+    applyNeedsChoice(payload);
+  };
+
   window.__onModelStatus = async function () {
     // Don't endBusy here if a generate job is still running
-    if (state.generating) {
+    if (state.generating) return;
+
+    // Preload finished (Python pushes this from the worker thread). Prefer
+    // resolving via job status so we don't leave the busy dialog open forever
+    // if pollJob was stalled.
+    if (state.modelLoading) {
       const a = api();
-      if (!a) return;
-      try {
-        updateModelStatusLine(await a.get_model_status());
-      } catch (_) {
-        /* ignore */
+      const jobId = state.preloadJobId;
+      if (a && jobId) {
+        try {
+          const job = await a.get_job(jobId);
+          if (job && job.status === "done") {
+            finishModelDownload(true);
+            return;
+          }
+          if (job && (job.status === "error" || job.status === "missing")) {
+            finishModelDownload(false, job.error || "Model load failed");
+            return;
+          }
+        } catch (_) {
+          /* pollJob may still be running */
+        }
       }
       return;
     }
     endBusy("Ready");
-    const a = api();
-    if (!a) return;
-    try {
-      const status = await a.get_model_status();
-      updateModelStatusLine(status);
-    } catch (_) {
-      /* ignore */
-    }
   };
 
   function wireEvents() {
@@ -1716,13 +2639,14 @@
     const platformSelect = $("#platform-select");
     if (platformSelect) {
       platformSelect.addEventListener("change", () => {
-        if (platformSelect.value) {
-          $("#platform-input").value = platformSelect.value;
-          beep(700, 0.03);
-        }
+        if (platformSelect.value) beep(700, 0.03);
       });
     }
-    $("#platform-input").addEventListener("input", syncPlatformSelect);
+
+    const creationTypeSel = $("#creation-type");
+    if (creationTypeSel) {
+      creationTypeSel.addEventListener("change", syncCreationDescription);
+    }
 
     $("#create-form").addEventListener("submit", async (e) => {
       e.preventDefault();
@@ -1736,97 +2660,6 @@
       await startGeneration();
     });
 
-    let startGenerationLock = false;
-    async function startGeneration() {
-      if (startGenerationLock || state.generating) {
-        showToast("A generation is already running…");
-        return;
-      }
-      startGenerationLock = true;
-
-      try {
-        const a = api();
-        if (!a) {
-          showToast("Python bridge not ready. Launch via: python -m retro_game_creator");
-          return;
-        }
-
-        if (!$("#creation-type").options.length) {
-          fillCatalogs(null);
-        }
-
-        const game = $("#game-input").value.trim();
-        const platform = $("#platform-input").value.trim();
-        const creationType = $("#creation-type").value;
-        if (!game || !platform || !creationType) {
-          showToast("Game, platform, and creation type are required.");
-          return;
-        }
-
-        state.generating = true;
-        $("#btn-generate").disabled = true;
-        beginBusy("Generating document", "Calling Gemini / backend…", {
-        delayMs: 0,
-      });
-        beep(400, 0.05);
-
-        try {
-          await a.ping();
-        } catch (err) {
-          applyGenerationError("Python bridge not responding: " + err);
-          return;
-        }
-
-        let res;
-        try {
-          res = await a.create_creation(game, platform, creationType);
-        } catch (err) {
-          applyGenerationError(err);
-          return;
-        }
-
-        if (!res || !res.ok) {
-          applyGenerationError((res && res.error) || "Generation failed to start");
-          return;
-        }
-        if (!res.job_id) {
-          applyGenerationError("Backend did not return a job id.");
-          return;
-        }
-        updateBusy("Job started — loading model / generating…");
-        pollJob(res.job_id, "generate");
-      } finally {
-        startGenerationLock = false;
-      }
-    }
-
-    $("#btn-preload").addEventListener("click", async () => {
-      const a = api();
-      if (!a) {
-        showToast("Python bridge not ready.");
-        return;
-      }
-      beginBusy("Checking backend", "…", { delayMs: 0 });
-      try {
-        const res = await a.preload_model();
-        if (!res || !res.ok) {
-          endBusy("Ready");
-          showToast((res && res.error) || "Backend check failed");
-          return;
-        }
-        if (res.job_id) {
-          pollJob(res.job_id, "preload");
-        } else {
-          endBusy("Ready");
-          if (res.modelStatus) updateModelStatusLine(res.modelStatus);
-          showToast(res.message || "Backend ready");
-        }
-      } catch (err) {
-        endBusy("Ready");
-        showToast(String(err));
-      }
-    });
-
     $("#archive-search").addEventListener("input", renderArchives);
 
     $("#btn-export-all").addEventListener("click", async () => {
@@ -1834,7 +2667,7 @@
       if (!a) return;
       const json = await a.export_creations_json();
       const date = new Date().toISOString().slice(0, 10);
-      await a.save_file_dialog("retro_game_archives_" + date + ".json", json);
+      await a.save_file_dialog("game_base_ref_archives_" + date + ".json", json);
       beep(900, 0.05);
     });
 
@@ -1905,96 +2738,130 @@
       if (state.active) renderDocument(state.active);
     });
 
-    $("#model-suggested").addEventListener("change", () => {
-      const v = $("#model-suggested").value;
-      if (v) $("#model-repo").value = v;
-    });
-
-    if ($("#gemini-suggested")) {
-      $("#gemini-suggested").addEventListener("change", () => {
-        const v = $("#gemini-suggested").value;
-        if (v) $("#gemini-model").value = v;
-      });
-    }
-
-    if ($("#backend-provider")) {
-      $("#backend-provider").addEventListener("change", () => {
-        syncBackendPanels();
+    if ($("#model-repo")) {
+      $("#model-repo").addEventListener("change", () => {
         updateStudioBackendLabel({
           config: {
-            backend: { provider: $("#backend-provider").value },
-            gemini: { model: $("#gemini-model").value },
+            backend: {
+              provider:
+                ($("#backend-provider") && $("#backend-provider").value) ||
+                "huggingface",
+            },
+            gemini: {
+              model: ($("#gemini-model") && $("#gemini-model").value) || "",
+            },
+            openrouter: {
+              model:
+                ($("#openrouter-model") && $("#openrouter-model").value) || "",
+            },
             model: { repo_id: $("#model-repo").value },
           },
         });
       });
     }
 
-    $("#btn-save-model").addEventListener("click", async () => {
-      const a = api();
-      if (!a) return;
-      const res = await a.save_settings(collectSettings(true));
-      applyDisplaySettingsFromControls();
-      if (res.config) {
-        // Reflect masked key status
-        fillControlPanel({
-          config: res.config,
-          suggestedModels: [],
-          suggestedGeminiModels: [],
-          modelStatus: res.modelStatus,
+    if ($("#gemini-model")) {
+      $("#gemini-model").addEventListener("change", () => {
+        updateStudioBackendLabel({
+          config: {
+            backend: {
+              provider:
+                ($("#backend-provider") && $("#backend-provider").value) ||
+                "gemini",
+            },
+            gemini: { model: $("#gemini-model").value },
+            openrouter: {
+              model:
+                ($("#openrouter-model") && $("#openrouter-model").value) || "",
+            },
+            model: {
+              repo_id: ($("#model-repo") && $("#model-repo").value) || "",
+            },
+          },
         });
-        // Re-fetch full bootstrap catalogs for suggested lists if emptied
-        try {
-          const boot = await a.get_bootstrap();
-          fillControlPanel(boot);
-        } catch (_) {
-          updateModelStatusLine(res.modelStatus);
-        }
-      } else {
-        updateModelStatusLine(res.modelStatus);
-      }
-      showToast(res.message || "Saved");
-      beep(750, 0.05);
+      });
+    }
+
+    if ($("#openrouter-model")) {
+      $("#openrouter-model").addEventListener("change", () => {
+        updateStudioBackendLabel({
+          config: {
+            backend: {
+              provider:
+                ($("#backend-provider") && $("#backend-provider").value) ||
+                "openrouter",
+            },
+            gemini: {
+              model: ($("#gemini-model") && $("#gemini-model").value) || "",
+            },
+            openrouter: { model: $("#openrouter-model").value },
+            model: {
+              repo_id: ($("#model-repo") && $("#model-repo").value) || "",
+            },
+          },
+        });
+      });
+    }
+
+    if ($("#backend-provider")) {
+      $("#backend-provider").addEventListener("change", () => {
+        syncBackendPanels();
+        updateApiKeyIndicators();
+        updateStudioBackendLabel({
+          config: {
+            backend: { provider: $("#backend-provider").value },
+            gemini: { model: ($("#gemini-model") && $("#gemini-model").value) || "" },
+            openrouter: {
+              model: ($("#openrouter-model") && $("#openrouter-model").value) || "",
+            },
+            model: { repo_id: ($("#model-repo") && $("#model-repo").value) || "" },
+          },
+        });
+      });
+    }
+
+    $("#btn-save-model").addEventListener("click", async () => {
+      await saveControlPanelSettings({ offerDownload: true });
     });
 
     $("#btn-save-settings").addEventListener("click", async () => {
-      const a = api();
-      if (!a) return;
-      applyDisplaySettingsFromControls();
-      const res = await a.save_settings(collectSettings(false));
-      showToast(res.message || "Display & sound saved");
-      beep(750, 0.05);
+      await saveControlPanelSettings({ applyDisplay: true });
     });
 
     if ($("#btn-save-defaults")) {
       $("#btn-save-defaults").addEventListener("click", async () => {
-        const a = api();
-        if (!a) return;
-        applyGameDefaults({ applyPresetFields: true, applyTheme: true });
-        const res = await a.save_settings(collectSettings(false));
-        showToast(res.message || "Game defaults saved");
-        beep(750, 0.05);
+        await saveControlPanelSettings({ applyDefaults: true });
       });
     }
 
-    if ($("#default-preset")) {
-      $("#default-preset").addEventListener("change", () => {
-        applyGameDefaults({ applyPresetFields: true, applyTheme: false });
+    document.querySelectorAll(".btn-cancel-control").forEach((btn) => {
+      btn.addEventListener("click", () => {
+        cancelControlPanel();
+      });
+    });
+
+    if ($("#default-platform")) {
+      $("#default-platform").addEventListener("change", () => {
+        applyGameDefaults({ applyPlatform: true, applyTheme: false });
         beep(700, 0.03);
       });
     }
     if ($("#default-theme")) {
       $("#default-theme").addEventListener("change", () => {
-        applyGameDefaults({ applyPresetFields: false, applyTheme: true });
+        applyGameDefaults({ applyPlatform: false, applyTheme: true });
         beep(700, 0.03);
       });
     }
 
-    document.querySelectorAll(".control-tab").forEach((btn) => {
-      btn.addEventListener("click", () => {
-        setControlTab(btn.getAttribute("data-control-tab"));
+    document.querySelectorAll('.control-tabs [role="tab"]').forEach((tabEl) => {
+      const activate = (e) => {
+        e.preventDefault();
+        setControlTab(tabEl.getAttribute("data-control-tab"));
         beep(650, 0.03);
-      });
+      };
+      const link = tabEl.querySelector("a");
+      if (link) link.addEventListener("click", activate);
+      else tabEl.addEventListener("click", activate);
     });
 
     $("#opt-sound").addEventListener("change", () => {
@@ -2010,11 +2877,19 @@
         beep(700, 0.03);
       });
     }
+    if ($("#app-theme")) {
+      $("#app-theme").addEventListener("change", () => {
+        applyAppTheme($("#app-theme").value);
+        beep(700, 0.03);
+      });
+    }
   }
 
   async function init() {
     // Catalogs first — never depend on Python for dropdowns
     fillCatalogs(null);
+    fillAppThemeSelect();
+    applyAppTheme(state.appTheme || "win98");
     wireEvents();
     enableWindowDragging();
     tickClock();
@@ -2025,7 +2900,7 @@
     const a = await waitForApi();
     if (!a) {
       showToast(
-        "Running without Python bridge — open via: python -m retro_game_creator"
+        "Running without Python bridge — open via: python -m game_base_ref_creator"
       );
       return;
     }
@@ -2036,7 +2911,7 @@
       state.creations = boot.creations || [];
       fillCatalogs(boot);
       fillControlPanel(boot);
-      applyGameDefaults({ applyPresetFields: true, applyTheme: true });
+      applyGameDefaults({ applyPlatform: true, applyTheme: true });
       renderArchives();
       if (state.creations.length) renderDocument(state.creations[0]);
       renderTaskbar();

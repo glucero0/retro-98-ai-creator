@@ -11,8 +11,13 @@ from typing import Any
 
 from . import __version__
 from .config import SUGGESTED_MODELS, load_config, save_config
-from .gemini_provider import SUGGESTED_GEMINI_MODELS, resolve_api_key
+from .gemini_provider import SUGGESTED_GEMINI_MODELS, resolve_api_key as resolve_gemini_key
+from .creation_utils import AmbiguousGameError
 from .generator import generate_creation, provider_status
+from .openrouter_provider import (
+    SUGGESTED_OPENROUTER_MODELS,
+    resolve_api_key as resolve_openrouter_key,
+)
 from .presets import CREATION_TYPES, PLATFORM_OPTIONS, POPULAR_GAME_PRESETS
 from .storage import ArchiveStore
 
@@ -61,6 +66,7 @@ class Api:
             "config": self._public_config(),
             "suggestedModels": SUGGESTED_MODELS,
             "suggestedGeminiModels": SUGGESTED_GEMINI_MODELS,
+            "suggestedOpenRouterModels": SUGGESTED_OPENROUTER_MODELS,
             "platforms": PLATFORM_OPTIONS,
             "creationTypes": CREATION_TYPES,
             "presets": POPULAR_GAME_PRESETS,
@@ -75,10 +81,21 @@ class Api:
             gemini["api_key_set"] = True
             gemini["api_key"] = ""
         else:
-            gemini["api_key_set"] = bool(resolve_api_key(cfg.get("gemini") or {}))
+            gemini["api_key_set"] = bool(resolve_gemini_key(cfg.get("gemini") or {}))
+
+        openrouter = dict(cfg.get("openrouter") or {})
+        if openrouter.get("api_key"):
+            openrouter["api_key_set"] = True
+            openrouter["api_key"] = ""
+        else:
+            openrouter["api_key_set"] = bool(
+                resolve_openrouter_key(cfg.get("openrouter") or {})
+            )
+
         return {
             "backend": dict(cfg.get("backend") or {}),
             "gemini": gemini,
+            "openrouter": openrouter,
             "model": dict(cfg.get("model", {})),
             "generation": dict(cfg.get("generation", {})),
             "ui": dict(cfg.get("ui", {})),
@@ -118,13 +135,21 @@ class Api:
         return result
 
     def preload_model(self) -> dict[str, Any]:
-        """Download / load local HF model (Gemini needs no download)."""
+        """Download / load local HF model (API backends need no download)."""
         provider = ((self.config.get("backend") or {}).get("provider") or "gemini").lower()
         if provider in ("gemini", "google", "google-gemini"):
             status = provider_status(self.config)
             return {
                 "ok": True,
                 "message": status.get("detail") or "Gemini uses the cloud API — no local download.",
+                "modelStatus": status,
+            }
+        if provider in ("openrouter", "open-router", "or"):
+            status = provider_status(self.config)
+            return {
+                "ok": True,
+                "message": status.get("detail")
+                or "OpenRouter uses the cloud API — no local download.",
                 "modelStatus": status,
             }
 
@@ -180,9 +205,21 @@ class Api:
 
     # ── Generation ────────────────────────────────────────────────────
 
-    def create_creation(self, game: str, platform: str, creation_type: str) -> dict[str, Any]:
+    def create_creation(
+        self,
+        game: str,
+        platform: str,
+        creation_type: str,
+        exact_title: bool = False,
+    ) -> dict[str, Any]:
         """Start generation in a background thread; UI must poll get_job(job_id)."""
-        logger.info("create_creation requested: %s / %s / %s", game, platform, creation_type)
+        logger.info(
+            "create_creation requested: %s / %s / %s (exact=%s)",
+            game,
+            platform,
+            creation_type,
+            exact_title,
+        )
 
         if not game or not platform or not creation_type:
             return {
@@ -213,6 +250,7 @@ class Api:
                     creation_type=creation_type.strip(),
                     config=self.config,
                     progress=lambda payload: self._on_job_progress(job_id, payload),
+                    exact_title=bool(exact_title),
                 )
                 saved = self.store.upsert(result)
                 self._set_job(
@@ -230,6 +268,35 @@ class Api:
                     self._push_best_effort(
                         f"window.__onGenerationComplete && window.__onGenerationComplete("
                         f"JSON.parse({json.dumps(json.dumps(saved))}))"
+                    )
+            except AmbiguousGameError as exc:
+                logger.info("Ambiguous game title: %s (%d candidates)", exc.user_game, len(exc.candidates))
+                choice = {
+                    "kind": "ambiguous",
+                    "query": exc.user_game,
+                    "candidates": exc.candidates,
+                    "platform": platform.strip(),
+                    "creationType": creation_type.strip(),
+                }
+                self._set_job(
+                    job_id,
+                    status="needs_choice",
+                    result=choice,
+                    progress={
+                        "message": "Multiple matches — choose a title",
+                        "percent": 100,
+                        "phase": "choice",
+                    },
+                )
+                try:
+                    payload = json.dumps(choice, ensure_ascii=False)
+                    self._push_best_effort(
+                        f"window.__onNeedsChoice && window.__onNeedsChoice({payload})"
+                    )
+                except (TypeError, ValueError):
+                    self._push_best_effort(
+                        f"window.__onNeedsChoice && window.__onNeedsChoice("
+                        f"JSON.parse({json.dumps(json.dumps(choice))}))"
                     )
             except Exception as exc:  # noqa: BLE001
                 logger.exception("Generation failed")

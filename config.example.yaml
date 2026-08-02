@@ -1,14 +1,20 @@
 # Example configuration — copy to config.yaml or edit via Control Panel.
-# Put GEMINI_API_KEY in .env (see .env.example).
+# config.yaml is gitignored (may contain your API keys).
 
 backend:
-  provider: gemini
+  provider: gemini   # gemini | openrouter | huggingface
 
 gemini:
   model: gemini-2.5-flash
   api_key: null
   google_search: true
   temperature: 0.4
+
+openrouter:
+  model: google/gemini-2.5-flash
+  api_key: null
+  temperature: 0.4
+  base_url: https://openrouter.ai/api/v1
 
 model:
   repo_id: microsoft/Phi-3.5-mini-instruct
@@ -28,8 +34,9 @@ ui:
   sound_enabled: true
   crt_enabled: false
   ui_scale: 1.0
-  default_preset: null
+  default_platform: null
   default_theme: auto
+  app_theme: win98
   window_width: 1280
   window_height: 800
   title: "Game Base Ref Creator 98"

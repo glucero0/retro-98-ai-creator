@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import logging
-import os
 import re
 from typing import Any, Callable
 
@@ -49,11 +48,7 @@ def normalize_gemini_model(model_name: str | None) -> str:
 
 def resolve_api_key(gemini_cfg: dict[str, Any] | None = None) -> str | None:
     gemini_cfg = gemini_cfg or {}
-    key = (
-        (gemini_cfg.get("api_key") or "").strip()
-        or os.environ.get("GEMINI_API_KEY", "").strip()
-        or os.environ.get("GOOGLE_API_KEY", "").strip()
-    )
+    key = (gemini_cfg.get("api_key") or "").strip()
     return key or None
 
 
@@ -114,7 +109,9 @@ def generate_with_gemini(
     *,
     gemini_cfg: dict[str, Any],
     system_extra: str = "",
+    creation_description: str = "",
     progress: ProgressCallback | None = None,
+    exact_title: bool = False,
 ) -> dict[str, Any]:
     """Call Gemini (optional Google Search grounding) and return a creation dict."""
 
@@ -133,8 +130,7 @@ def generate_with_gemini(
     api_key = resolve_api_key(gemini_cfg)
     if not api_key:
         raise RuntimeError(
-            "Gemini API key missing. Set GEMINI_API_KEY in the environment, "
-            "or paste your key in Control Panel → AI Model (Gemini)."
+            "Gemini API key missing. Paste your key in Control Panel → AI Model (Gemini)."
         )
 
     model_name = normalize_gemini_model(gemini_cfg.get("model"))
@@ -156,7 +152,9 @@ def generate_with_gemini(
         platform,
         creation_type,
         system_extra=system_extra,
+        creation_description=creation_description,
         with_web_search=bool(use_search),
+        exact_title=exact_title,
     )
 
     response_text = ""
@@ -222,4 +220,5 @@ def generate_with_gemini(
             "google_search": bool(search_used),
         },
         grounding_sources=grounding_sources or None,
+        exact_title=exact_title,
     )

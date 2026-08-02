@@ -12,23 +12,29 @@ PACKAGE_ROOT = Path(__file__).resolve().parent
 PROJECT_ROOT = PACKAGE_ROOT.parent
 DEFAULT_CONFIG_PATH = PROJECT_ROOT / "config.yaml"
 EXAMPLE_CONFIG_PATH = PROJECT_ROOT / "config.example.yaml"
-ENV_PATH = PROJECT_ROOT / ".env"
 
 DEFAULT_GEMINI_MODEL = "gemini-2.5-flash"
+DEFAULT_OPENROUTER_MODEL = "google/gemini-2.5-flash"
 DEFAULT_HF_MODEL = "microsoft/Phi-3.5-mini-instruct"
 # Back-compat alias used by older tests / docs
 DEFAULT_MODEL = DEFAULT_HF_MODEL
 
 DEFAULTS: dict[str, Any] = {
     "backend": {
-        # gemini (default, fast API) | huggingface (local, optional deps)
+        # gemini (default) | openrouter | huggingface (local, optional deps)
         "provider": "gemini",
     },
     "gemini": {
         "model": DEFAULT_GEMINI_MODEL,
-        "api_key": None,  # prefer GEMINI_API_KEY in .env
+        "api_key": None,  # set via Control Panel → saved in config.yaml
         "google_search": True,
         "temperature": 0.4,
+    },
+    "openrouter": {
+        "model": DEFAULT_OPENROUTER_MODEL,
+        "api_key": None,  # set via Control Panel → saved in config.yaml
+        "temperature": 0.4,
+        "base_url": "https://openrouter.ai/api/v1",
     },
     "model": {
         "repo_id": DEFAULT_HF_MODEL,
@@ -48,8 +54,9 @@ DEFAULTS: dict[str, Any] = {
         "sound_enabled": True,
         "crt_enabled": False,
         "ui_scale": 1.0,
-        "default_preset": None,
+        "default_platform": None,
         "default_theme": "auto",
+        "app_theme": "win98",
         "window_width": 1280,
         "window_height": 800,
         "title": "Game Base Ref Creator 98",
@@ -89,30 +96,6 @@ def _load_yaml(path: Path) -> dict[str, Any]:
     return data
 
 
-def _write_env_key(key: str, value: str) -> None:
-    """Set or replace a KEY=value line in the project .env (create if needed)."""
-    lines: list[str] = []
-    if ENV_PATH.exists():
-        lines = ENV_PATH.read_text(encoding="utf-8").splitlines()
-
-    prefix = f"{key}="
-    replaced = False
-    out: list[str] = []
-    for line in lines:
-        if line.strip().startswith(prefix) or line.strip().startswith(f"# {prefix}"):
-            if not replaced:
-                out.append(f"{key}={value}")
-                replaced = True
-            continue
-        out.append(line)
-    if not replaced:
-        if out and out[-1].strip():
-            out.append("")
-        out.append(f"{key}={value}")
-
-    ENV_PATH.write_text("\n".join(out) + "\n", encoding="utf-8")
-
-
 def load_config() -> dict[str, Any]:
     """Merge defaults ← config.yaml ← optional config.local.yaml."""
     cfg = copy.deepcopy(DEFAULTS)
@@ -126,6 +109,10 @@ def load_config() -> dict[str, Any]:
     if not paths.get("archives"):
         paths["archives"] = DEFAULTS["paths"]["archives"]
 
+    # Drop retired Game Defaults key (preset → platform)
+    ui = cfg.setdefault("ui", {})
+    ui.pop("default_preset", None)
+
     # Remap retired Gemini model IDs still saved in older configs
     from .gemini_provider import normalize_gemini_model
 
@@ -134,37 +121,51 @@ def load_config() -> dict[str, Any]:
     return cfg
 
 
+def _apply_api_key_update(updates: dict[str, Any], section: str) -> None:
+    """Blank api_key fields mean keep the existing key (do not clear)."""
+    section_updates = updates.get(section)
+    if not isinstance(section_updates, dict):
+        return
+    incoming = (section_updates.get("api_key") or "").strip()
+    section_updates = dict(section_updates)
+    if incoming:
+        section_updates["api_key"] = incoming
+    else:
+        section_updates.pop("api_key", None)
+    updates[section] = section_updates
+
+
+def _normalize_api_key(section: dict[str, Any]) -> dict[str, Any]:
+    out = dict(section or {})
+    raw_key = (out.get("api_key") or "").strip()
+    out["api_key"] = raw_key or None
+    return out
+
+
 def save_config(updates: dict[str, Any], existing: dict[str, Any] | None = None) -> dict[str, Any]:
-    """Persist Control Panel changes to the project config.yaml (keys go to .env)."""
+    """Persist Control Panel changes to the project config.yaml."""
     current = existing or load_config()
     updates = copy.deepcopy(updates)
 
-    gemini_updates = updates.get("gemini")
-    if isinstance(gemini_updates, dict):
-        incoming = (gemini_updates.get("api_key") or "").strip()
-        if incoming:
-            _write_env_key("GEMINI_API_KEY", incoming)
-            import os
-
-            os.environ["GEMINI_API_KEY"] = incoming
-        gemini_updates = dict(gemini_updates)
-        gemini_updates.pop("api_key", None)
-        updates["gemini"] = gemini_updates
+    _apply_api_key_update(updates, "gemini")
+    _apply_api_key_update(updates, "openrouter")
 
     merged = _deep_merge(current, updates)
     paths = merged.setdefault("paths", {})
     paths.pop("user_config", None)
+    ui_out = dict(merged.get("ui") or {})
+    ui_out.pop("default_preset", None)
 
-    # Never persist secrets in config.yaml — use .env
-    gemini_out = dict(merged.get("gemini") or {})
-    gemini_out["api_key"] = None
+    gemini_out = _normalize_api_key(merged.get("gemini") or {})
+    openrouter_out = _normalize_api_key(merged.get("openrouter") or {})
 
     to_write = {
         "backend": merged.get("backend", {}),
         "gemini": gemini_out,
+        "openrouter": openrouter_out,
         "model": merged["model"],
         "generation": merged["generation"],
-        "ui": merged["ui"],
+        "ui": ui_out,
         "paths": {
             "archives": paths.get("archives") or DEFAULTS["paths"]["archives"],
         },
@@ -173,6 +174,8 @@ def save_config(updates: dict[str, Any], existing: dict[str, Any] | None = None)
         yaml.safe_dump(to_write, fh, default_flow_style=False, sort_keys=False)
 
     merged["gemini"] = gemini_out
+    merged["openrouter"] = openrouter_out
+    merged["ui"] = ui_out
     return merged
 
 

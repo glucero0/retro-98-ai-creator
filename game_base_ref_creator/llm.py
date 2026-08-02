@@ -368,6 +368,8 @@ class ModelManager:
         creation_type: str,
         model_cfg: dict[str, Any],
         system_extra: str = "",
+        creation_description: str = "",
+        exact_title: bool = False,
     ) -> dict[str, Any]:
         self.ensure_loaded(model_cfg)
 
@@ -380,7 +382,14 @@ class ModelManager:
                 title="Generating document",
             )
 
-            prompt = build_prompt(game, platform, creation_type, system_extra=system_extra)
+            prompt = build_prompt(
+                game,
+                platform,
+                creation_type,
+                system_extra=system_extra,
+                creation_description=creation_description,
+                exact_title=exact_title,
+            )
             tokenizer = self._tokenizer
             model = self._model
 
@@ -465,6 +474,7 @@ class ModelManager:
                     "revision": self._loaded_revision,
                     "device": self._device,
                 },
+                exact_title=exact_title,
             )
 
             self._status = "ready"
