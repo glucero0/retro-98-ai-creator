@@ -1,0 +1,1337 @@
+[
+  {
+    "id": "apple-ii",
+    "label": "Apple II / IIe",
+    "manufacturer": "Apple",
+    "controllers": [
+      {
+        "id": "keyboard",
+        "label": "Keyboard",
+        "type": "keyboard",
+        "buttons": [
+          { "id": "arrow-up", "label": "↑", "kind": "direction" },
+          { "id": "arrow-down", "label": "↓", "kind": "direction" },
+          { "id": "arrow-left", "label": "←", "kind": "direction" },
+          { "id": "arrow-right", "label": "→", "kind": "direction" },
+          { "id": "space", "label": "Space", "kind": "key" },
+          { "id": "return", "label": "Return", "kind": "key" },
+          { "id": "escape", "label": "Esc", "kind": "key" },
+          { "id": "ctrl", "label": "Ctrl", "kind": "modifier" },
+          { "id": "open-apple", "label": "Open Apple", "kind": "modifier" },
+          { "id": "closed-apple", "label": "Closed Apple", "kind": "modifier" }
+        ]
+      },
+      {
+        "id": "joystick",
+        "label": "Analog Joystick",
+        "type": "joystick",
+        "buttons": [
+          { "id": "stick", "label": "Stick", "kind": "axis" },
+          { "id": "button-0", "label": "Button 0", "kind": "face" },
+          { "id": "button-1", "label": "Button 1", "kind": "face" }
+        ]
+      }
+    ]
+  },
+  {
+    "id": "zx-spectrum",
+    "label": "Timex Sinclair 1000 / ZX Spectrum",
+    "manufacturer": "Sinclair / Timex",
+    "controllers": [
+      {
+        "id": "keyboard",
+        "label": "Rubber / Membrane Keyboard",
+        "type": "keyboard",
+        "buttons": [
+          { "id": "q", "label": "Q", "kind": "key" },
+          { "id": "a", "label": "A", "kind": "key" },
+          { "id": "o", "label": "O", "kind": "key" },
+          { "id": "p", "label": "P", "kind": "key" },
+          { "id": "space", "label": "Space", "kind": "key" },
+          { "id": "enter", "label": "Enter", "kind": "key" },
+          { "id": "caps-shift", "label": "Caps Shift", "kind": "modifier" },
+          { "id": "symbol-shift", "label": "Symbol Shift", "kind": "modifier" }
+        ]
+      },
+      {
+        "id": "kempston",
+        "label": "Kempston Joystick",
+        "type": "joystick",
+        "buttons": [
+          { "id": "up", "label": "Up", "kind": "direction" },
+          { "id": "down", "label": "Down", "kind": "direction" },
+          { "id": "left", "label": "Left", "kind": "direction" },
+          { "id": "right", "label": "Right", "kind": "direction" },
+          { "id": "fire", "label": "Fire", "kind": "face" }
+        ]
+      }
+    ]
+  },
+  {
+    "id": "c64",
+    "label": "Commodore 64 (C64)",
+    "manufacturer": "Commodore",
+    "controllers": [
+      {
+        "id": "keyboard",
+        "label": "Keyboard",
+        "type": "keyboard",
+        "buttons": [
+          { "id": "run-stop", "label": "RUN/STOP", "kind": "key" },
+          { "id": "restore", "label": "RESTORE", "kind": "key" },
+          { "id": "space", "label": "Space", "kind": "key" },
+          { "id": "return", "label": "Return", "kind": "key" },
+          { "id": "ctrl", "label": "CTRL", "kind": "modifier" },
+          { "id": "commodore", "label": "C=", "kind": "modifier" }
+        ]
+      },
+      {
+        "id": "joystick",
+        "label": "Atari-style Joystick (Control Port)",
+        "type": "joystick",
+        "buttons": [
+          { "id": "up", "label": "Up", "kind": "direction" },
+          { "id": "down", "label": "Down", "kind": "direction" },
+          { "id": "left", "label": "Left", "kind": "direction" },
+          { "id": "right", "label": "Right", "kind": "direction" },
+          { "id": "fire", "label": "Fire", "kind": "face" }
+        ]
+      }
+    ]
+  },
+  {
+    "id": "amiga",
+    "label": "Commodore Amiga 500 / 1200",
+    "manufacturer": "Commodore",
+    "controllers": [
+      {
+        "id": "keyboard",
+        "label": "Keyboard",
+        "type": "keyboard",
+        "buttons": [
+          { "id": "arrow-up", "label": "↑", "kind": "direction" },
+          { "id": "arrow-down", "label": "↓", "kind": "direction" },
+          { "id": "arrow-left", "label": "←", "kind": "direction" },
+          { "id": "arrow-right", "label": "→", "kind": "direction" },
+          { "id": "space", "label": "Space", "kind": "key" },
+          { "id": "return", "label": "Return", "kind": "key" },
+          { "id": "esc", "label": "Esc", "kind": "key" },
+          { "id": "left-amiga", "label": "Left Amiga", "kind": "modifier" },
+          { "id": "right-amiga", "label": "Right Amiga", "kind": "modifier" },
+          { "id": "ctrl", "label": "Ctrl", "kind": "modifier" }
+        ]
+      },
+      {
+        "id": "joystick",
+        "label": "Digital Joystick",
+        "type": "joystick",
+        "buttons": [
+          { "id": "up", "label": "Up", "kind": "direction" },
+          { "id": "down", "label": "Down", "kind": "direction" },
+          { "id": "left", "label": "Left", "kind": "direction" },
+          { "id": "right", "label": "Right", "kind": "direction" },
+          { "id": "fire", "label": "Fire", "kind": "face" }
+        ]
+      },
+      {
+        "id": "mouse",
+        "label": "Mouse",
+        "type": "mouse",
+        "buttons": [
+          { "id": "left", "label": "Left Button", "kind": "face" },
+          { "id": "right", "label": "Right Button", "kind": "face" },
+          { "id": "move", "label": "Pointer", "kind": "axis" }
+        ]
+      }
+    ]
+  },
+  {
+    "id": "atari-2600-family",
+    "label": "Atari 2600 / 5200 / 7800",
+    "manufacturer": "Atari",
+    "controllers": [
+      {
+        "id": "joystick",
+        "label": "CX40 Joystick",
+        "type": "joystick",
+        "buttons": [
+          { "id": "up", "label": "Up", "kind": "direction" },
+          { "id": "down", "label": "Down", "kind": "direction" },
+          { "id": "left", "label": "Left", "kind": "direction" },
+          { "id": "right", "label": "Right", "kind": "direction" },
+          { "id": "fire", "label": "Fire", "kind": "face" }
+        ]
+      },
+      {
+        "id": "console",
+        "label": "Console Switches",
+        "type": "console",
+        "buttons": [
+          { "id": "reset", "label": "Game Reset", "kind": "system" },
+          { "id": "select", "label": "Game Select", "kind": "system" },
+          { "id": "color-bw", "label": "Color / B&W", "kind": "system" },
+          { "id": "difficulty-a", "label": "Difficulty A (Left)", "kind": "system" },
+          { "id": "difficulty-b", "label": "Difficulty B (Right)", "kind": "system" }
+        ]
+      }
+    ]
+  },
+  {
+    "id": "atari-st",
+    "label": "Atari ST / TT",
+    "manufacturer": "Atari",
+    "controllers": [
+      {
+        "id": "keyboard",
+        "label": "Keyboard",
+        "type": "keyboard",
+        "buttons": [
+          { "id": "arrow-up", "label": "↑", "kind": "direction" },
+          { "id": "arrow-down", "label": "↓", "kind": "direction" },
+          { "id": "arrow-left", "label": "←", "kind": "direction" },
+          { "id": "arrow-right", "label": "→", "kind": "direction" },
+          { "id": "space", "label": "Space", "kind": "key" },
+          { "id": "return", "label": "Return", "kind": "key" },
+          { "id": "esc", "label": "Esc", "kind": "key" },
+          { "id": "help", "label": "Help", "kind": "key" },
+          { "id": "undo", "label": "Undo", "kind": "key" }
+        ]
+      },
+      {
+        "id": "joystick",
+        "label": "Joystick",
+        "type": "joystick",
+        "buttons": [
+          { "id": "up", "label": "Up", "kind": "direction" },
+          { "id": "down", "label": "Down", "kind": "direction" },
+          { "id": "left", "label": "Left", "kind": "direction" },
+          { "id": "right", "label": "Right", "kind": "direction" },
+          { "id": "fire", "label": "Fire", "kind": "face" }
+        ]
+      },
+      {
+        "id": "mouse",
+        "label": "Mouse",
+        "type": "mouse",
+        "buttons": [
+          { "id": "left", "label": "Left Button", "kind": "face" },
+          { "id": "right", "label": "Right Button", "kind": "face" },
+          { "id": "move", "label": "Pointer", "kind": "axis" }
+        ]
+      }
+    ]
+  },
+  {
+    "id": "amstrad-cpc",
+    "label": "Amstrad CPC",
+    "manufacturer": "Amstrad",
+    "controllers": [
+      {
+        "id": "keyboard",
+        "label": "Keyboard",
+        "type": "keyboard",
+        "buttons": [
+          { "id": "cursor-up", "label": "↑", "kind": "direction" },
+          { "id": "cursor-down", "label": "↓", "kind": "direction" },
+          { "id": "cursor-left", "label": "←", "kind": "direction" },
+          { "id": "cursor-right", "label": "→", "kind": "direction" },
+          { "id": "space", "label": "Space", "kind": "key" },
+          { "id": "return", "label": "Return", "kind": "key" },
+          { "id": "esc", "label": "Esc", "kind": "key" },
+          { "id": "copy", "label": "Copy", "kind": "key" },
+          { "id": "ctrl", "label": "Control", "kind": "modifier" }
+        ]
+      },
+      {
+        "id": "joystick",
+        "label": "Joystick",
+        "type": "joystick",
+        "buttons": [
+          { "id": "up", "label": "Up", "kind": "direction" },
+          { "id": "down", "label": "Down", "kind": "direction" },
+          { "id": "left", "label": "Left", "kind": "direction" },
+          { "id": "right", "label": "Right", "kind": "direction" },
+          { "id": "fire-1", "label": "Fire 1", "kind": "face" },
+          { "id": "fire-2", "label": "Fire 2", "kind": "face" }
+        ]
+      }
+    ]
+  },
+  {
+    "id": "bbc-micro",
+    "label": "BBC Micro / Acorn Electron",
+    "manufacturer": "Acorn",
+    "controllers": [
+      {
+        "id": "keyboard",
+        "label": "Keyboard",
+        "type": "keyboard",
+        "buttons": [
+          { "id": "z", "label": "Z", "kind": "key" },
+          { "id": "x", "label": "X", "kind": "key" },
+          { "id": "colon", "label": ":", "kind": "key" },
+          { "id": "slash", "label": "/", "kind": "key" },
+          { "id": "return", "label": "Return", "kind": "key" },
+          { "id": "space", "label": "Space", "kind": "key" },
+          { "id": "escape", "label": "Escape", "kind": "key" },
+          { "id": "copy", "label": "COPY", "kind": "key" }
+        ]
+      },
+      {
+        "id": "analogue",
+        "label": "Analogue Joystick Port",
+        "type": "joystick",
+        "buttons": [
+          { "id": "stick", "label": "Stick", "kind": "axis" },
+          { "id": "fire-0", "label": "Fire 0", "kind": "face" },
+          { "id": "fire-1", "label": "Fire 1", "kind": "face" }
+        ]
+      }
+    ]
+  },
+  {
+    "id": "vectrex",
+    "label": "Vectrex",
+    "manufacturer": "General Consumer Electronics / Milton Bradley",
+    "controllers": [
+      {
+        "id": "vectrex-controller",
+        "label": "Vectrex Controller",
+        "type": "gamepad",
+        "buttons": [
+          { "id": "joystick", "label": "Analog Stick", "kind": "axis" },
+          { "id": "button-1", "label": "Button 1", "kind": "face" },
+          { "id": "button-2", "label": "Button 2", "kind": "face" },
+          { "id": "button-3", "label": "Button 3", "kind": "face" },
+          { "id": "button-4", "label": "Button 4", "kind": "face" }
+        ]
+      }
+    ]
+  },
+  {
+    "id": "ms-dos",
+    "label": "MS-DOS (VGA/EGA/CGA)",
+    "manufacturer": "IBM PC Compatible",
+    "controllers": [
+      {
+        "id": "keyboard",
+        "label": "PC Keyboard",
+        "type": "keyboard",
+        "buttons": [
+          { "id": "arrow-up", "label": "↑", "kind": "direction" },
+          { "id": "arrow-down", "label": "↓", "kind": "direction" },
+          { "id": "arrow-left", "label": "←", "kind": "direction" },
+          { "id": "arrow-right", "label": "→", "kind": "direction" },
+          { "id": "wasd", "label": "W A S D", "kind": "direction" },
+          { "id": "space", "label": "Space", "kind": "key" },
+          { "id": "enter", "label": "Enter", "kind": "key" },
+          { "id": "esc", "label": "Esc", "kind": "key" },
+          { "id": "ctrl", "label": "Ctrl", "kind": "modifier" },
+          { "id": "alt", "label": "Alt", "kind": "modifier" },
+          { "id": "shift", "label": "Shift", "kind": "modifier" },
+          { "id": "f1", "label": "F1", "kind": "key" },
+          { "id": "f2", "label": "F2", "kind": "key" },
+          { "id": "f3", "label": "F3", "kind": "key" },
+          { "id": "f4", "label": "F4", "kind": "key" },
+          { "id": "f5", "label": "F5", "kind": "key" },
+          { "id": "f6", "label": "F6", "kind": "key" },
+          { "id": "f7", "label": "F7", "kind": "key" },
+          { "id": "f8", "label": "F8", "kind": "key" },
+          { "id": "f9", "label": "F9", "kind": "key" },
+          { "id": "f10", "label": "F10", "kind": "key" },
+          { "id": "f11", "label": "F11", "kind": "key" },
+          { "id": "f12", "label": "F12", "kind": "key" },
+          { "id": "numpad", "label": "Numpad", "kind": "key" }
+        ]
+      },
+      {
+        "id": "mouse",
+        "label": "Mouse",
+        "type": "mouse",
+        "buttons": [
+          { "id": "left", "label": "Left Button", "kind": "face" },
+          { "id": "right", "label": "Right Button", "kind": "face" },
+          { "id": "middle", "label": "Middle Button", "kind": "face" },
+          { "id": "move", "label": "Pointer", "kind": "axis" }
+        ]
+      },
+      {
+        "id": "joystick",
+        "label": "Game Port Joystick",
+        "type": "joystick",
+        "buttons": [
+          { "id": "stick", "label": "Stick", "kind": "axis" },
+          { "id": "button-1", "label": "Button 1", "kind": "face" },
+          { "id": "button-2", "label": "Button 2", "kind": "face" },
+          { "id": "button-3", "label": "Button 3", "kind": "face" },
+          { "id": "button-4", "label": "Button 4", "kind": "face" }
+        ]
+      }
+    ]
+  },
+  {
+    "id": "fm-towns-pc98",
+    "label": "FM Towns / PC-98",
+    "manufacturer": "Fujitsu / NEC",
+    "controllers": [
+      {
+        "id": "keyboard",
+        "label": "Keyboard",
+        "type": "keyboard",
+        "buttons": [
+          { "id": "arrow-up", "label": "↑", "kind": "direction" },
+          { "id": "arrow-down", "label": "↓", "kind": "direction" },
+          { "id": "arrow-left", "label": "←", "kind": "direction" },
+          { "id": "arrow-right", "label": "→", "kind": "direction" },
+          { "id": "space", "label": "Space", "kind": "key" },
+          { "id": "enter", "label": "Enter / Return", "kind": "key" },
+          { "id": "esc", "label": "Esc", "kind": "key" },
+          { "id": "ctrl", "label": "Ctrl", "kind": "modifier" },
+          { "id": "shift", "label": "Shift", "kind": "modifier" },
+          { "id": "grph", "label": "GRPH", "kind": "modifier" }
+        ]
+      },
+      {
+        "id": "mouse",
+        "label": "Mouse",
+        "type": "mouse",
+        "buttons": [
+          { "id": "left", "label": "Left Button", "kind": "face" },
+          { "id": "right", "label": "Right Button", "kind": "face" },
+          { "id": "move", "label": "Pointer", "kind": "axis" }
+        ]
+      },
+      {
+        "id": "pad",
+        "label": "Game Pad",
+        "type": "gamepad",
+        "buttons": [
+          { "id": "dpad-up", "label": "D-Pad Up", "kind": "direction" },
+          { "id": "dpad-down", "label": "D-Pad Down", "kind": "direction" },
+          { "id": "dpad-left", "label": "D-Pad Left", "kind": "direction" },
+          { "id": "dpad-right", "label": "D-Pad Right", "kind": "direction" },
+          { "id": "a", "label": "A", "kind": "face" },
+          { "id": "b", "label": "B", "kind": "face" },
+          { "id": "x", "label": "X", "kind": "face" },
+          { "id": "y", "label": "Y", "kind": "face" },
+          { "id": "l", "label": "L", "kind": "shoulder" },
+          { "id": "r", "label": "R", "kind": "shoulder" },
+          { "id": "start", "label": "Start", "kind": "system" },
+          { "id": "select", "label": "Select", "kind": "system" }
+        ]
+      }
+    ]
+  },
+  {
+    "id": "nes",
+    "label": "Nintendo Entertainment System (NES)",
+    "manufacturer": "Nintendo",
+    "controllers": [
+      {
+        "id": "nes-controller",
+        "label": "NES Controller",
+        "type": "gamepad",
+        "buttons": [
+          { "id": "dpad-up", "label": "D-Pad Up", "kind": "direction" },
+          { "id": "dpad-down", "label": "D-Pad Down", "kind": "direction" },
+          { "id": "dpad-left", "label": "D-Pad Left", "kind": "direction" },
+          { "id": "dpad-right", "label": "D-Pad Right", "kind": "direction" },
+          { "id": "a", "label": "A", "kind": "face" },
+          { "id": "b", "label": "B", "kind": "face" },
+          { "id": "start", "label": "Start", "kind": "system" },
+          { "id": "select", "label": "Select", "kind": "system" }
+        ]
+      }
+    ]
+  },
+  {
+    "id": "snes",
+    "label": "Super Nintendo (SNES)",
+    "manufacturer": "Nintendo",
+    "controllers": [
+      {
+        "id": "snes-controller",
+        "label": "SNES Controller",
+        "type": "gamepad",
+        "buttons": [
+          { "id": "dpad-up", "label": "D-Pad Up", "kind": "direction" },
+          { "id": "dpad-down", "label": "D-Pad Down", "kind": "direction" },
+          { "id": "dpad-left", "label": "D-Pad Left", "kind": "direction" },
+          { "id": "dpad-right", "label": "D-Pad Right", "kind": "direction" },
+          { "id": "a", "label": "A", "kind": "face" },
+          { "id": "b", "label": "B", "kind": "face" },
+          { "id": "x", "label": "X", "kind": "face" },
+          { "id": "y", "label": "Y", "kind": "face" },
+          { "id": "l", "label": "L", "kind": "shoulder" },
+          { "id": "r", "label": "R", "kind": "shoulder" },
+          { "id": "start", "label": "Start", "kind": "system" },
+          { "id": "select", "label": "Select", "kind": "system" }
+        ]
+      }
+    ]
+  },
+  {
+    "id": "n64",
+    "label": "Nintendo 64 (N64)",
+    "manufacturer": "Nintendo",
+    "controllers": [
+      {
+        "id": "n64-controller",
+        "label": "N64 Controller",
+        "type": "gamepad",
+        "buttons": [
+          { "id": "stick", "label": "Control Stick", "kind": "axis" },
+          { "id": "dpad-up", "label": "D-Pad Up", "kind": "direction" },
+          { "id": "dpad-down", "label": "D-Pad Down", "kind": "direction" },
+          { "id": "dpad-left", "label": "D-Pad Left", "kind": "direction" },
+          { "id": "dpad-right", "label": "D-Pad Right", "kind": "direction" },
+          { "id": "a", "label": "A", "kind": "face" },
+          { "id": "b", "label": "B", "kind": "face" },
+          { "id": "c-up", "label": "C-Up", "kind": "face" },
+          { "id": "c-down", "label": "C-Down", "kind": "face" },
+          { "id": "c-left", "label": "C-Left", "kind": "face" },
+          { "id": "c-right", "label": "C-Right", "kind": "face" },
+          { "id": "l", "label": "L", "kind": "shoulder" },
+          { "id": "r", "label": "R", "kind": "shoulder" },
+          { "id": "z", "label": "Z", "kind": "trigger" },
+          { "id": "start", "label": "Start", "kind": "system" }
+        ]
+      }
+    ]
+  },
+  {
+    "id": "game-boy",
+    "label": "Game Boy / Game Boy Color / Game Boy Advance",
+    "manufacturer": "Nintendo",
+    "controllers": [
+      {
+        "id": "game-boy",
+        "label": "Game Boy / GBC Controls",
+        "type": "handheld",
+        "buttons": [
+          { "id": "dpad-up", "label": "D-Pad Up", "kind": "direction" },
+          { "id": "dpad-down", "label": "D-Pad Down", "kind": "direction" },
+          { "id": "dpad-left", "label": "D-Pad Left", "kind": "direction" },
+          { "id": "dpad-right", "label": "D-Pad Right", "kind": "direction" },
+          { "id": "a", "label": "A", "kind": "face" },
+          { "id": "b", "label": "B", "kind": "face" },
+          { "id": "start", "label": "Start", "kind": "system" },
+          { "id": "select", "label": "Select", "kind": "system" }
+        ]
+      },
+      {
+        "id": "gba",
+        "label": "Game Boy Advance Controls",
+        "type": "handheld",
+        "buttons": [
+          { "id": "dpad-up", "label": "D-Pad Up", "kind": "direction" },
+          { "id": "dpad-down", "label": "D-Pad Down", "kind": "direction" },
+          { "id": "dpad-left", "label": "D-Pad Left", "kind": "direction" },
+          { "id": "dpad-right", "label": "D-Pad Right", "kind": "direction" },
+          { "id": "a", "label": "A", "kind": "face" },
+          { "id": "b", "label": "B", "kind": "face" },
+          { "id": "l", "label": "L", "kind": "shoulder" },
+          { "id": "r", "label": "R", "kind": "shoulder" },
+          { "id": "start", "label": "Start", "kind": "system" },
+          { "id": "select", "label": "Select", "kind": "system" }
+        ]
+      }
+    ]
+  },
+  {
+    "id": "genesis",
+    "label": "Sega Genesis / Mega Drive",
+    "manufacturer": "Sega",
+    "controllers": [
+      {
+        "id": "genesis-3-button",
+        "label": "3-Button Controller",
+        "type": "gamepad",
+        "buttons": [
+          { "id": "dpad-up", "label": "D-Pad Up", "kind": "direction" },
+          { "id": "dpad-down", "label": "D-Pad Down", "kind": "direction" },
+          { "id": "dpad-left", "label": "D-Pad Left", "kind": "direction" },
+          { "id": "dpad-right", "label": "D-Pad Right", "kind": "direction" },
+          { "id": "a", "label": "A", "kind": "face" },
+          { "id": "b", "label": "B", "kind": "face" },
+          { "id": "c", "label": "C", "kind": "face" },
+          { "id": "start", "label": "Start", "kind": "system" }
+        ]
+      },
+      {
+        "id": "genesis-6-button",
+        "label": "6-Button Controller",
+        "type": "gamepad",
+        "buttons": [
+          { "id": "dpad-up", "label": "D-Pad Up", "kind": "direction" },
+          { "id": "dpad-down", "label": "D-Pad Down", "kind": "direction" },
+          { "id": "dpad-left", "label": "D-Pad Left", "kind": "direction" },
+          { "id": "dpad-right", "label": "D-Pad Right", "kind": "direction" },
+          { "id": "a", "label": "A", "kind": "face" },
+          { "id": "b", "label": "B", "kind": "face" },
+          { "id": "c", "label": "C", "kind": "face" },
+          { "id": "x", "label": "X", "kind": "face" },
+          { "id": "y", "label": "Y", "kind": "face" },
+          { "id": "z", "label": "Z", "kind": "face" },
+          { "id": "start", "label": "Start", "kind": "system" },
+          { "id": "mode", "label": "Mode", "kind": "system" }
+        ]
+      }
+    ]
+  },
+  {
+    "id": "saturn",
+    "label": "Sega Saturn",
+    "manufacturer": "Sega",
+    "controllers": [
+      {
+        "id": "saturn-controller",
+        "label": "Saturn Control Pad",
+        "type": "gamepad",
+        "buttons": [
+          { "id": "dpad-up", "label": "D-Pad Up", "kind": "direction" },
+          { "id": "dpad-down", "label": "D-Pad Down", "kind": "direction" },
+          { "id": "dpad-left", "label": "D-Pad Left", "kind": "direction" },
+          { "id": "dpad-right", "label": "D-Pad Right", "kind": "direction" },
+          { "id": "a", "label": "A", "kind": "face" },
+          { "id": "b", "label": "B", "kind": "face" },
+          { "id": "c", "label": "C", "kind": "face" },
+          { "id": "x", "label": "X", "kind": "face" },
+          { "id": "y", "label": "Y", "kind": "face" },
+          { "id": "z", "label": "Z", "kind": "face" },
+          { "id": "l", "label": "L", "kind": "shoulder" },
+          { "id": "r", "label": "R", "kind": "shoulder" },
+          { "id": "start", "label": "Start", "kind": "system" }
+        ]
+      }
+    ]
+  },
+  {
+    "id": "dreamcast",
+    "label": "Sega Dreamcast",
+    "manufacturer": "Sega",
+    "controllers": [
+      {
+        "id": "dreamcast-controller",
+        "label": "Dreamcast Controller",
+        "type": "gamepad",
+        "buttons": [
+          { "id": "analog", "label": "Analog Stick", "kind": "axis" },
+          { "id": "dpad-up", "label": "D-Pad Up", "kind": "direction" },
+          { "id": "dpad-down", "label": "D-Pad Down", "kind": "direction" },
+          { "id": "dpad-left", "label": "D-Pad Left", "kind": "direction" },
+          { "id": "dpad-right", "label": "D-Pad Right", "kind": "direction" },
+          { "id": "a", "label": "A", "kind": "face" },
+          { "id": "b", "label": "B", "kind": "face" },
+          { "id": "x", "label": "X", "kind": "face" },
+          { "id": "y", "label": "Y", "kind": "face" },
+          { "id": "l", "label": "L Trigger", "kind": "trigger" },
+          { "id": "r", "label": "R Trigger", "kind": "trigger" },
+          { "id": "start", "label": "Start", "kind": "system" }
+        ]
+      }
+    ]
+  },
+  {
+    "id": "turbografx",
+    "label": "TurboGrafx-16 / PC Engine",
+    "manufacturer": "NEC / Hudson Soft",
+    "controllers": [
+      {
+        "id": "turbo-pad",
+        "label": "TurboPad",
+        "type": "gamepad",
+        "buttons": [
+          { "id": "dpad-up", "label": "D-Pad Up", "kind": "direction" },
+          { "id": "dpad-down", "label": "D-Pad Down", "kind": "direction" },
+          { "id": "dpad-left", "label": "D-Pad Left", "kind": "direction" },
+          { "id": "dpad-right", "label": "D-Pad Right", "kind": "direction" },
+          { "id": "i", "label": "I", "kind": "face" },
+          { "id": "ii", "label": "II", "kind": "face" },
+          { "id": "run", "label": "Run", "kind": "system" },
+          { "id": "select", "label": "Select", "kind": "system" }
+        ]
+      },
+      {
+        "id": "avenue-pad-6",
+        "label": "Avenue Pad 6",
+        "type": "gamepad",
+        "buttons": [
+          { "id": "dpad-up", "label": "D-Pad Up", "kind": "direction" },
+          { "id": "dpad-down", "label": "D-Pad Down", "kind": "direction" },
+          { "id": "dpad-left", "label": "D-Pad Left", "kind": "direction" },
+          { "id": "dpad-right", "label": "D-Pad Right", "kind": "direction" },
+          { "id": "i", "label": "I", "kind": "face" },
+          { "id": "ii", "label": "II", "kind": "face" },
+          { "id": "iii", "label": "III", "kind": "face" },
+          { "id": "iv", "label": "IV", "kind": "face" },
+          { "id": "v", "label": "V", "kind": "face" },
+          { "id": "vi", "label": "VI", "kind": "face" },
+          { "id": "run", "label": "Run", "kind": "system" },
+          { "id": "select", "label": "Select", "kind": "system" }
+        ]
+      }
+    ]
+  },
+  {
+    "id": "neo-geo",
+    "label": "Neo Geo MVS / AES",
+    "manufacturer": "SNK",
+    "controllers": [
+      {
+        "id": "neo-geo-stick",
+        "label": "Neo Geo Joystick / Pad",
+        "type": "gamepad",
+        "buttons": [
+          { "id": "joystick", "label": "Joystick", "kind": "direction" },
+          { "id": "a", "label": "A", "kind": "face" },
+          { "id": "b", "label": "B", "kind": "face" },
+          { "id": "c", "label": "C", "kind": "face" },
+          { "id": "d", "label": "D", "kind": "face" },
+          { "id": "start", "label": "Start", "kind": "system" },
+          { "id": "select", "label": "Select", "kind": "system" }
+        ]
+      }
+    ]
+  },
+  {
+    "id": "ps1",
+    "label": "Sony PlayStation (PS1)",
+    "manufacturer": "Sony",
+    "controllers": [
+      {
+        "id": "dualshock",
+        "label": "DualShock / PlayStation Controller",
+        "type": "gamepad",
+        "buttons": [
+          { "id": "cross", "label": "Cross", "kind": "face", "aliases": ["×", "X"] },
+          { "id": "circle", "label": "Circle", "kind": "face", "aliases": ["○", "O"] },
+          { "id": "square", "label": "Square", "kind": "face", "aliases": ["□"] },
+          { "id": "triangle", "label": "Triangle", "kind": "face", "aliases": ["△"] },
+          { "id": "l1", "label": "L1", "kind": "shoulder" },
+          { "id": "r1", "label": "R1", "kind": "shoulder" },
+          { "id": "l2", "label": "L2", "kind": "trigger" },
+          { "id": "r2", "label": "R2", "kind": "trigger" },
+          { "id": "l3", "label": "L3", "kind": "stick-click" },
+          { "id": "r3", "label": "R3", "kind": "stick-click" },
+          { "id": "left-stick", "label": "Left Stick", "kind": "axis" },
+          { "id": "right-stick", "label": "Right Stick", "kind": "axis" },
+          { "id": "dpad-up", "label": "D-Pad Up", "kind": "direction" },
+          { "id": "dpad-down", "label": "D-Pad Down", "kind": "direction" },
+          { "id": "dpad-left", "label": "D-Pad Left", "kind": "direction" },
+          { "id": "dpad-right", "label": "D-Pad Right", "kind": "direction" },
+          { "id": "start", "label": "Start", "kind": "system" },
+          { "id": "select", "label": "Select", "kind": "system" }
+        ]
+      }
+    ]
+  },
+  {
+    "id": "ps2",
+    "label": "Sony PlayStation 2 (PS2)",
+    "manufacturer": "Sony",
+    "controllers": [
+      {
+        "id": "dualshock-2",
+        "label": "DualShock 2",
+        "type": "gamepad",
+        "buttons": [
+          { "id": "cross", "label": "Cross", "kind": "face", "aliases": ["×", "X"] },
+          { "id": "circle", "label": "Circle", "kind": "face", "aliases": ["○", "O"] },
+          { "id": "square", "label": "Square", "kind": "face", "aliases": ["□"] },
+          { "id": "triangle", "label": "Triangle", "kind": "face", "aliases": ["△"] },
+          { "id": "l1", "label": "L1", "kind": "shoulder" },
+          { "id": "r1", "label": "R1", "kind": "shoulder" },
+          { "id": "l2", "label": "L2", "kind": "trigger" },
+          { "id": "r2", "label": "R2", "kind": "trigger" },
+          { "id": "l3", "label": "L3", "kind": "stick-click" },
+          { "id": "r3", "label": "R3", "kind": "stick-click" },
+          { "id": "left-stick", "label": "Left Stick", "kind": "axis" },
+          { "id": "right-stick", "label": "Right Stick", "kind": "axis" },
+          { "id": "dpad-up", "label": "D-Pad Up", "kind": "direction" },
+          { "id": "dpad-down", "label": "D-Pad Down", "kind": "direction" },
+          { "id": "dpad-left", "label": "D-Pad Left", "kind": "direction" },
+          { "id": "dpad-right", "label": "D-Pad Right", "kind": "direction" },
+          { "id": "start", "label": "Start", "kind": "system" },
+          { "id": "select", "label": "Select", "kind": "system" },
+          { "id": "analog", "label": "Analog", "kind": "system" }
+        ]
+      }
+    ]
+  },
+  {
+    "id": "ps3",
+    "label": "Sony PlayStation 3 (PS3)",
+    "manufacturer": "Sony",
+    "controllers": [
+      {
+        "id": "sixaxis-dualshock-3",
+        "label": "SIXAXIS / DualShock 3",
+        "type": "gamepad",
+        "buttons": [
+          { "id": "cross", "label": "Cross", "kind": "face", "aliases": ["×", "X"] },
+          { "id": "circle", "label": "Circle", "kind": "face", "aliases": ["○", "O"] },
+          { "id": "square", "label": "Square", "kind": "face", "aliases": ["□"] },
+          { "id": "triangle", "label": "Triangle", "kind": "face", "aliases": ["△"] },
+          { "id": "l1", "label": "L1", "kind": "shoulder" },
+          { "id": "r1", "label": "R1", "kind": "shoulder" },
+          { "id": "l2", "label": "L2", "kind": "trigger" },
+          { "id": "r2", "label": "R2", "kind": "trigger" },
+          { "id": "l3", "label": "L3", "kind": "stick-click" },
+          { "id": "r3", "label": "R3", "kind": "stick-click" },
+          { "id": "left-stick", "label": "Left Stick", "kind": "axis" },
+          { "id": "right-stick", "label": "Right Stick", "kind": "axis" },
+          { "id": "dpad-up", "label": "D-Pad Up", "kind": "direction" },
+          { "id": "dpad-down", "label": "D-Pad Down", "kind": "direction" },
+          { "id": "dpad-left", "label": "D-Pad Left", "kind": "direction" },
+          { "id": "dpad-right", "label": "D-Pad Right", "kind": "direction" },
+          { "id": "start", "label": "Start", "kind": "system" },
+          { "id": "select", "label": "Select", "kind": "system" },
+          { "id": "ps", "label": "PS Button", "kind": "system" }
+        ]
+      }
+    ]
+  },
+  {
+    "id": "ps4",
+    "label": "Sony PlayStation 4 (PS4)",
+    "manufacturer": "Sony",
+    "controllers": [
+      {
+        "id": "dualshock-4",
+        "label": "DualShock 4",
+        "type": "gamepad",
+        "buttons": [
+          { "id": "cross", "label": "Cross", "kind": "face", "aliases": ["×", "X"] },
+          { "id": "circle", "label": "Circle", "kind": "face", "aliases": ["○", "O"] },
+          { "id": "square", "label": "Square", "kind": "face", "aliases": ["□"] },
+          { "id": "triangle", "label": "Triangle", "kind": "face", "aliases": ["△"] },
+          { "id": "l1", "label": "L1", "kind": "shoulder" },
+          { "id": "r1", "label": "R1", "kind": "shoulder" },
+          { "id": "l2", "label": "L2", "kind": "trigger" },
+          { "id": "r2", "label": "R2", "kind": "trigger" },
+          { "id": "l3", "label": "L3", "kind": "stick-click" },
+          { "id": "r3", "label": "R3", "kind": "stick-click" },
+          { "id": "left-stick", "label": "Left Stick", "kind": "axis" },
+          { "id": "right-stick", "label": "Right Stick", "kind": "axis" },
+          { "id": "dpad-up", "label": "D-Pad Up", "kind": "direction" },
+          { "id": "dpad-down", "label": "D-Pad Down", "kind": "direction" },
+          { "id": "dpad-left", "label": "D-Pad Left", "kind": "direction" },
+          { "id": "dpad-right", "label": "D-Pad Right", "kind": "direction" },
+          { "id": "options", "label": "Options", "kind": "system" },
+          { "id": "share", "label": "Share", "kind": "system" },
+          { "id": "touch-pad", "label": "Touch Pad", "kind": "touch" },
+          { "id": "touch-pad-click", "label": "Touch Pad Click", "kind": "touch" },
+          { "id": "ps", "label": "PS Button", "kind": "system" }
+        ]
+      }
+    ]
+  },
+  {
+    "id": "ps5",
+    "label": "Sony PlayStation 5 (PS5)",
+    "manufacturer": "Sony",
+    "controllers": [
+      {
+        "id": "dualsense",
+        "label": "DualSense",
+        "type": "gamepad",
+        "buttons": [
+          { "id": "cross", "label": "Cross", "kind": "face", "aliases": ["×", "X"] },
+          { "id": "circle", "label": "Circle", "kind": "face", "aliases": ["○", "O"] },
+          { "id": "square", "label": "Square", "kind": "face", "aliases": ["□"] },
+          { "id": "triangle", "label": "Triangle", "kind": "face", "aliases": ["△"] },
+          { "id": "l1", "label": "L1", "kind": "shoulder" },
+          { "id": "r1", "label": "R1", "kind": "shoulder" },
+          { "id": "l2", "label": "L2", "kind": "trigger" },
+          { "id": "r2", "label": "R2", "kind": "trigger" },
+          { "id": "l3", "label": "L3", "kind": "stick-click" },
+          { "id": "r3", "label": "R3", "kind": "stick-click" },
+          { "id": "left-stick", "label": "Left Stick", "kind": "axis" },
+          { "id": "right-stick", "label": "Right Stick", "kind": "axis" },
+          { "id": "dpad-up", "label": "D-Pad Up", "kind": "direction" },
+          { "id": "dpad-down", "label": "D-Pad Down", "kind": "direction" },
+          { "id": "dpad-left", "label": "D-Pad Left", "kind": "direction" },
+          { "id": "dpad-right", "label": "D-Pad Right", "kind": "direction" },
+          { "id": "options", "label": "Options", "kind": "system" },
+          { "id": "create", "label": "Create", "kind": "system" },
+          { "id": "touch-pad", "label": "Touch Pad", "kind": "touch" },
+          { "id": "touch-pad-click", "label": "Touch Pad Click", "kind": "touch" },
+          { "id": "mute", "label": "Mute", "kind": "system" },
+          { "id": "ps", "label": "PS Button", "kind": "system" }
+        ]
+      }
+    ]
+  },
+  {
+    "id": "psp-vita",
+    "label": "PlayStation Portable (PSP) / PS Vita",
+    "manufacturer": "Sony",
+    "controllers": [
+      {
+        "id": "psp",
+        "label": "PSP Controls",
+        "type": "handheld",
+        "buttons": [
+          { "id": "analog", "label": "Analog Stick", "kind": "axis" },
+          { "id": "dpad-up", "label": "D-Pad Up", "kind": "direction" },
+          { "id": "dpad-down", "label": "D-Pad Down", "kind": "direction" },
+          { "id": "dpad-left", "label": "D-Pad Left", "kind": "direction" },
+          { "id": "dpad-right", "label": "D-Pad Right", "kind": "direction" },
+          { "id": "cross", "label": "Cross", "kind": "face", "aliases": ["×", "X"] },
+          { "id": "circle", "label": "Circle", "kind": "face", "aliases": ["○", "O"] },
+          { "id": "square", "label": "Square", "kind": "face", "aliases": ["□"] },
+          { "id": "triangle", "label": "Triangle", "kind": "face", "aliases": ["△"] },
+          { "id": "l", "label": "L", "kind": "shoulder" },
+          { "id": "r", "label": "R", "kind": "shoulder" },
+          { "id": "start", "label": "Start", "kind": "system" },
+          { "id": "select", "label": "Select", "kind": "system" },
+          { "id": "home", "label": "Home", "kind": "system" },
+          { "id": "volume-up", "label": "Volume +", "kind": "system" },
+          { "id": "volume-down", "label": "Volume −", "kind": "system" }
+        ]
+      },
+      {
+        "id": "vita",
+        "label": "PS Vita Controls",
+        "type": "handheld",
+        "buttons": [
+          { "id": "left-stick", "label": "Left Stick", "kind": "axis" },
+          { "id": "right-stick", "label": "Right Stick", "kind": "axis" },
+          { "id": "dpad-up", "label": "D-Pad Up", "kind": "direction" },
+          { "id": "dpad-down", "label": "D-Pad Down", "kind": "direction" },
+          { "id": "dpad-left", "label": "D-Pad Left", "kind": "direction" },
+          { "id": "dpad-right", "label": "D-Pad Right", "kind": "direction" },
+          { "id": "cross", "label": "Cross", "kind": "face", "aliases": ["×", "X"] },
+          { "id": "circle", "label": "Circle", "kind": "face", "aliases": ["○", "O"] },
+          { "id": "square", "label": "Square", "kind": "face", "aliases": ["□"] },
+          { "id": "triangle", "label": "Triangle", "kind": "face", "aliases": ["△"] },
+          { "id": "l", "label": "L", "kind": "shoulder" },
+          { "id": "r", "label": "R", "kind": "shoulder" },
+          { "id": "start", "label": "Start", "kind": "system" },
+          { "id": "select", "label": "Select", "kind": "system" },
+          { "id": "ps", "label": "PS Button", "kind": "system" },
+          { "id": "front-touch", "label": "Front Touchscreen", "kind": "touch" },
+          { "id": "rear-touch", "label": "Rear Touch Pad", "kind": "touch" }
+        ]
+      }
+    ]
+  },
+  {
+    "id": "xbox",
+    "label": "Original Xbox",
+    "manufacturer": "Microsoft",
+    "controllers": [
+      {
+        "id": "xbox-controller-s",
+        "label": "Xbox Controller S",
+        "type": "gamepad",
+        "buttons": [
+          { "id": "a", "label": "A", "kind": "face" },
+          { "id": "b", "label": "B", "kind": "face" },
+          { "id": "x", "label": "X", "kind": "face" },
+          { "id": "y", "label": "Y", "kind": "face" },
+          { "id": "black", "label": "Black", "kind": "face" },
+          { "id": "white", "label": "White", "kind": "face" },
+          { "id": "lt", "label": "Left Trigger", "kind": "trigger", "aliases": ["LT"] },
+          { "id": "rt", "label": "Right Trigger", "kind": "trigger", "aliases": ["RT"] },
+          { "id": "left-stick", "label": "Left Stick", "kind": "axis" },
+          { "id": "right-stick", "label": "Right Stick", "kind": "axis" },
+          { "id": "ls", "label": "Left Stick Click", "kind": "stick-click", "aliases": ["LS"] },
+          { "id": "rs", "label": "Right Stick Click", "kind": "stick-click", "aliases": ["RS"] },
+          { "id": "dpad-up", "label": "D-Pad Up", "kind": "direction" },
+          { "id": "dpad-down", "label": "D-Pad Down", "kind": "direction" },
+          { "id": "dpad-left", "label": "D-Pad Left", "kind": "direction" },
+          { "id": "dpad-right", "label": "D-Pad Right", "kind": "direction" },
+          { "id": "start", "label": "Start", "kind": "system" },
+          { "id": "back", "label": "Back", "kind": "system" }
+        ]
+      }
+    ]
+  },
+  {
+    "id": "xbox-360",
+    "label": "Xbox 360",
+    "manufacturer": "Microsoft",
+    "controllers": [
+      {
+        "id": "xbox-360-controller",
+        "label": "Xbox 360 Controller",
+        "type": "gamepad",
+        "buttons": [
+          { "id": "a", "label": "A", "kind": "face" },
+          { "id": "b", "label": "B", "kind": "face" },
+          { "id": "x", "label": "X", "kind": "face" },
+          { "id": "y", "label": "Y", "kind": "face" },
+          { "id": "lb", "label": "LB", "kind": "shoulder" },
+          { "id": "rb", "label": "RB", "kind": "shoulder" },
+          { "id": "lt", "label": "LT", "kind": "trigger" },
+          { "id": "rt", "label": "RT", "kind": "trigger" },
+          { "id": "left-stick", "label": "Left Stick", "kind": "axis" },
+          { "id": "right-stick", "label": "Right Stick", "kind": "axis" },
+          { "id": "ls", "label": "LS", "kind": "stick-click" },
+          { "id": "rs", "label": "RS", "kind": "stick-click" },
+          { "id": "dpad-up", "label": "D-Pad Up", "kind": "direction" },
+          { "id": "dpad-down", "label": "D-Pad Down", "kind": "direction" },
+          { "id": "dpad-left", "label": "D-Pad Left", "kind": "direction" },
+          { "id": "dpad-right", "label": "D-Pad Right", "kind": "direction" },
+          { "id": "start", "label": "Start", "kind": "system" },
+          { "id": "back", "label": "Back", "kind": "system" },
+          { "id": "guide", "label": "Guide", "kind": "system", "aliases": ["Xbox Button"] }
+        ]
+      }
+    ]
+  },
+  {
+    "id": "xbox-one",
+    "label": "Xbox One",
+    "manufacturer": "Microsoft",
+    "controllers": [
+      {
+        "id": "xbox-one-controller",
+        "label": "Xbox One Controller",
+        "type": "gamepad",
+        "buttons": [
+          { "id": "a", "label": "A", "kind": "face" },
+          { "id": "b", "label": "B", "kind": "face" },
+          { "id": "x", "label": "X", "kind": "face" },
+          { "id": "y", "label": "Y", "kind": "face" },
+          { "id": "lb", "label": "LB", "kind": "shoulder" },
+          { "id": "rb", "label": "RB", "kind": "shoulder" },
+          { "id": "lt", "label": "LT", "kind": "trigger" },
+          { "id": "rt", "label": "RT", "kind": "trigger" },
+          { "id": "left-stick", "label": "Left Stick", "kind": "axis" },
+          { "id": "right-stick", "label": "Right Stick", "kind": "axis" },
+          { "id": "ls", "label": "LS", "kind": "stick-click" },
+          { "id": "rs", "label": "RS", "kind": "stick-click" },
+          { "id": "dpad-up", "label": "D-Pad Up", "kind": "direction" },
+          { "id": "dpad-down", "label": "D-Pad Down", "kind": "direction" },
+          { "id": "dpad-left", "label": "D-Pad Left", "kind": "direction" },
+          { "id": "dpad-right", "label": "D-Pad Right", "kind": "direction" },
+          { "id": "menu", "label": "Menu", "kind": "system", "aliases": ["Start"] },
+          { "id": "view", "label": "View", "kind": "system", "aliases": ["Back", "Select"] },
+          { "id": "xbox", "label": "Xbox Button", "kind": "system" }
+        ]
+      }
+    ]
+  },
+  {
+    "id": "xbox-series",
+    "label": "Xbox Series X | S",
+    "manufacturer": "Microsoft",
+    "controllers": [
+      {
+        "id": "xbox-series-controller",
+        "label": "Xbox Wireless Controller",
+        "type": "gamepad",
+        "buttons": [
+          { "id": "a", "label": "A", "kind": "face" },
+          { "id": "b", "label": "B", "kind": "face" },
+          { "id": "x", "label": "X", "kind": "face" },
+          { "id": "y", "label": "Y", "kind": "face" },
+          { "id": "lb", "label": "LB", "kind": "shoulder" },
+          { "id": "rb", "label": "RB", "kind": "shoulder" },
+          { "id": "lt", "label": "LT", "kind": "trigger" },
+          { "id": "rt", "label": "RT", "kind": "trigger" },
+          { "id": "left-stick", "label": "Left Stick", "kind": "axis" },
+          { "id": "right-stick", "label": "Right Stick", "kind": "axis" },
+          { "id": "ls", "label": "LS", "kind": "stick-click" },
+          { "id": "rs", "label": "RS", "kind": "stick-click" },
+          { "id": "dpad-up", "label": "D-Pad Up", "kind": "direction" },
+          { "id": "dpad-down", "label": "D-Pad Down", "kind": "direction" },
+          { "id": "dpad-left", "label": "D-Pad Left", "kind": "direction" },
+          { "id": "dpad-right", "label": "D-Pad Right", "kind": "direction" },
+          { "id": "menu", "label": "Menu", "kind": "system" },
+          { "id": "view", "label": "View", "kind": "system" },
+          { "id": "share", "label": "Share", "kind": "system" },
+          { "id": "xbox", "label": "Xbox Button", "kind": "system" }
+        ]
+      }
+    ]
+  },
+  {
+    "id": "gamecube",
+    "label": "Nintendo GameCube",
+    "manufacturer": "Nintendo",
+    "controllers": [
+      {
+        "id": "gamecube-controller",
+        "label": "GameCube Controller",
+        "type": "gamepad",
+        "buttons": [
+          { "id": "control-stick", "label": "Control Stick", "kind": "axis" },
+          { "id": "c-stick", "label": "C-Stick", "kind": "axis" },
+          { "id": "dpad-up", "label": "D-Pad Up", "kind": "direction" },
+          { "id": "dpad-down", "label": "D-Pad Down", "kind": "direction" },
+          { "id": "dpad-left", "label": "D-Pad Left", "kind": "direction" },
+          { "id": "dpad-right", "label": "D-Pad Right", "kind": "direction" },
+          { "id": "a", "label": "A", "kind": "face" },
+          { "id": "b", "label": "B", "kind": "face" },
+          { "id": "x", "label": "X", "kind": "face" },
+          { "id": "y", "label": "Y", "kind": "face" },
+          { "id": "z", "label": "Z", "kind": "shoulder" },
+          { "id": "l", "label": "L", "kind": "trigger" },
+          { "id": "r", "label": "R", "kind": "trigger" },
+          { "id": "start", "label": "Start / Pause", "kind": "system" }
+        ]
+      }
+    ]
+  },
+  {
+    "id": "wii-wiiu",
+    "label": "Nintendo Wii / Wii U",
+    "manufacturer": "Nintendo",
+    "controllers": [
+      {
+        "id": "wii-remote",
+        "label": "Wii Remote",
+        "type": "motion",
+        "buttons": [
+          { "id": "dpad-up", "label": "D-Pad Up", "kind": "direction" },
+          { "id": "dpad-down", "label": "D-Pad Down", "kind": "direction" },
+          { "id": "dpad-left", "label": "D-Pad Left", "kind": "direction" },
+          { "id": "dpad-right", "label": "D-Pad Right", "kind": "direction" },
+          { "id": "a", "label": "A", "kind": "face" },
+          { "id": "b", "label": "B", "kind": "trigger" },
+          { "id": "one", "label": "1", "kind": "face" },
+          { "id": "two", "label": "2", "kind": "face" },
+          { "id": "plus", "label": "+", "kind": "system" },
+          { "id": "minus", "label": "−", "kind": "system" },
+          { "id": "home", "label": "Home", "kind": "system" },
+          { "id": "pointer", "label": "Pointer", "kind": "axis" },
+          { "id": "motion", "label": "Motion / Tilt", "kind": "motion" }
+        ]
+      },
+      {
+        "id": "nunchuk",
+        "label": "Nunchuk",
+        "type": "motion",
+        "buttons": [
+          { "id": "stick", "label": "Control Stick", "kind": "axis" },
+          { "id": "c", "label": "C", "kind": "face" },
+          { "id": "z", "label": "Z", "kind": "trigger" },
+          { "id": "motion", "label": "Motion / Tilt", "kind": "motion" }
+        ]
+      },
+      {
+        "id": "classic-controller",
+        "label": "Classic Controller / Pro",
+        "type": "gamepad",
+        "buttons": [
+          { "id": "left-stick", "label": "Left Stick", "kind": "axis" },
+          { "id": "right-stick", "label": "Right Stick", "kind": "axis" },
+          { "id": "dpad-up", "label": "D-Pad Up", "kind": "direction" },
+          { "id": "dpad-down", "label": "D-Pad Down", "kind": "direction" },
+          { "id": "dpad-left", "label": "D-Pad Left", "kind": "direction" },
+          { "id": "dpad-right", "label": "D-Pad Right", "kind": "direction" },
+          { "id": "a", "label": "A", "kind": "face" },
+          { "id": "b", "label": "B", "kind": "face" },
+          { "id": "x", "label": "X", "kind": "face" },
+          { "id": "y", "label": "Y", "kind": "face" },
+          { "id": "l", "label": "L", "kind": "shoulder" },
+          { "id": "r", "label": "R", "kind": "shoulder" },
+          { "id": "zl", "label": "ZL", "kind": "trigger" },
+          { "id": "zr", "label": "ZR", "kind": "trigger" },
+          { "id": "plus", "label": "+", "kind": "system" },
+          { "id": "minus", "label": "−", "kind": "system" },
+          { "id": "home", "label": "Home", "kind": "system" }
+        ]
+      },
+      {
+        "id": "wii-u-gamepad",
+        "label": "Wii U GamePad",
+        "type": "gamepad",
+        "buttons": [
+          { "id": "left-stick", "label": "Left Stick", "kind": "axis" },
+          { "id": "right-stick", "label": "Right Stick", "kind": "axis" },
+          { "id": "dpad-up", "label": "D-Pad Up", "kind": "direction" },
+          { "id": "dpad-down", "label": "D-Pad Down", "kind": "direction" },
+          { "id": "dpad-left", "label": "D-Pad Left", "kind": "direction" },
+          { "id": "dpad-right", "label": "D-Pad Right", "kind": "direction" },
+          { "id": "a", "label": "A", "kind": "face" },
+          { "id": "b", "label": "B", "kind": "face" },
+          { "id": "x", "label": "X", "kind": "face" },
+          { "id": "y", "label": "Y", "kind": "face" },
+          { "id": "l", "label": "L", "kind": "shoulder" },
+          { "id": "r", "label": "R", "kind": "shoulder" },
+          { "id": "zl", "label": "ZL", "kind": "trigger" },
+          { "id": "zr", "label": "ZR", "kind": "trigger" },
+          { "id": "plus", "label": "+", "kind": "system" },
+          { "id": "minus", "label": "−", "kind": "system" },
+          { "id": "home", "label": "Home", "kind": "system" },
+          { "id": "touchscreen", "label": "Touchscreen", "kind": "touch" }
+        ]
+      }
+    ]
+  },
+  {
+    "id": "switch",
+    "label": "Nintendo Switch",
+    "manufacturer": "Nintendo",
+    "controllers": [
+      {
+        "id": "joy-con",
+        "label": "Joy-Con (L/R)",
+        "type": "gamepad",
+        "buttons": [
+          { "id": "left-stick", "label": "Left Stick", "kind": "axis" },
+          { "id": "right-stick", "label": "Right Stick", "kind": "axis" },
+          { "id": "dpad-up", "label": "D-Pad / Left Button Up", "kind": "direction" },
+          { "id": "dpad-down", "label": "D-Pad / Left Button Down", "kind": "direction" },
+          { "id": "dpad-left", "label": "D-Pad / Left Button Left", "kind": "direction" },
+          { "id": "dpad-right", "label": "D-Pad / Left Button Right", "kind": "direction" },
+          { "id": "a", "label": "A", "kind": "face" },
+          { "id": "b", "label": "B", "kind": "face" },
+          { "id": "x", "label": "X", "kind": "face" },
+          { "id": "y", "label": "Y", "kind": "face" },
+          { "id": "l", "label": "L", "kind": "shoulder" },
+          { "id": "r", "label": "R", "kind": "shoulder" },
+          { "id": "zl", "label": "ZL", "kind": "trigger" },
+          { "id": "zr", "label": "ZR", "kind": "trigger" },
+          { "id": "sl", "label": "SL", "kind": "shoulder" },
+          { "id": "sr", "label": "SR", "kind": "shoulder" },
+          { "id": "plus", "label": "+", "kind": "system" },
+          { "id": "minus", "label": "−", "kind": "system" },
+          { "id": "home", "label": "Home", "kind": "system" },
+          { "id": "capture", "label": "Capture", "kind": "system" },
+          { "id": "motion", "label": "Motion / Gyro", "kind": "motion" }
+        ]
+      },
+      {
+        "id": "pro-controller",
+        "label": "Nintendo Switch Pro Controller",
+        "type": "gamepad",
+        "buttons": [
+          { "id": "left-stick", "label": "Left Stick", "kind": "axis" },
+          { "id": "right-stick", "label": "Right Stick", "kind": "axis" },
+          { "id": "dpad-up", "label": "D-Pad Up", "kind": "direction" },
+          { "id": "dpad-down", "label": "D-Pad Down", "kind": "direction" },
+          { "id": "dpad-left", "label": "D-Pad Left", "kind": "direction" },
+          { "id": "dpad-right", "label": "D-Pad Right", "kind": "direction" },
+          { "id": "a", "label": "A", "kind": "face" },
+          { "id": "b", "label": "B", "kind": "face" },
+          { "id": "x", "label": "X", "kind": "face" },
+          { "id": "y", "label": "Y", "kind": "face" },
+          { "id": "l", "label": "L", "kind": "shoulder" },
+          { "id": "r", "label": "R", "kind": "shoulder" },
+          { "id": "zl", "label": "ZL", "kind": "trigger" },
+          { "id": "zr", "label": "ZR", "kind": "trigger" },
+          { "id": "plus", "label": "+", "kind": "system" },
+          { "id": "minus", "label": "−", "kind": "system" },
+          { "id": "home", "label": "Home", "kind": "system" },
+          { "id": "capture", "label": "Capture", "kind": "system" },
+          { "id": "ls", "label": "Left Stick Click", "kind": "stick-click" },
+          { "id": "rs", "label": "Right Stick Click", "kind": "stick-click" }
+        ]
+      }
+    ]
+  },
+  {
+    "id": "windows-pc",
+    "label": "Windows PC / Steam Deck",
+    "manufacturer": "PC / Valve",
+    "controllers": [
+      {
+        "id": "keyboard-mouse",
+        "label": "Keyboard & Mouse",
+        "type": "keyboard",
+        "buttons": [
+          { "id": "wasd", "label": "W A S D", "kind": "direction" },
+          { "id": "arrow-keys", "label": "Arrow Keys", "kind": "direction" },
+          { "id": "space", "label": "Space", "kind": "key" },
+          { "id": "shift", "label": "Shift", "kind": "modifier" },
+          { "id": "ctrl", "label": "Ctrl", "kind": "modifier" },
+          { "id": "alt", "label": "Alt", "kind": "modifier" },
+          { "id": "tab", "label": "Tab", "kind": "key" },
+          { "id": "esc", "label": "Esc", "kind": "key" },
+          { "id": "enter", "label": "Enter", "kind": "key" },
+          { "id": "mouse-left", "label": "Left Click", "kind": "face" },
+          { "id": "mouse-right", "label": "Right Click", "kind": "face" },
+          { "id": "mouse-middle", "label": "Middle Click", "kind": "face" },
+          { "id": "mouse-move", "label": "Mouse Look / Aim", "kind": "axis" },
+          { "id": "scroll-wheel", "label": "Scroll Wheel", "kind": "axis" }
+        ]
+      },
+      {
+        "id": "xbox-compatible",
+        "label": "Xbox-Compatible Gamepad",
+        "type": "gamepad",
+        "buttons": [
+          { "id": "a", "label": "A", "kind": "face" },
+          { "id": "b", "label": "B", "kind": "face" },
+          { "id": "x", "label": "X", "kind": "face" },
+          { "id": "y", "label": "Y", "kind": "face" },
+          { "id": "lb", "label": "LB", "kind": "shoulder" },
+          { "id": "rb", "label": "RB", "kind": "shoulder" },
+          { "id": "lt", "label": "LT", "kind": "trigger" },
+          { "id": "rt", "label": "RT", "kind": "trigger" },
+          { "id": "left-stick", "label": "Left Stick", "kind": "axis" },
+          { "id": "right-stick", "label": "Right Stick", "kind": "axis" },
+          { "id": "ls", "label": "LS", "kind": "stick-click" },
+          { "id": "rs", "label": "RS", "kind": "stick-click" },
+          { "id": "dpad-up", "label": "D-Pad Up", "kind": "direction" },
+          { "id": "dpad-down", "label": "D-Pad Down", "kind": "direction" },
+          { "id": "dpad-left", "label": "D-Pad Left", "kind": "direction" },
+          { "id": "dpad-right", "label": "D-Pad Right", "kind": "direction" },
+          { "id": "menu", "label": "Menu / Start", "kind": "system" },
+          { "id": "view", "label": "View / Select", "kind": "system" },
+          { "id": "guide", "label": "Guide / Xbox", "kind": "system" }
+        ]
+      },
+      {
+        "id": "steam-deck",
+        "label": "Steam Deck Controls",
+        "type": "handheld",
+        "buttons": [
+          { "id": "a", "label": "A", "kind": "face" },
+          { "id": "b", "label": "B", "kind": "face" },
+          { "id": "x", "label": "X", "kind": "face" },
+          { "id": "y", "label": "Y", "kind": "face" },
+          { "id": "l1", "label": "L1", "kind": "shoulder" },
+          { "id": "r1", "label": "R1", "kind": "shoulder" },
+          { "id": "l2", "label": "L2", "kind": "trigger" },
+          { "id": "r2", "label": "R2", "kind": "trigger" },
+          { "id": "l4", "label": "L4", "kind": "shoulder" },
+          { "id": "r4", "label": "R4", "kind": "shoulder" },
+          { "id": "l5", "label": "L5", "kind": "shoulder" },
+          { "id": "r5", "label": "R5", "kind": "shoulder" },
+          { "id": "left-stick", "label": "Left Stick", "kind": "axis" },
+          { "id": "right-stick", "label": "Right Stick", "kind": "axis" },
+          { "id": "dpad-up", "label": "D-Pad Up", "kind": "direction" },
+          { "id": "dpad-down", "label": "D-Pad Down", "kind": "direction" },
+          { "id": "dpad-left", "label": "D-Pad Left", "kind": "direction" },
+          { "id": "dpad-right", "label": "D-Pad Right", "kind": "direction" },
+          { "id": "left-trackpad", "label": "Left Trackpad", "kind": "touch" },
+          { "id": "right-trackpad", "label": "Right Trackpad", "kind": "touch" },
+          { "id": "view", "label": "View", "kind": "system" },
+          { "id": "menu", "label": "Menu", "kind": "system" },
+          { "id": "steam", "label": "STEAM", "kind": "system" },
+          { "id": "quick-access", "label": "Quick Access (…)", "kind": "system" }
+        ]
+      }
+    ]
+  },
+  {
+    "id": "arcade",
+    "label": "Arcade (Coin-Op Cabinet)",
+    "manufacturer": "Various",
+    "controllers": [
+      {
+        "id": "arcade-panel",
+        "label": "Standard Arcade Panel",
+        "type": "arcade",
+        "buttons": [
+          { "id": "joystick", "label": "Joystick", "kind": "direction" },
+          { "id": "button-1", "label": "Button 1", "kind": "face" },
+          { "id": "button-2", "label": "Button 2", "kind": "face" },
+          { "id": "button-3", "label": "Button 3", "kind": "face" },
+          { "id": "button-4", "label": "Button 4", "kind": "face" },
+          { "id": "button-5", "label": "Button 5", "kind": "face" },
+          { "id": "button-6", "label": "Button 6", "kind": "face" },
+          { "id": "start", "label": "Start", "kind": "system" },
+          { "id": "coin", "label": "Coin / Credit", "kind": "system" }
+        ]
+      }
+    ]
+  }
+]

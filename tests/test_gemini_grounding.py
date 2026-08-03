@@ -2,7 +2,7 @@
 
 from types import SimpleNamespace
 
-from game_base_ref_creator.gemini_provider import _extract_grounding_sources
+from retro_98_ai_creator.gemini_provider import _extract_grounding_sources
 
 
 def test_extract_grounding_from_chunks():

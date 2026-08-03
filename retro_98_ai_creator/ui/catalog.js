@@ -1,4 +1,4 @@
-/* Shared catalogs — mirrors game_base_ref_creator/data/creation_types.json
+/* Shared catalogs — mirrors retro_98_ai_creator/data/creation_types.json
    (and presets.py platforms/presets) so the UI works even before (or without)
    the Python bridge answering get_bootstrap. */
 window.RGC_CATALOG = {
@@ -44,7 +44,7 @@ window.RGC_CATALOG = {
       id: "Quick Reference Card",
       label: "Quick Reference Card & Keybindings",
       description:
-        "Produce a compact quick-reference card focused on getting the player into the game fast. Cover default keyboard and joystick/controller bindings, pause/quit/save/load keys, disk or media swap steps when relevant, sound and video setup quirks for the platform, boot/launch tips, and a short 'first five minutes' checklist. Prefer tables of key→action pairs and concise bullet steps over long narrative.",
+        "You are a video game control binding extractor. Your goal is to provide 100% accurate default control schemes for [GAME] on [PLATFORM].\n\nInstructions:\n1. Search specifically for official game manual layouts, game control settings menus, or verified wiki control tables for [GAME] on [PLATFORM].\n2. Verify platform-specific terminology (e.g., PS4 uses Cross/Square/Triangle/Circle, L1/R1, L2/R2). Do not mix Xbox or PC inputs.\n3. Separate control schemes by state: On-Foot, Driving, and Navigation/Menus.\n4. If a button action cannot be confirmed by search results, mark it as \"Unmapped\" or omit it rather than guessing based on general genre conventions.\n\nCRITICAL CONSTRAINT — DO NOT ASSUME GENRE CONVENTIONS:\nDo NOT fill in missing controls using standard action-game conventions (e.g., do not assume 'Circle' is crouch or 'Square' is reload unless explicitly verified in the source text).\nGames often use non-standard control schemes. If a button's function is not explicitly stated in the retrieved search text, output \"Not Listed\" instead of guessing.\nPrioritize exact matches over logical assumptions.\n\nStep 1: Extract and list raw text quotes from the search results that explicitly state a button and its function.\nStep 2: Map ONLY the extracted quotes to the final JSON/Table layout.\nStep 3: Any button not covered by a quote in Step 1 MUST be marked as \"Unconfirmed\".",
     },
     {
       id: "Player Manual & Strategy Guide",

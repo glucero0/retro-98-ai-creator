@@ -5,15 +5,22 @@ backend:
   provider: gemini   # gemini | openrouter | huggingface
 
 gemini:
+  # Three modality slots — Studio picks by prompt intent (cheapest defaults)
+  text_model: gemini-2.5-flash
+  image_model: gemini-2.5-flash-image
+  video_model: veo-2.0-generate-001
+  # Legacy alias kept in sync with text_model
   model: gemini-2.5-flash
   api_key: null
   google_search: true
-  temperature: 0.4
+  # Pass 1: search & extract with sourceSnippets; Pass 2: verify at temperature 0
+  two_pass_verify: true
+  temperature: 0.0
 
 openrouter:
   model: google/gemini-2.5-flash
   api_key: null
-  temperature: 0.4
+  temperature: 0.0
   base_url: https://openrouter.ai/api/v1
 
 model:
@@ -22,7 +29,7 @@ model:
   device: auto
   torch_dtype: auto
   max_new_tokens: 2048
-  temperature: 0.4
+  temperature: 0.0
   top_p: 0.9
   trust_remote_code: false
   hf_token: null
@@ -36,10 +43,20 @@ ui:
   ui_scale: 1.0
   default_platform: null
   default_theme: auto
-  app_theme: win98
+  app_theme: light  # light | dark | custom
+  custom_theme:
+    desktop_color: "#008080"
+    window_color: "#c0c0c0"
+    title_color: "#000080"
+    text_color: "#222222"
+    font: sans  # sans | serif | mono
   window_width: 1280
   window_height: 800
-  title: "Game Base Ref Creator 98"
+  title: "Retro 98 AI Creator"
 
 paths:
   archives: archives.json
+  media: media
+
+# Video Edit (Viewer → Edit on a video) requires ffmpeg + ffprobe on PATH
+# (or a common Windows install location). Install from https://ffmpeg.org/

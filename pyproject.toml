@@ -3,13 +3,13 @@ requires = ["setuptools>=68", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "game-base-ref-creator"
+name = "retro-98-ai-creator"
 version = "0.1.0"
-description = "Windows 98–themed retro game documentation studio (Gemini API + optional local HF models)"
+description = "Windows 98–themed general AI studio for text, images, and video"
 readme = "README.md"
 license = { text = "MIT" }
 requires-python = ">=3.10"
-authors = [{ name = "Game Base Ref Creator contributors" }]
+authors = [{ name = "Retro 98 AI Creator contributors" }]
 keywords = ["retro", "gaming", "documentation", "gemini", "huggingface", "win98", "98.css"]
 classifiers = [
   "Development Status :: 3 - Alpha",
@@ -40,15 +40,11 @@ local = [
 ]
 
 [project.scripts]
-game-base-ref-creator = "game_base_ref_creator.app:main"
-
-[project.urls]
-Homepage = "https://github.com/glucero0/Game-Base-Ref-Creator"
-Issues = "https://github.com/glucero0/Game-Base-Ref-Creator/issues"
+retro-98-ai-creator = "retro_98_ai_creator.app:main"
 
 [tool.setuptools.packages.find]
 where = ["."]
-include = ["game_base_ref_creator*"]
+include = ["retro_98_ai_creator*"]
 
 [tool.setuptools.package-data]
-game_base_ref_creator = ["ui/**/*", "data/**/*"]
+retro_98_ai_creator = ["ui/**/*", "data/**/*"]

@@ -1,0 +1,877 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Retro 98 AI Creator</title>
+  <link rel="stylesheet" href="vendor/98.css" />
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <div id="desktop">
+    <div class="desktop-icons" id="desktop-icons">
+      <button type="button" class="desktop-icon" data-open="form" title="Creation Studio">
+        <div class="icon-glyph">🕹️</div>
+        <span>Creation Studio</span>
+      </button>
+      <button type="button" class="desktop-icon" data-open="library" title="Archives">
+        <div class="icon-glyph">📁</div>
+        <span>Archives</span>
+      </button>
+      <button type="button" class="desktop-icon" data-open="viewer" title="Viewer">
+        <div class="icon-glyph">🎮</div>
+        <span>Viewer</span>
+      </button>
+      <button type="button" class="desktop-icon" data-open="image-edit" title="Image Edit">
+        <div class="icon-glyph">🖼️</div>
+        <span>Image Edit</span>
+      </button>
+      <button type="button" class="desktop-icon" data-open="video-edit" title="Video Edit">
+        <div class="icon-glyph">🎬</div>
+        <span>Video Edit</span>
+      </button>
+      <button type="button" class="desktop-icon" data-open="control" title="Control Panel">
+        <div class="icon-glyph">⚙️</div>
+        <span>Control Panel</span>
+      </button>
+    </div>
+
+    <div id="windows-layer">
+      <!-- Creation Studio -->
+      <div class="window app-window" id="win-form" data-window="form" style="left:24px;top:24px;width:440px;height:640px;">
+        <div class="title-bar">
+          <div class="title-bar-text">Creation Studio</div>
+          <div class="title-bar-controls">
+            <button aria-label="Minimize" data-action="minimize"></button>
+            <button aria-label="Maximize" data-action="noop"></button>
+            <button aria-label="Close" data-action="close"></button>
+          </div>
+        </div>
+        <div class="window-body">
+          <fieldset class="mission-banner">
+            <legend>Studio Mission</legend>
+            <p>
+              A general AI studio for generating <strong>text</strong>, <strong>images</strong>,
+              and <strong>video</strong>. Write what you want in the Prompt field below.
+              By default the Studio calls <strong>Google Gemini</strong> (paste a
+              key in Control Panel). You can switch to <strong>OpenRouter</strong>
+              or a local Hugging Face model anytime.
+            </p>
+            <p class="hint disclaimer">
+              Always review generated output before relying on it — especially facts,
+              media details, and anything you plan to publish or ship.
+            </p>
+          </fieldset>
+
+          <form id="create-form">
+            <div class="field-row-stacked">
+              <label for="studio-prompt">Prompt</label>
+              <textarea
+                id="studio-prompt"
+                class="studio-prompt"
+                rows="14"
+                placeholder="Describe the text, image, or video you want to create…"
+              ></textarea>
+            </div>
+
+            <div class="form-actions">
+              <button type="button" id="btn-generate" class="default">⚡ CREATE</button>
+            </div>
+            <div class="form-actions studio-load-actions">
+              <button type="button" id="btn-studio-load-text">Load Text…</button>
+              <button type="button" id="btn-studio-load-image">Load Image…</button>
+              <button type="button" id="btn-studio-load-video">Load Video…</button>
+              <button type="button" id="btn-studio-use-active">Use Active as Basis</button>
+            </div>
+            <p class="hint" id="studio-load-hint">
+              Load a file or use the Viewer’s active item as a starting point for a new
+              text / image / video of the same kind (copies into Archives; originals stay intact).
+            </p>
+          </form>
+
+          <div class="status-bar" id="studio-status-bar">
+            <p class="status-bar-field" id="gen-status-text">Ready</p>
+            <p class="status-bar-field" id="studio-model-field">Backend: Gemini</p>
+            <p class="status-bar-field" id="studio-theme-field">Theme Engine: Auto Box Art Palette</p>
+          </div>
+        </div>
+      </div>
+
+      <!-- Viewer -->
+      <div class="window app-window" id="win-viewer" data-window="viewer" hidden style="left:480px;top:24px;width:720px;height:560px;">
+        <div class="title-bar">
+          <div class="title-bar-text" id="viewer-title">Viewer</div>
+          <div class="title-bar-controls">
+            <button aria-label="Minimize" data-action="minimize"></button>
+            <button aria-label="Maximize" data-action="noop"></button>
+            <button aria-label="Close" data-action="close"></button>
+          </div>
+        </div>
+        <div class="window-body viewer-body">
+          <div class="viewer-tabs" role="tablist">
+            <button type="button" class="viewer-tab active" data-tab="doc" role="tab" id="tab-doc">The Document</button>
+            <button type="button" class="viewer-tab" data-tab="media" role="tab" id="tab-media" hidden>Media</button>
+            <button type="button" class="viewer-tab" data-tab="grounding" role="tab" id="tab-grounding">Sources (0)</button>
+            <button type="button" class="viewer-tab" data-tab="print" role="tab" id="tab-print">Reference Layout</button>
+            <button type="button" class="viewer-tab" data-tab="ascii" role="tab" id="tab-ascii">Plain ASCII</button>
+          </div>
+          <div class="viewer-toolbar">
+            <button type="button" id="btn-export-txt">Export TXT</button>
+            <button type="button" id="btn-export-json">Export Metadata</button>
+            <button type="button" id="btn-export-png">Export PNG</button>
+            <button type="button" id="btn-export-pdf">Export PDF</button>
+            <button type="button" id="btn-export-media" hidden>Save MP4…</button>
+            <button type="button" id="btn-edit-image" hidden>Edit</button>
+            <button type="button" id="btn-edit-video" hidden>Edit</button>
+            <button type="button" id="btn-use-basis">Use as Basis</button>
+            <button type="button" id="btn-copy-ascii">Copy ASCII</button>
+            <button type="button" id="btn-voice">Voice Reader</button>
+          </div>
+          <div class="viewer-theme-bar" hidden>
+            <label class="theme-label" for="theme-override">
+              Palette Theme
+              <select id="theme-override">
+                <option value="auto">Auto (from document)</option>
+                <optgroup label="Vintage Computers">
+                  <option value="apple2-green">Apple II Phosphor Green</option>
+                  <option value="apple2-amber">Apple II Phosphor Amber</option>
+                  <option value="sinclair-spectrum">Timex Sinclair / ZX Spectrum</option>
+                  <option value="c64">Commodore 64 Classic Blue</option>
+                  <option value="workbench">Commodore Amiga Workbench 1.3</option>
+                  <option value="atari2600">Atari 2600 Woodgrain &amp; Sunset</option>
+                  <option value="atari-st">Atari ST TOS Desktop</option>
+                  <option value="amstrad-cpc">Amstrad CPC Color Palette</option>
+                  <option value="bbc-micro">BBC Micro / Acorn Palette</option>
+                  <option value="vectrex">Vectrex Vector Monitor</option>
+                  <option value="dos-vga">MS-DOS Cyber VGA Green</option>
+                </optgroup>
+                <optgroup label="Classic Consoles &amp; Handhelds">
+                  <option value="gameboy">Game Boy Monochromatic Green</option>
+                  <option value="nes">NES Gray</option>
+                  <option value="snes-parchment">SNES 16-Bit Parchment</option>
+                  <option value="sega-genesis">Sega Genesis / Mega Drive Gold</option>
+                  <option value="dreamcast">Sega Dreamcast Orange</option>
+                  <option value="ps1-classic">PlayStation 1 Classic Gray</option>
+                  <option value="ps2-darkness">PlayStation 2 Deep Space</option>
+                  <option value="gamecube">Nintendo GameCube Indigo</option>
+                </optgroup>
+                <optgroup label="Modern Consoles &amp; Systems">
+                  <option value="xbox-original">Original Xbox Matrix Green</option>
+                  <option value="xbox-360">Xbox 360 Blade Emerald</option>
+                  <option value="xbox-series">Xbox Series X Dark Minimal</option>
+                  <option value="wii-menu">Nintendo Wii Menu Cyan</option>
+                  <option value="switch-neon">Nintendo Switch Joy-Con Neon</option>
+                  <option value="ps3-xmb">PlayStation 3 XMB Crimson</option>
+                  <option value="ps4-ps5">PlayStation 4 / PS5 Midnight Blue</option>
+                  <option value="win98">Windows 98 Standard</option>
+                </optgroup>
+              </select>
+            </label>
+            <span id="theme-boxart" class="theme-boxart"></span>
+          </div>
+          <div id="doc-canvas" class="doc-canvas">
+            <p class="muted">Open a document from Archives or generate a new one.</p>
+          </div>
+        </div>
+        <div class="status-bar">
+          <p class="status-bar-field" id="viewer-status">No document loaded</p>
+          <p class="status-bar-field" id="viewer-palette">Palette: —</p>
+        </div>
+      </div>
+
+      <!-- Archives -->
+      <div class="window app-window" id="win-library" data-window="library" hidden style="left:80px;top:80px;width:560px;height:420px;">
+        <div class="title-bar">
+          <div class="title-bar-text">Archives</div>
+          <div class="title-bar-controls">
+            <button aria-label="Minimize" data-action="minimize"></button>
+            <button aria-label="Maximize" data-action="noop"></button>
+            <button aria-label="Close" data-action="close"></button>
+          </div>
+        </div>
+        <div class="window-body">
+          <div class="field-row">
+            <label for="archive-search">Search</label>
+            <input id="archive-search" type="text" placeholder="Filter by game…" />
+          </div>
+          <div class="archive-actions">
+            <button type="button" id="btn-import">Import JSON…</button>
+            <button type="button" id="btn-export-all">Export All…</button>
+            <button type="button" id="btn-import-text">Import Text…</button>
+            <button type="button" id="btn-import-image">Import Image…</button>
+            <button type="button" id="btn-import-video">Import Video…</button>
+          </div>
+          <ul id="archive-list" class="archive-list"></ul>
+        </div>
+      </div>
+
+      <!-- Control Panel -->
+      <div class="window app-window" id="win-control" data-window="control" hidden style="left:120px;top:40px;width:560px;">
+        <div class="title-bar">
+          <div class="title-bar-text">Control Panel</div>
+        </div>
+        <div class="window-body">
+          <menu role="tablist" class="control-tabs">
+            <li role="tab" aria-selected="true" data-control-tab="ai">
+              <a href="#control-pane-ai">AI Model</a>
+            </li>
+            <li role="tab" aria-selected="false" data-control-tab="display">
+              <a href="#control-pane-display">Display &amp; Sound</a>
+            </li>
+          </menu>
+
+          <div class="window control-tab-panel" role="tabpanel">
+            <div class="window-body">
+              <div id="control-pane-ai" class="control-pane" data-control-pane="ai">
+                <fieldset>
+                  <legend>AI Backend</legend>
+                  <p class="hint disclaimer">
+                    Recommended: <strong>Google Gemini 2.5 Flash or Pro</strong> with Google Search
+                    grounding (and two-pass verify) for accurate manuals and keybindings.
+                    OpenRouter works well when routing to the same Gemini models.
+                    Always verify generated data before using it in production or publishing.
+                  </p>
+                  <div class="field-row-stacked">
+                    <label for="backend-provider">Provider</label>
+                    <select id="backend-provider">
+                      <option value="gemini">Google Gemini (API — fast)</option>
+                      <option value="openrouter">OpenRouter (API — many models)</option>
+                      <option value="huggingface">Hugging Face local (slow / offline)</option>
+                    </select>
+                  </div>
+                </fieldset>
+
+                <fieldset id="gemini-settings">
+                  <legend>Gemini</legend>
+                  <p class="hint">
+                    Get a key at
+                    <a href="https://aistudio.google.com/apikey" target="_blank" rel="noreferrer">aistudio.google.com/apikey</a>.
+                    Paste it below and save — it is stored in <code>config.yaml</code>.
+                    Studio picks the Text / Image / Video model from your prompt.
+                    Defaults are the cheapest options in each slot — customize anytime.
+                  </p>
+                  <div class="field-row-stacked">
+                    <label for="gemini-text-model">Text model</label>
+                    <select id="gemini-text-model"></select>
+                  </div>
+                  <div class="field-row-stacked">
+                    <label for="gemini-image-model">Image model</label>
+                    <select id="gemini-image-model"></select>
+                  </div>
+                  <div class="field-row-stacked">
+                    <label for="gemini-video-model">Video model</label>
+                    <select id="gemini-video-model"></select>
+                  </div>
+                  <p class="hint" id="gemini-model-hint">
+                    Each list shows only models compatible with that modality.
+                    Refreshed from Google when Control Panel opens (requires a saved API key).
+                  </p>
+                  <div class="field-row-stacked">
+                    <label for="gemini-key">
+                      <span>API key</span>
+                      <span class="label-hint" id="gemini-key-badge">Not set</span>
+                    </label>
+                    <input id="gemini-key" type="password" placeholder="Paste Gemini API key" />
+                  </div>
+                  <p class="hint" id="gemini-key-status"></p>
+                  <div class="field-row">
+                    <input type="checkbox" id="gemini-search" checked />
+                    <label for="gemini-search">Google Search grounding (text)</label>
+                  </div>
+                  <div class="field-row">
+                    <input type="checkbox" id="gemini-two-pass" checked />
+                    <label for="gemini-two-pass">Two-pass verify (search extract → temperature 0 check)</label>
+                  </div>
+                  <p class="hint" id="gemini-two-pass-hint">
+                    Pass 1 searches and quotes sources; Pass 2 strips anything not proven by those snippets.
+                    Requires Google Search grounding. Applies to text documents only.
+                  </p>
+                  <div class="field-row">
+                    <label for="gemini-temp">Temperature</label>
+                    <input id="gemini-temp" type="number" min="0" max="2" step="0.05" value="0" />
+                  </div>
+                </fieldset>
+
+                <fieldset id="openrouter-settings" hidden>
+                  <legend>OpenRouter</legend>
+                  <p class="hint">
+                    Get a key at
+                    <a href="https://openrouter.ai/keys" target="_blank" rel="noreferrer">openrouter.ai/keys</a>.
+                    Paste it below and save — it is stored in <code>config.yaml</code>.
+                    Google Search grounding is Gemini-only (not available through OpenRouter).
+                    Prefer routing to <strong>google/gemini-2.5-flash</strong> or
+                    <strong>google/gemini-2.5-pro</strong> for documentation quality.
+                  </p>
+                  <div class="field-row-stacked">
+                    <label for="openrouter-model">Model</label>
+                    <select id="openrouter-model"></select>
+                  </div>
+                  <div class="field-row-stacked">
+                    <label for="openrouter-key">
+                      <span>API key</span>
+                      <span class="label-hint" id="openrouter-key-badge">Not set</span>
+                    </label>
+                    <input id="openrouter-key" type="password" placeholder="Paste OpenRouter API key" />
+                  </div>
+                  <p class="hint" id="openrouter-key-status"></p>
+                  <div class="field-row">
+                    <label for="openrouter-temp">Temperature</label>
+                    <input id="openrouter-temp" type="number" min="0" max="2" step="0.05" value="0" />
+                  </div>
+                </fieldset>
+
+                <fieldset id="hf-settings" hidden>
+                  <legend>Hugging Face (local)</legend>
+                  <p class="hint disclaimer hf-setup-hint">
+                    <strong>Setup required:</strong> install local deps with
+                    <code>pip install -r requirements-local.txt</code> before this backend will work.
+                  </p>
+                  <p class="hint disclaimer">
+                    <strong>Text-only in this app.</strong> Local Hugging Face loads causal
+                    instruct models for text. Image/video need Gemini (or a future Diffusers
+                    path). Pick a small instruct repo below — Hub has millions of models;
+                    you're on your own beyond this curated list / typing a known text repo id.
+                  </p>
+                  <p class="hint disclaimer">
+                    <strong>Warning:</strong> small local instruct models usually cannot produce
+                    reliable game docs or keybindings. Unless you run a large local setup
+                    (e.g. <strong>70B+</strong> parameter models) with custom
+                    <strong>MCP (Model Context Protocol)</strong> search tools, results are often
+                    unusable compared to Gemini/OpenRouter with web search.
+                  </p>
+                  <div class="field-row-stacked">
+                    <label for="model-repo">Text model</label>
+                    <select id="model-repo"></select>
+                  </div>
+                  <div class="field-row">
+                    <label for="model-device">Device</label>
+                    <select id="model-device">
+                      <option value="auto">auto</option>
+                      <option value="cpu">cpu</option>
+                      <option value="cuda">cuda</option>
+                      <option value="mps">mps</option>
+                    </select>
+                    <label for="model-dtype">dtype</label>
+                    <select id="model-dtype">
+                      <option value="auto">auto</option>
+                      <option value="float16">float16</option>
+                      <option value="bfloat16">bfloat16</option>
+                      <option value="float32">float32</option>
+                    </select>
+                  </div>
+                  <div class="field-row">
+                    <label for="model-tokens">Max tokens</label>
+                    <input id="model-tokens" type="number" min="256" max="16384" step="256" />
+                    <label for="model-temp">Temperature</label>
+                    <input id="model-temp" type="number" min="0" max="2" step="0.05" value="0" />
+                  </div>
+                  <div class="field-row-stacked">
+                    <label for="model-token">HF token (optional, gated models)</label>
+                    <input id="model-token" type="password" placeholder="hf_… or leave blank" />
+                  </div>
+                </fieldset>
+
+                <fieldset>
+                  <legend>Shared</legend>
+                  <div class="field-row-stacked">
+                    <label for="system-extra">Extra system instructions</label>
+                    <textarea id="system-extra" rows="3" placeholder="Optional custom prompt additions…"></textarea>
+                  </div>
+                  <div class="form-actions">
+                    <button type="button" id="btn-save-model">Save</button>
+                    <button type="button" class="btn-cancel-control">Cancel</button>
+                  </div>
+                </fieldset>
+              </div>
+
+              <div id="control-pane-display" class="control-pane" data-control-pane="display" hidden>
+                <fieldset>
+                  <legend>Theme</legend>
+                  <div class="field-row-stacked">
+                    <label for="app-theme">Appearance</label>
+                    <select id="app-theme">
+                      <option value="light">Light Mode (Day)</option>
+                      <option value="dark">Dark Mode (Night)</option>
+                      <option value="custom">Customize…</option>
+                    </select>
+                    <p class="hint">
+                      Recolors the whole app — desktop, windows, title bars, buttons, and text.
+                      Separate from the Viewer Palette Theme used on documents.
+                    </p>
+                  </div>
+                  <div id="app-theme-custom" class="theme-custom-controls" hidden>
+                    <div class="field-row">
+                      <label for="custom-desktop-color">Desktop</label>
+                      <input type="color" id="custom-desktop-color" value="#008080" />
+                    </div>
+                    <div class="field-row">
+                      <label for="custom-window-color">Window</label>
+                      <input type="color" id="custom-window-color" value="#c0c0c0" />
+                    </div>
+                    <div class="field-row">
+                      <label for="custom-title-color">Title bar</label>
+                      <input type="color" id="custom-title-color" value="#000080" />
+                    </div>
+                    <div class="field-row">
+                      <label for="custom-text-color">Text</label>
+                      <input type="color" id="custom-text-color" value="#222222" />
+                    </div>
+                    <div class="field-row-stacked">
+                      <label for="custom-ui-font">Font</label>
+                      <select id="custom-ui-font">
+                        <option value="sans">Sans (MS Sans / Tahoma)</option>
+                        <option value="serif">Serif (Georgia / Times)</option>
+                        <option value="mono">Monospace (Courier)</option>
+                      </select>
+                    </div>
+                    <p class="hint">
+                      Customize is only available when selected above. Light and Dark use fixed palettes.
+                    </p>
+                  </div>
+                </fieldset>
+
+                <fieldset>
+                  <legend>Sound</legend>
+                  <div class="field-row">
+                    <input type="checkbox" id="opt-sound" />
+                    <label for="opt-sound">Sound effects</label>
+                  </div>
+                </fieldset>
+
+                <fieldset>
+                  <legend>Display</legend>
+                  <div class="field-row">
+                    <input type="checkbox" id="opt-crt" />
+                    <label for="opt-crt">CRT scanlines</label>
+                  </div>
+                  <div class="field-row-stacked">
+                    <label for="ui-scale">UI scale (fonts, windows, desktop)</label>
+                    <div class="field-row scale-row">
+                      <select id="ui-scale">
+                        <option value="0.75">75%</option>
+                        <option value="0.9">90%</option>
+                        <option value="1" selected>100% (default)</option>
+                        <option value="1.1">110%</option>
+                        <option value="1.25">125%</option>
+                        <option value="1.5">150%</option>
+                        <option value="1.75">175%</option>
+                        <option value="2">200%</option>
+                      </select>
+                      <span id="ui-scale-label" class="hint">100%</span>
+                    </div>
+                    <p class="hint">
+                      Scales the entire desktop UI. Useful on high-DPI displays or if text feels small.
+                    </p>
+                  </div>
+                  <p class="hint">
+                    Video Edit (Viewer → Edit) requires <strong>ffmpeg</strong> on PATH
+                    (see <code>config.example.yaml</code>).
+                  </p>
+                </fieldset>
+
+                <div class="form-actions">
+                  <button type="button" id="btn-save-settings">Save</button>
+                  <button type="button" class="btn-cancel-control">Cancel</button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div id="crt-overlay" hidden></div>
+
+    <div id="taskbar">
+      <button type="button" id="start-btn">Start</button>
+      <div id="taskbar-windows"></div>
+      <div id="taskbar-clock"></div>
+    </div>
+
+    <div id="start-menu" hidden>
+      <div class="start-banner">Start Here</div>
+      <button type="button" data-open="form">🕹️ Creation Studio</button>
+      <button type="button" data-open="library">📁 Archives</button>
+      <button type="button" data-open="viewer">🎮 Viewer</button>
+      <button type="button" data-open="image-edit">🖼️ Image Edit</button>
+      <button type="button" data-open="video-edit">🎬 Video Edit</button>
+      <button type="button" data-open="control">⚙️ Control Panel</button>
+    </div>
+
+    <div id="busy-overlay" hidden>
+      <div class="window" id="busy-window" role="dialog" aria-live="polite" aria-busy="true">
+        <div class="title-bar">
+          <div class="title-bar-text" id="busy-title">Please wait…</div>
+        </div>
+        <div class="window-body">
+          <p id="busy-message">Working…</p>
+          <div class="progress-indicator segmented" id="busy-indicator">
+            <span class="progress-indicator-bar" id="busy-bar"></span>
+          </div>
+          <div class="busy-meta">
+            <span id="busy-elapsed">0:00</span>
+            <span id="busy-percent-label"></span>
+          </div>
+          <p class="busy-hint" id="busy-hint">Gemini usually finishes in seconds. Local models can take minutes.</p>
+          <div class="form-actions busy-actions" id="busy-actions" hidden>
+            <button type="button" id="busy-cancel">Cancel</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div id="confirm-overlay" hidden>
+      <div class="window" id="confirm-window" role="dialog" aria-modal="true">
+        <div class="title-bar">
+          <div class="title-bar-text" id="confirm-title">Confirm</div>
+        </div>
+        <div class="window-body">
+          <p id="confirm-message"></p>
+          <div class="form-actions confirm-actions">
+            <button type="button" id="confirm-yes" class="default">Yes</button>
+            <button type="button" id="confirm-no">No</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div id="search-results-overlay" hidden>
+      <div class="window" id="search-results-window" role="dialog" aria-modal="true" aria-labelledby="search-results-title">
+        <div class="title-bar">
+          <div class="title-bar-text" id="search-results-title">Search Results</div>
+        </div>
+        <div class="window-body">
+          <p id="search-results-message"></p>
+          <ul id="search-results-list" class="search-results-list" role="listbox" aria-label="Matching games"></ul>
+          <div class="form-actions confirm-actions">
+            <button type="button" id="search-results-cancel">Cancel</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+      <!-- Image Edit (ReFrame-style adjustments) -->
+      <div class="window app-window" id="win-image-edit" data-window="image-edit" hidden style="left:80px;top:30px;width:920px;height:640px;">
+        <div class="title-bar">
+          <div class="title-bar-text">Image Edit</div>
+          <div class="title-bar-controls">
+            <button aria-label="Minimize" data-action="minimize"></button>
+            <button aria-label="Maximize" data-action="noop"></button>
+            <button aria-label="Close" data-action="close"></button>
+          </div>
+        </div>
+        <div class="window-body image-edit-body">
+          <div class="editor-app-toolbar form-actions">
+            <button type="button" id="btn-iedit-load">Load Image…</button>
+            <button type="button" id="btn-iedit-from-active">From Active</button>
+            <span class="label-hint" id="iedit-loaded-label">No image loaded</span>
+          </div>
+          <div class="image-edit-layout">
+            <div class="image-edit-preview-wrap">
+              <div class="image-edit-preview-stage" id="image-edit-stage">
+                <div class="image-edit-canvas-wrap" id="image-edit-canvas-wrap">
+                  <canvas id="image-edit-canvas"></canvas>
+                  <div id="image-edit-crop-box" class="image-edit-crop-box" hidden></div>
+                </div>
+              </div>
+              <p class="hint" id="image-edit-hint">
+                Load an image to begin, or open Edit from the Viewer. At 0° rotation, drag on the
+                image to set a crop (yellow box; outside dims). Clear Crop to reset. Apply saves.
+              </p>
+            </div>
+            <div class="image-edit-controls">
+              <fieldset>
+                <legend>Transform</legend>
+                <div class="field-row">
+                  <label for="edit-rotation">Rotate</label>
+                  <input id="edit-rotation" type="range" min="0" max="359" step="1" value="0" />
+                  <span id="edit-rotation-label" class="label-hint">0°</span>
+                </div>
+                <div class="form-actions">
+                  <button type="button" id="btn-edit-rot-ccw">⟲ 90°</button>
+                  <button type="button" id="btn-edit-rot-cw">90° ⟳</button>
+                  <button type="button" id="btn-edit-crop-clear">Clear Crop</button>
+                </div>
+              </fieldset>
+
+              <fieldset>
+                <legend>Basic</legend>
+                <div class="field-row">
+                  <label for="edit-brightness">Brightness</label>
+                  <input id="edit-brightness" type="range" min="-100" max="100" step="1" value="0" />
+                  <span class="edit-val" data-for="edit-brightness">0</span>
+                </div>
+                <div class="field-row">
+                  <label for="edit-contrast">Contrast</label>
+                  <input id="edit-contrast" type="range" min="-100" max="100" step="1" value="0" />
+                  <span class="edit-val" data-for="edit-contrast">0</span>
+                </div>
+                <div class="field-row">
+                  <input type="checkbox" id="edit-grayscale" />
+                  <label for="edit-grayscale">Grayscale</label>
+                </div>
+                <div class="field-row">
+                  <input type="checkbox" id="edit-threshold" />
+                  <label for="edit-threshold">Threshold (B/W)</label>
+                </div>
+                <div class="field-row">
+                  <input type="checkbox" id="edit-sharpen" />
+                  <label for="edit-sharpen">Sharpen</label>
+                </div>
+                <div class="field-row">
+                  <input type="checkbox" id="edit-bg-remove" />
+                  <label for="edit-bg-remove">Make background transparent</label>
+                </div>
+                <div class="field-row" id="edit-bg-tol-row" hidden>
+                  <label for="edit-bg-tolerance">Similarity</label>
+                  <input id="edit-bg-tolerance" type="range" min="5" max="100" step="1" value="35" />
+                  <span class="edit-val" data-for="edit-bg-tolerance">35</span>
+                </div>
+                <div class="field-row" id="edit-bg-edges-row" hidden>
+                  <input type="checkbox" id="edit-bg-edges" />
+                  <label for="edit-bg-edges">Remove from edges only</label>
+                </div>
+              </fieldset>
+
+              <fieldset>
+                <legend>Advanced</legend>
+                <div class="field-row">
+                  <label for="edit-saturation">Saturation</label>
+                  <input id="edit-saturation" type="range" min="0" max="200" step="1" value="100" />
+                  <span class="edit-val" data-for="edit-saturation">100</span>
+                </div>
+                <div class="field-row">
+                  <label for="edit-hue">Hue rotate</label>
+                  <input id="edit-hue" type="range" min="0" max="360" step="1" value="0" />
+                  <span class="edit-val" data-for="edit-hue">0</span>
+                </div>
+                <div class="field-row">
+                  <label for="edit-invert">Invert</label>
+                  <input id="edit-invert" type="range" min="0" max="100" step="1" value="0" />
+                  <span class="edit-val" data-for="edit-invert">0</span>
+                </div>
+                <div class="field-row">
+                  <label for="edit-sepia">Sepia</label>
+                  <input id="edit-sepia" type="range" min="0" max="100" step="1" value="0" />
+                  <span class="edit-val" data-for="edit-sepia">0</span>
+                </div>
+                <div class="field-row">
+                  <label for="edit-blur">Blur</label>
+                  <input id="edit-blur" type="range" min="0" max="10" step="0.5" value="0" />
+                  <span class="edit-val" data-for="edit-blur">0</span>
+                </div>
+                <div class="field-row">
+                  <label for="edit-exposure">Exposure</label>
+                  <input id="edit-exposure" type="range" min="-100" max="100" step="1" value="0" />
+                  <span class="edit-val" data-for="edit-exposure">0</span>
+                </div>
+                <div class="field-row">
+                  <label for="edit-gamma">Gamma</label>
+                  <input id="edit-gamma" type="range" min="0.2" max="3" step="0.05" value="1" />
+                  <span class="edit-val" data-for="edit-gamma">1</span>
+                </div>
+                <div class="field-row">
+                  <label for="edit-vignette">Vignette</label>
+                  <input id="edit-vignette" type="range" min="0" max="100" step="1" value="0" />
+                  <span class="edit-val" data-for="edit-vignette">0</span>
+                </div>
+                <div class="field-row">
+                  <label for="edit-tint-r">Red tint</label>
+                  <input id="edit-tint-r" type="range" min="-100" max="100" step="1" value="0" />
+                  <span class="edit-val" data-for="edit-tint-r">0</span>
+                </div>
+                <div class="field-row">
+                  <label for="edit-tint-g">Green tint</label>
+                  <input id="edit-tint-g" type="range" min="-100" max="100" step="1" value="0" />
+                  <span class="edit-val" data-for="edit-tint-g">0</span>
+                </div>
+                <div class="field-row">
+                  <label for="edit-tint-b">Blue tint</label>
+                  <input id="edit-tint-b" type="range" min="-100" max="100" step="1" value="0" />
+                  <span class="edit-val" data-for="edit-tint-b">0</span>
+                </div>
+              </fieldset>
+
+              <div class="form-actions">
+                <button type="button" id="btn-edit-reset">Reset</button>
+                <button type="button" id="btn-edit-cancel">Cancel</button>
+                <button type="button" id="btn-edit-apply" class="default">Apply</button>
+                <button type="button" id="btn-edit-save" class="default" hidden>Save</button>
+                <button type="button" id="btn-edit-save-as" hidden>Save As…</button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Video Edit (ffmpeg filters + trim/split/splice) -->
+      <div class="window app-window" id="win-video-edit" data-window="video-edit" hidden style="left:60px;top:20px;width:960px;height:680px;">
+        <div class="title-bar">
+          <div class="title-bar-text">Video Edit</div>
+          <div class="title-bar-controls">
+            <button aria-label="Minimize" data-action="minimize"></button>
+            <button aria-label="Maximize" data-action="noop"></button>
+            <button aria-label="Close" data-action="close"></button>
+          </div>
+        </div>
+        <div class="window-body image-edit-body">
+          <div class="editor-app-toolbar form-actions">
+            <button type="button" id="btn-vedit-load">Load Video…</button>
+            <button type="button" id="btn-vedit-from-active">From Active</button>
+            <span class="label-hint" id="vedit-loaded-label">No video loaded</span>
+          </div>
+          <div class="image-edit-layout">
+            <div class="image-edit-preview-wrap">
+              <div class="image-edit-preview-stage video-edit-stage" id="video-edit-stage">
+                <video id="video-edit-player" class="video-edit-player" controls playsinline></video>
+                <canvas id="video-edit-preview-canvas" class="video-edit-preview-canvas" hidden></canvas>
+                <div id="video-edit-crop-box" class="image-edit-crop-box" hidden></div>
+              </div>
+              <div class="video-edit-transport field-row">
+                <button type="button" id="btn-vedit-pause">Pause</button>
+                <label for="vedit-scrub">Time</label>
+                <input id="vedit-scrub" type="range" min="0" max="1000" step="1" value="0" />
+                <span id="vedit-time-label" class="label-hint">0.0s / 0.0s</span>
+              </div>
+              <fieldset class="vedit-segments-panel">
+                <legend>Segments</legend>
+                <p class="hint">
+                  Split at the playhead, select a clip, delete or reorder, then save.
+                  The timeline always starts at 0.00s on the left (edited order), not source time.
+                </p>
+                <div class="vedit-timeline" id="vedit-timeline" title="Click a segment to select it">
+                  <div class="vedit-timeline-track" id="vedit-timeline-track"></div>
+                  <div class="vedit-playhead" id="vedit-playhead" hidden></div>
+                </div>
+                <p class="hint" id="vedit-segments-summary">1 segment</p>
+                <div class="form-actions">
+                  <button type="button" id="btn-vedit-split">Split at playhead</button>
+                  <button type="button" id="btn-vedit-seg-delete">Delete</button>
+                  <button type="button" id="btn-vedit-seg-left">← Move</button>
+                  <button type="button" id="btn-vedit-seg-right">Move →</button>
+                </div>
+              </fieldset>
+              <p class="hint" id="video-edit-hint">
+                Filters preview on the current frame. Apply rebuilds the video with your segment
+                order and filters (requires ffmpeg on PATH). Load a video here or from the Viewer.
+                Drag a paused frame (0°) to crop. Timeline starts at 0.00s.
+              </p>
+            </div>
+            <div class="image-edit-controls">
+              <fieldset>
+                <legend>Transform</legend>
+                <div class="field-row">
+                  <label for="vedit-rotation">Rotate</label>
+                  <input id="vedit-rotation" type="range" min="0" max="359" step="1" value="0" />
+                  <span id="vedit-rotation-label" class="label-hint">0°</span>
+                </div>
+                <div class="form-actions">
+                  <button type="button" id="btn-vedit-rot-ccw">⟲ 90°</button>
+                  <button type="button" id="btn-vedit-rot-cw">90° ⟳</button>
+                  <button type="button" id="btn-vedit-crop-clear">Clear Crop</button>
+                </div>
+              </fieldset>
+
+              <fieldset>
+                <legend>Basic</legend>
+                <div class="field-row">
+                  <label for="vedit-brightness">Brightness</label>
+                  <input id="vedit-brightness" type="range" min="-100" max="100" step="1" value="0" />
+                  <span class="edit-val" data-for="vedit-brightness">0</span>
+                </div>
+                <div class="field-row">
+                  <label for="vedit-contrast">Contrast</label>
+                  <input id="vedit-contrast" type="range" min="-100" max="100" step="1" value="0" />
+                  <span class="edit-val" data-for="vedit-contrast">0</span>
+                </div>
+                <div class="field-row">
+                  <input type="checkbox" id="vedit-grayscale" />
+                  <label for="vedit-grayscale">Grayscale</label>
+                </div>
+                <div class="field-row">
+                  <input type="checkbox" id="vedit-sharpen" />
+                  <label for="vedit-sharpen">Sharpen</label>
+                </div>
+              </fieldset>
+
+              <fieldset>
+                <legend>Advanced</legend>
+                <div class="field-row">
+                  <label for="vedit-saturation">Saturation</label>
+                  <input id="vedit-saturation" type="range" min="0" max="200" step="1" value="100" />
+                  <span class="edit-val" data-for="vedit-saturation">100</span>
+                </div>
+                <div class="field-row">
+                  <label for="vedit-hue">Hue rotate</label>
+                  <input id="vedit-hue" type="range" min="0" max="360" step="1" value="0" />
+                  <span class="edit-val" data-for="vedit-hue">0</span>
+                </div>
+                <div class="field-row">
+                  <label for="vedit-invert">Invert</label>
+                  <input id="vedit-invert" type="range" min="0" max="100" step="1" value="0" />
+                  <span class="edit-val" data-for="vedit-invert">0</span>
+                </div>
+                <div class="field-row">
+                  <label for="vedit-sepia">Sepia</label>
+                  <input id="vedit-sepia" type="range" min="0" max="100" step="1" value="0" />
+                  <span class="edit-val" data-for="vedit-sepia">0</span>
+                </div>
+                <div class="field-row">
+                  <label for="vedit-blur">Blur</label>
+                  <input id="vedit-blur" type="range" min="0" max="10" step="0.5" value="0" />
+                  <span class="edit-val" data-for="vedit-blur">0</span>
+                </div>
+                <div class="field-row">
+                  <label for="vedit-exposure">Exposure</label>
+                  <input id="vedit-exposure" type="range" min="-100" max="100" step="1" value="0" />
+                  <span class="edit-val" data-for="vedit-exposure">0</span>
+                </div>
+                <div class="field-row">
+                  <label for="vedit-gamma">Gamma</label>
+                  <input id="vedit-gamma" type="range" min="0.2" max="3" step="0.05" value="1" />
+                  <span class="edit-val" data-for="vedit-gamma">1</span>
+                </div>
+                <div class="field-row">
+                  <label for="vedit-vignette">Vignette</label>
+                  <input id="vedit-vignette" type="range" min="0" max="100" step="1" value="0" />
+                  <span class="edit-val" data-for="vedit-vignette">0</span>
+                </div>
+                <div class="field-row">
+                  <label for="vedit-tint-r">Red tint</label>
+                  <input id="vedit-tint-r" type="range" min="-100" max="100" step="1" value="0" />
+                  <span class="edit-val" data-for="vedit-tint-r">0</span>
+                </div>
+                <div class="field-row">
+                  <label for="vedit-tint-g">Green tint</label>
+                  <input id="vedit-tint-g" type="range" min="-100" max="100" step="1" value="0" />
+                  <span class="edit-val" data-for="vedit-tint-g">0</span>
+                </div>
+                <div class="field-row">
+                  <label for="vedit-tint-b">Blue tint</label>
+                  <input id="vedit-tint-b" type="range" min="-100" max="100" step="1" value="0" />
+                  <span class="edit-val" data-for="vedit-tint-b">0</span>
+                </div>
+              </fieldset>
+
+              <div class="form-actions">
+                <button type="button" id="btn-vedit-reset">Reset</button>
+                <button type="button" id="btn-vedit-cancel">Cancel</button>
+                <button type="button" id="btn-vedit-apply" class="default">Apply</button>
+                <button type="button" id="btn-vedit-save" class="default" hidden>Save</button>
+                <button type="button" id="btn-vedit-save-as" hidden>Save As…</button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div id="error-toast" hidden></div>
+  </div>
+
+  <script src="vendor/html-to-image.js"></script>
+  <script src="vendor/jspdf.umd.min.js"></script>
+  <script src="catalog.js"></script>
+  <script src="image_edit.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>

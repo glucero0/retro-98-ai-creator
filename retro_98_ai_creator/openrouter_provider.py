@@ -8,8 +8,8 @@ import urllib.error
 import urllib.request
 from typing import Any, Callable
 
-from .creation_utils import finalize_creation
-from .prompts import SYSTEM_MESSAGE, build_prompt
+from .creation_utils import build_text_creation_from_plain, finalize_creation, is_generic_studio_request
+from .prompts import SYSTEM_MESSAGE, build_general_text_prompt, build_prompt
 
 logger = logging.getLogger(__name__)
 
@@ -22,37 +22,44 @@ SUGGESTED_OPENROUTER_MODELS: list[dict[str, str]] = [
     {
         "repo_id": "google/gemini-2.5-flash",
         "label": "Gemini 2.5 Flash",
-        "notes": "Fast — recommended default",
+        "notes": "Recommended default via OpenRouter",
+        "modality": "text",
     },
     {
         "repo_id": "google/gemini-2.5-pro",
         "label": "Gemini 2.5 Pro",
-        "notes": "Higher quality via OpenRouter",
+        "notes": "Recommended for highest accuracy",
+        "modality": "text",
     },
     {
         "repo_id": "openai/gpt-4o-mini",
         "label": "GPT-4o Mini",
         "notes": "Fast & affordable OpenAI",
+        "modality": "text",
     },
     {
         "repo_id": "openai/gpt-4o",
         "label": "GPT-4o",
         "notes": "Strong OpenAI multimodal",
+        "modality": "text",
     },
     {
         "repo_id": "anthropic/claude-sonnet-4",
         "label": "Claude Sonnet 4",
         "notes": "Strong writing / documentation",
+        "modality": "text",
     },
     {
         "repo_id": "deepseek/deepseek-chat",
         "label": "DeepSeek Chat",
         "notes": "Strong value JSON generation",
+        "modality": "text",
     },
     {
         "repo_id": "meta-llama/llama-3.3-70b-instruct",
         "label": "Llama 3.3 70B Instruct",
         "notes": "Open-weight via OpenRouter",
+        "modality": "text",
     },
 ]
 
@@ -90,8 +97,7 @@ def _chat_completion(
         headers={
             "Authorization": f"Bearer {api_key}",
             "Content-Type": "application/json",
-            "HTTP-Referer": "https://github.com/glucero0/Game-Base-Ref-Creator",
-            "X-Title": "Game Base Ref Creator 98",
+            "X-Title": "Retro 98 AI Creator",
         },
     )
     try:
@@ -137,6 +143,8 @@ def generate_with_openrouter(
     def emit(message: str, percent: float | None = None, **extra: Any) -> None:
         if not progress:
             return
+        from .cancellation import GenerationCancelled
+
         payload: dict[str, Any] = {
             "message": message,
             "phase": "generate",
@@ -147,6 +155,8 @@ def generate_with_openrouter(
         payload.update(extra)
         try:
             progress(payload)
+        except GenerationCancelled:
+            raise
         except Exception:  # noqa: BLE001
             pass
 
@@ -160,22 +170,34 @@ def generate_with_openrouter(
     temperature = float(
         openrouter_cfg.get("temperature")
         if openrouter_cfg.get("temperature") is not None
-        else 0.4
+        else 0.0
     )
     base_url = (openrouter_cfg.get("base_url") or OPENROUTER_BASE_URL).strip() or OPENROUTER_BASE_URL
 
     emit(f"Contacting OpenRouter ({model_name})…", percent=10)
-    prompt = build_prompt(
-        game,
-        platform,
-        creation_type,
-        system_extra=system_extra,
-        creation_description=creation_description,
-        with_web_search=False,
-        exact_title=exact_title,
-    )
+    prompt_text = (creation_description or "").strip() or (game or "").strip()
+    generic = is_generic_studio_request(game, platform, creation_type)
+
+    if generic:
+        prompt = build_general_text_prompt(prompt_text, system_extra=system_extra)
+        system = (
+            "You are a helpful creative AI assistant. "
+            "Follow the user's prompt carefully. Prefer clear, well-structured output."
+        )
+    else:
+        prompt = build_prompt(
+            game,
+            platform,
+            creation_type,
+            system_extra=system_extra,
+            creation_description=creation_description,
+            with_web_search=False,
+            exact_title=exact_title,
+        )
+        system = SYSTEM_MESSAGE
+
     messages = [
-        {"role": "system", "content": SYSTEM_MESSAGE},
+        {"role": "system", "content": system},
         {"role": "user", "content": prompt},
     ]
 
@@ -189,10 +211,27 @@ def generate_with_openrouter(
             base_url=base_url,
         )
     except Exception as exc:
+        from .cancellation import GenerationCancelled
+
+        if isinstance(exc, GenerationCancelled):
+            raise
         raise RuntimeError(f"OpenRouter API error: {exc}") from exc
 
     if not response_text:
         raise RuntimeError("OpenRouter returned an empty response.")
+
+    if generic:
+        emit("Formatting response…", percent=85)
+        return build_text_creation_from_plain(
+            response_text,
+            prompt=prompt_text,
+            model_info={
+                "provider": "openrouter",
+                "repo_id": model_name,
+                "modality": "text",
+                "google_search": False,
+            },
+        )
 
     emit("Parsing OpenRouter JSON…", percent=85)
     return finalize_creation(
@@ -203,8 +242,10 @@ def generate_with_openrouter(
         model_info={
             "provider": "openrouter",
             "repo_id": model_name,
+            "modality": "text",
             "google_search": False,
         },
         grounding_sources=None,
         exact_title=exact_title,
+        prompt=prompt_text,
     )

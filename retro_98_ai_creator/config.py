@@ -14,6 +14,9 @@ DEFAULT_CONFIG_PATH = PROJECT_ROOT / "config.yaml"
 EXAMPLE_CONFIG_PATH = PROJECT_ROOT / "config.example.yaml"
 
 DEFAULT_GEMINI_MODEL = "gemini-2.5-flash"
+DEFAULT_GEMINI_TEXT_MODEL = "gemini-2.5-flash"
+DEFAULT_GEMINI_IMAGE_MODEL = "gemini-2.5-flash-image"
+DEFAULT_GEMINI_VIDEO_MODEL = "veo-2.0-generate-001"
 DEFAULT_OPENROUTER_MODEL = "google/gemini-2.5-flash"
 DEFAULT_HF_MODEL = "microsoft/Phi-3.5-mini-instruct"
 # Back-compat alias used by older tests / docs
@@ -25,15 +28,21 @@ DEFAULTS: dict[str, Any] = {
         "provider": "gemini",
     },
     "gemini": {
-        "model": DEFAULT_GEMINI_MODEL,
+        # Legacy single-model key — kept in sync with text_model
+        "model": DEFAULT_GEMINI_TEXT_MODEL,
+        "text_model": DEFAULT_GEMINI_TEXT_MODEL,
+        "image_model": DEFAULT_GEMINI_IMAGE_MODEL,
+        "video_model": DEFAULT_GEMINI_VIDEO_MODEL,
         "api_key": None,  # set via Control Panel → saved in config.yaml
         "google_search": True,
-        "temperature": 0.4,
+        # When google_search is on: Pass 1 extract + Pass 2 verify at temperature 0
+        "two_pass_verify": True,
+        "temperature": 0.0,
     },
     "openrouter": {
         "model": DEFAULT_OPENROUTER_MODEL,
         "api_key": None,  # set via Control Panel → saved in config.yaml
-        "temperature": 0.4,
+        "temperature": 0.0,
         "base_url": "https://openrouter.ai/api/v1",
     },
     "model": {
@@ -42,7 +51,7 @@ DEFAULTS: dict[str, Any] = {
         "device": "auto",
         "torch_dtype": "auto",
         "max_new_tokens": 2048,
-        "temperature": 0.4,
+        "temperature": 0.0,
         "top_p": 0.9,
         "trust_remote_code": False,
         "hf_token": None,
@@ -56,14 +65,22 @@ DEFAULTS: dict[str, Any] = {
         "ui_scale": 1.0,
         "default_platform": None,
         "default_theme": "auto",
-        "app_theme": "win98",
+        "app_theme": "light",
+        "custom_theme": {
+            "desktop_color": "#008080",
+            "window_color": "#c0c0c0",
+            "title_color": "#000080",
+            "text_color": "#222222",
+            "font": "sans",
+        },
         "window_width": 1280,
         "window_height": 800,
-        "title": "Game Base Ref Creator 98",
+        "title": "Retro 98 AI Creator",
     },
     "paths": {
         # Relative paths resolve against the project root
         "archives": "archives.json",
+        "media": "media",
     },
 }
 
@@ -108,16 +125,22 @@ def load_config() -> dict[str, Any]:
     paths.pop("user_config", None)
     if not paths.get("archives"):
         paths["archives"] = DEFAULTS["paths"]["archives"]
+    if not paths.get("media"):
+        paths["media"] = DEFAULTS["paths"]["media"]
 
     # Drop retired Game Defaults key (preset → platform)
     ui = cfg.setdefault("ui", {})
     ui.pop("default_preset", None)
 
-    # Remap retired Gemini model IDs still saved in older configs
-    from .gemini_provider import normalize_gemini_model
+    # Remap / migrate Gemini model settings (legacy single model → three slots)
+    from .gemini_provider import migrate_gemini_model_config, normalize_gemini_model
 
     gemini = cfg.setdefault("gemini", {})
-    gemini["model"] = normalize_gemini_model(gemini.get("model"))
+    migrate_gemini_model_config(gemini)
+    gemini["model"] = normalize_gemini_model(gemini.get("model") or gemini.get("text_model"))
+    gemini["text_model"] = normalize_gemini_model(gemini.get("text_model"))
+    gemini["image_model"] = normalize_gemini_model(gemini.get("image_model"))
+    gemini["video_model"] = normalize_gemini_model(gemini.get("video_model"))
     return cfg
 
 
@@ -193,21 +216,21 @@ SUGGESTED_MODELS: list[dict[str, str]] = [
     {
         "repo_id": "microsoft/Phi-3.5-mini-instruct",
         "label": "Phi-3.5 Mini Instruct",
-        "notes": "~3.8B params — local, no API key",
+        "notes": "~3.8B — often weak for accurate docs (needs 70B+ / MCP search)",
     },
     {
         "repo_id": "Qwen/Qwen2.5-3B-Instruct",
         "label": "Qwen2.5 3B Instruct",
-        "notes": "Strong small instruct model",
+        "notes": "Small local — not recommended for keybindings without search tools",
     },
     {
         "repo_id": "Qwen/Qwen2.5-1.5B-Instruct",
         "label": "Qwen2.5 1.5B Instruct",
-        "notes": "Faster / lower memory",
+        "notes": "Fastest / lowest memory — demos only",
     },
     {
         "repo_id": "google/gemma-2-2b-it",
         "label": "Gemma 2 2B IT",
-        "notes": "Compact Gemma instruct (may require HF acceptance)",
+        "notes": "Compact (may require HF acceptance) — demos only",
     },
 ]

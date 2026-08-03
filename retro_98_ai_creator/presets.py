@@ -3,9 +3,13 @@
 from __future__ import annotations
 
 import json
+import re
 from pathlib import Path
+from typing import Any
 
-_CREATION_TYPES_PATH = Path(__file__).resolve().parent / "data" / "creation_types.json"
+_DATA_DIR = Path(__file__).resolve().parent / "data"
+_CREATION_TYPES_PATH = _DATA_DIR / "creation_types.json"
+_PLATFORMS_PATH = _DATA_DIR / "platforms.json"
 
 
 def _load_creation_types() -> list[dict[str, str]]:
@@ -26,6 +30,26 @@ def _load_creation_types() -> list[dict[str, str]]:
     return out
 
 
+def _load_platforms() -> list[dict[str, Any]]:
+    """Load hardware platform catalog (id, label, manufacturer, controllers/buttons)."""
+    with _PLATFORMS_PATH.open(encoding="utf-8") as fh:
+        raw = json.load(fh)
+    if not isinstance(raw, list):
+        raise ValueError("platforms.json must be a JSON array")
+    out: list[dict[str, Any]] = []
+    for item in raw:
+        if not isinstance(item, dict):
+            continue
+        entry = {
+            "id": str(item["id"]),
+            "label": str(item["label"]),
+            "manufacturer": str(item.get("manufacturer") or "").strip(),
+            "controllers": item.get("controllers") or [],
+        }
+        out.append(entry)
+    return out
+
+
 def creation_description_for(creation_type: str) -> str:
     """Return the authoritative description for a Desired Creation id."""
     needle = (creation_type or "").strip()
@@ -33,6 +57,57 @@ def creation_description_for(creation_type: str) -> str:
         if entry["id"] == needle:
             return entry.get("description") or ""
     return ""
+
+
+def apply_creation_placeholders(template: str, game: str, platform: str) -> str:
+    """Replace [GAME] / [PLATFORM] tokens (any case) with the studio selections."""
+    text = str(template or "")
+    g = (game or "").strip()
+    p = (platform or "").strip()
+    if g:
+        text = re.sub(r"\[GAME\]", g, text, flags=re.IGNORECASE)
+    if p:
+        text = re.sub(r"\[PLATFORM\]", p, text, flags=re.IGNORECASE)
+    return text
+
+
+def resolve_creation_description(
+    creation_type: str,
+    game: str,
+    platform: str,
+    *,
+    override: str | None = None,
+) -> str:
+    """Prefer a UI-supplied description; otherwise catalog + placeholder fill."""
+    template = (override or "").strip() or creation_description_for(creation_type)
+    return apply_creation_placeholders(template, game, platform)
+
+
+def platform_for(platform: str) -> dict[str, Any] | None:
+    """Return the hardware platform entry matching id or display label."""
+    needle = (platform or "").strip().lower()
+    if not needle:
+        return None
+    for entry in PLATFORMS:
+        if entry["id"].lower() == needle or entry["label"].lower() == needle:
+            return entry
+    return None
+
+
+def platform_button_labels(platform: str, *, controller_id: str | None = None) -> list[str]:
+    """Return display labels for buttons on a platform (optionally one controller)."""
+    entry = platform_for(platform)
+    if not entry:
+        return []
+    labels: list[str] = []
+    for controller in entry.get("controllers") or []:
+        if controller_id and str(controller.get("id") or "") != controller_id:
+            continue
+        for button in controller.get("buttons") or []:
+            label = str(button.get("label") or "").strip()
+            if label and label not in labels:
+                labels.append(label)
+    return labels
 
 
 POPULAR_GAME_PRESETS: list[dict[str, str]] = [
@@ -110,43 +185,8 @@ POPULAR_GAME_PRESETS: list[dict[str, str]] = [
     },
 ]
 
-PLATFORM_OPTIONS: list[str] = [
-    "Apple II / IIe",
-    "Timex Sinclair 1000 / ZX Spectrum",
-    "Commodore 64 (C64)",
-    "Commodore Amiga 500 / 1200",
-    "Atari 2600 / 5200 / 7800",
-    "Atari ST / TT",
-    "Amstrad CPC",
-    "BBC Micro / Acorn Electron",
-    "Vectrex",
-    "MS-DOS (VGA/EGA/CGA)",
-    "FM Towns / PC-98",
-    "Nintendo Entertainment System (NES)",
-    "Super Nintendo (SNES)",
-    "Nintendo 64 (N64)",
-    "Game Boy / Game Boy Color / Game Boy Advance",
-    "Sega Genesis / Mega Drive",
-    "Sega Saturn",
-    "Sega Dreamcast",
-    "TurboGrafx-16 / PC Engine",
-    "Neo Geo MVS / AES",
-    "Sony PlayStation (PS1)",
-    "Sony PlayStation 2 (PS2)",
-    "Sony PlayStation 3 (PS3)",
-    "Sony PlayStation 4 (PS4)",
-    "Sony PlayStation 5 (PS5)",
-    "PlayStation Portable (PSP) / PS Vita",
-    "Original Xbox",
-    "Xbox 360",
-    "Xbox One",
-    "Xbox Series X | S",
-    "Nintendo GameCube",
-    "Nintendo Wii / Wii U",
-    "Nintendo Switch",
-    "Windows PC / Steam Deck",
-    "Arcade (Coin-Op Cabinet)",
-]
+PLATFORMS: list[dict[str, Any]] = _load_platforms()
+PLATFORM_OPTIONS: list[str] = [p["label"] for p in PLATFORMS]
 
 CREATION_TYPES: list[dict[str, str]] = _load_creation_types()
 

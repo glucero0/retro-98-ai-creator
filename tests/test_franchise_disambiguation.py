@@ -2,12 +2,12 @@
 
 import pytest
 
-from game_base_ref_creator.creation_utils import AmbiguousGameError, GameNotFoundError, finalize_creation
-from game_base_ref_creator.franchise_disambiguation import (
+from retro_98_ai_creator.creation_utils import AmbiguousGameError, GameNotFoundError, finalize_creation
+from retro_98_ai_creator.franchise_disambiguation import (
     find_franchise_key,
     resolve_franchise_ambiguity,
 )
-from game_base_ref_creator.generator import generate_creation
+from retro_98_ai_creator.generator import generate_creation
 
 
 def test_call_of_duty_is_ambiguous():

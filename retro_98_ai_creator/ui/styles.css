@@ -1,4 +1,4 @@
-/* Game Base Ref Creator — desktop chrome on top of 98.css */
+/* Retro 98 AI Creator — desktop chrome on top of 98.css */
 
 :root {
   --desktop-bg: #008080;
@@ -36,6 +36,7 @@
   --ui-border-mid: #dfdfdf;
   --ui-border-dark: #808080;
   --ui-border-darker: #0a0a0a;
+  --ui-font: "Pixelated MS Sans Serif", "MS Sans Serif", Tahoma, sans-serif;
 }
 
 * {
@@ -46,28 +47,21 @@ html,
 body {
   margin: 0;
   height: 100%;
-  overflow: hidden;
+  overflow: auto;
   background: var(--desktop-bg);
   color: var(--ui-text);
-  font-family: "Pixelated MS Sans Serif", "MS Sans Serif", Tahoma, sans-serif;
+  font-family: var(--ui-font);
 }
 
 #desktop {
   position: relative;
   width: 100%;
-  height: 100%;
+  min-height: 100%;
+  height: auto;
   background-color: var(--desktop-bg);
-  background-image: var(--desktop-wallpaper),
-    linear-gradient(
-      160deg,
-      var(--desktop-bg-mid) 0%,
-      var(--desktop-bg) 45%,
-      var(--desktop-bg-deep) 100%
-    );
-  background-size: 240px 240px, cover;
-  background-position: center, center;
-  background-repeat: repeat, no-repeat;
-  overflow: hidden;
+  background-image: none;
+  overflow: visible;
+  padding-bottom: var(--taskbar-h);
   transition: background-color 0.25s ease;
 }
 
@@ -127,10 +121,14 @@ body {
 
 #windows-layer {
   position: absolute;
-  inset: 0 0 var(--taskbar-h) 0;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: var(--taskbar-h);
   z-index: 5;
   pointer-events: none;
-  overflow: hidden;
+  overflow: visible;
+  min-height: calc(100% - var(--taskbar-h));
 }
 
 .app-window {
@@ -142,6 +140,30 @@ body {
   display: flex;
   flex-direction: column;
   overflow: hidden;
+  min-width: 320px;
+  min-height: 180px;
+}
+
+.app-window .window-resize-handle {
+  position: absolute;
+  right: 0;
+  bottom: 0;
+  width: 18px;
+  height: 18px;
+  cursor: nwse-resize;
+  z-index: 6;
+  touch-action: none;
+  background:
+    linear-gradient(135deg, transparent 0 45%, var(--ui-shadow, #808080) 45% 55%, transparent 55% 70%, var(--ui-shadow, #808080) 70% 80%, transparent 80%);
+}
+
+.app-window.resizing {
+  z-index: 50 !important;
+  user-select: none;
+}
+
+.app-window.resizing .window-body {
+  pointer-events: none;
 }
 
 .app-window .window-body {
@@ -189,6 +211,27 @@ body {
   cursor: pointer;
 }
 
+/* 98.css hardcodes black SVG glyphs; swap to white on dark button faces */
+html[data-ui-button-dark="1"] .title-bar-controls button[aria-label="Minimize"],
+html[data-ui-button-dark="1"] .title-bar-controls button[aria-label].minimize {
+  background-image: url("data:image/svg+xml;charset=utf-8,%3Csvg width='6' height='2' fill='none' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath fill='%23fff' d='M0 0h6v2H0z'/%3E%3C/svg%3E");
+}
+
+html[data-ui-button-dark="1"] .title-bar-controls button[aria-label="Maximize"],
+html[data-ui-button-dark="1"] .title-bar-controls button[aria-label].maximize {
+  background-image: url("data:image/svg+xml;charset=utf-8,%3Csvg width='9' height='9' fill='none' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath fill-rule='evenodd' clip-rule='evenodd' d='M9 0H0v9h9V0zM8 2H1v6h7V2z' fill='%23fff'/%3E%3C/svg%3E");
+}
+
+html[data-ui-button-dark="1"] .title-bar-controls button[aria-label="Restore"],
+html[data-ui-button-dark="1"] .title-bar-controls button[aria-label].restore {
+  background-image: url("data:image/svg+xml;charset=utf-8,%3Csvg width='8' height='9' fill='none' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath fill='%23fff' d='M2 0h6v2H2zM7 2h1v4H7zM2 2h1v1H2zM6 5h1v1H6zM0 3h6v2H0zM5 5h1v4H5zM0 5h1v4H0zM1 8h4v1H1z'/%3E%3C/svg%3E");
+}
+
+html[data-ui-button-dark="1"] .title-bar-controls button[aria-label="Close"],
+html[data-ui-button-dark="1"] .title-bar-controls button[aria-label].close {
+  background-image: url("data:image/svg+xml;charset=utf-8,%3Csvg width='8' height='7' fill='none' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath fill-rule='evenodd' clip-rule='evenodd' d='M0 0h2v1h1v1h2V1h1V0h2v1H7v1H6v1H5v1h1v1h1v1h1v1H6V6H5V5H3v1H2v1H0V6h1V5h1V4h1V3H2V2H1V1H0V0z' fill='%23fff'/%3E%3C/svg%3E");
+}
+
 .app-window.focused {
   z-index: 30;
 }
@@ -202,6 +245,18 @@ body {
 }
 
 /* ── App Theme: windows, chrome, controls (overrides 98.css hardcodes) ── */
+
+.window,
+.window-body,
+button,
+input,
+select,
+textarea,
+label,
+.field-row,
+.status-bar-field {
+  font-family: var(--ui-font);
+}
 
 .window {
   background: var(--ui-window);
@@ -258,11 +313,46 @@ input[type="number"],
 input[type="search"],
 input[type="email"],
 input:not([type]),
-select,
 textarea {
   background: var(--ui-input);
   color: var(--ui-input-text);
   border-color: var(--ui-border-darker);
+}
+
+/* 98.css draws the Win98 combo arrow via background-image. Never use the
+   `background` shorthand on select — it wipes the arrow and can leave a
+   repeating SVG that tiles across the control when opened/focused. */
+select {
+  --combo-arrow: url("data:image/svg+xml;charset=utf-8,%3Csvg width='16' height='17' fill='none' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath fill-rule='evenodd' clip-rule='evenodd' d='M15 0H0v16h1V1h14V0z' fill='%23DFDFDF'/%3E%3Cpath fill-rule='evenodd' clip-rule='evenodd' d='M2 1H1v14h1V2h12V1H2z' fill='%23fff'/%3E%3Cpath fill-rule='evenodd' clip-rule='evenodd' d='M16 17H0v-1h15V0h1v17z' fill='%23000'/%3E%3Cpath fill-rule='evenodd' clip-rule='evenodd' d='M15 1h-1v14H1v1h14V1z' fill='gray'/%3E%3Cpath fill='silver' d='M2 2h12v13H2z'/%3E%3Cpath fill-rule='evenodd' clip-rule='evenodd' d='M11 6H4v1h1v1h1v1h1v1h1V9h1V8h1V7h1V6z' fill='%23000'/%3E%3C/svg%3E");
+  --combo-arrow-active: url("data:image/svg+xml;charset=utf-8,%3Csvg width='16' height='17' fill='none' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath fill-rule='evenodd' clip-rule='evenodd' d='M0 0h16v17H0V0zm1 16h14V1H1v15z' fill='gray'/%3E%3Cpath fill='silver' d='M1 1h14v15H1z'/%3E%3Cpath fill-rule='evenodd' clip-rule='evenodd' d='M12 7H5v1h1v1h1v1h1v1h1v-1h1V9h1V8h1V7z' fill='%23000'/%3E%3C/svg%3E");
+  appearance: none;
+  -webkit-appearance: none;
+  -moz-appearance: none;
+  background-color: var(--ui-input);
+  background-image: var(--combo-arrow);
+  background-repeat: no-repeat;
+  background-position: top 2px right 2px;
+  background-size: 16px 17px;
+  color: var(--ui-input-text);
+  border-color: var(--ui-border-darker);
+  padding-right: 32px;
+}
+
+select:focus,
+select:focus-visible {
+  background-color: navy;
+  background-image: var(--combo-arrow);
+  background-repeat: no-repeat;
+  background-position: top 2px right 2px;
+  background-size: 16px 17px;
+  color: #fff;
+}
+
+select:active {
+  background-image: var(--combo-arrow-active);
+  background-repeat: no-repeat;
+  background-position: top 2px right 2px;
+  background-size: 16px 17px;
 }
 
 label,
@@ -348,14 +438,15 @@ ul[role="tablist"] li[role="tab"].active {
   font-size: 11px;
 }
 
-.creation-type-desc {
+.studio-prompt {
   width: 100%;
-  min-height: 6.5em;
-  max-height: 9em;
-  resize: none;
+  min-height: 14em;
+  max-height: min(50vh, 28em);
+  resize: vertical;
   overflow-y: auto;
-  line-height: 1.35;
+  line-height: 1.4;
   font-size: 11px;
+  white-space: pre-wrap;
   background: var(--ui-input);
   color: var(--ui-input-text);
 }
@@ -370,6 +461,14 @@ ul[role="tablist"] li[role="tab"].active {
   margin: 0;
   font-size: 11px;
   line-height: 1.4;
+}
+
+.mission-banner p + p {
+  margin-top: 8px;
+}
+
+.hint.disclaimer {
+  font-weight: 700;
 }
 
 .form-actions {
@@ -427,6 +526,10 @@ ul[role="tablist"] li[role="tab"].active {
   font-size: 11px;
 }
 
+.viewer-theme-bar[hidden] {
+  display: none !important;
+}
+
 .theme-label {
   display: flex;
   align-items: center;
@@ -459,9 +562,287 @@ ul[role="tablist"] li[role="tab"].active {
   color: var(--ui-input-text);
 }
 
+.doc-canvas.doc-canvas-exporting {
+  max-height: none !important;
+  overflow: visible !important;
+  height: auto !important;
+}
+
 .doc-canvas .muted {
   color: var(--ui-muted);
 }
+
+.doc-section-body {
+  white-space: pre-wrap;
+  word-wrap: break-word;
+  line-height: 1.35;
+  margin: 0 0 12px;
+}
+
+.media-pane {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  min-height: 240px;
+}
+
+.media-pane-loading {
+  justify-content: center;
+  color: #ccc;
+}
+
+.media-image {
+  max-width: 100%;
+  max-height: min(70vh, 640px);
+  object-fit: contain;
+  background: #000;
+  border: 1px solid #444;
+}
+
+.media-video {
+  width: 100%;
+  max-height: min(70vh, 640px);
+  background: #000;
+  border: 1px solid #444;
+}
+
+.image-edit-body {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  height: calc(100% - 4px);
+  overflow: hidden;
+}
+
+.image-edit-layout {
+  display: flex;
+  gap: 10px;
+  min-height: 0;
+  flex: 1;
+  overflow: hidden;
+}
+
+.image-edit-preview-wrap {
+  flex: 1 1 55%;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.image-edit-preview-stage {
+  position: relative;
+  flex: 1;
+  min-height: 280px;
+  overflow: auto;
+  background: #111;
+  box-shadow:
+    inset -1px -1px var(--ui-border-light),
+    inset 1px 1px var(--ui-border-dark);
+  cursor: crosshair;
+  text-align: center;
+}
+
+.image-edit-canvas-wrap {
+  position: relative;
+  display: inline-block;
+  max-width: 100%;
+  vertical-align: top;
+  line-height: 0;
+  overflow: hidden;
+}
+
+#image-edit-canvas {
+  display: block;
+  max-width: 100%;
+  height: auto;
+  margin: 0;
+  vertical-align: top;
+}
+
+.image-edit-crop-box {
+  position: absolute;
+  left: 0;
+  top: 0;
+  border: 1px dashed #fff200;
+  outline: 1px solid rgba(0, 0, 0, 0.65);
+  box-shadow: 0 0 0 9999px rgba(0, 0, 0, 0.45);
+  pointer-events: none;
+  z-index: 2;
+  box-sizing: border-box;
+}
+
+.image-edit-controls fieldset {
+  margin-bottom: 8px;
+}
+
+.image-edit-controls {
+  flex: 0 0 320px;
+  overflow: auto;
+  max-height: 100%;
+  padding-right: 4px;
+}
+
+.image-edit-controls .field-row {
+  align-items: center;
+  gap: 6px;
+}
+
+.image-edit-controls .field-row label {
+  min-width: 88px;
+}
+
+.image-edit-controls input[type="range"] {
+  flex: 1;
+  min-width: 0;
+}
+
+.image-edit-controls .edit-val,
+.image-edit-controls #edit-rotation-label {
+  min-width: 36px;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+.video-edit-player {
+  display: block;
+  max-width: 100%;
+  max-height: min(52vh, 420px);
+  margin: 0 auto;
+  background: #000;
+}
+
+.video-edit-preview-canvas {
+  display: block;
+  max-width: 100%;
+  height: auto;
+  margin: 0 auto;
+}
+
+.video-edit-preview-canvas[hidden] {
+  display: none !important;
+}
+
+.video-edit-stage.previewing-filters .video-edit-player {
+  display: none;
+}
+
+.video-edit-stage.previewing-filters .video-edit-preview-canvas:not([hidden]) {
+  display: block;
+}
+
+.video-edit-transport {
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.video-edit-transport input[type="range"] {
+  flex: 1;
+  min-width: 120px;
+}
+
+.vedit-segments-panel {
+  margin-top: 6px;
+}
+
+.studio-load-actions {
+  flex-wrap: wrap;
+  margin-top: 6px;
+}
+
+.editor-app-toolbar {
+  margin-bottom: 8px;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+}
+
+.theme-custom-controls {
+  margin-top: 8px;
+  padding-top: 6px;
+  border-top: 1px solid var(--ui-border-dark);
+}
+
+.theme-custom-controls .field-row label {
+  min-width: 72px;
+}
+
+.theme-custom-controls input[type="color"] {
+  width: 48px;
+  height: 24px;
+  padding: 0;
+  border: 1px solid var(--ui-border-darker);
+  background: var(--ui-button);
+}
+
+.editor-app-toolbar .label-hint {
+  margin-left: auto;
+}
+
+.vedit-timeline {
+  position: relative;
+  height: 48px;
+  margin: 6px 0;
+  background: #1a1a1a;
+  box-shadow:
+    inset -1px -1px var(--ui-border-light),
+    inset 1px 1px var(--ui-border-dark);
+  overflow: hidden;
+  user-select: none;
+}
+
+.vedit-timeline-track {
+  display: flex;
+  height: 100%;
+  width: 100%;
+}
+
+.vedit-seg {
+  position: relative;
+  flex: 1 1 0;
+  min-width: 8px;
+  height: 100%;
+  border-right: 1px solid #000;
+  background: linear-gradient(180deg, #3a7abd 0%, #1f4f7a 100%);
+  color: #fff;
+  font-size: 10px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0 4px;
+  box-sizing: border-box;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.vedit-seg:nth-child(even) {
+  background: linear-gradient(180deg, #4a90c8 0%, #2a5f8a 100%);
+}
+
+.vedit-seg.selected {
+  outline: 2px solid #fff200;
+  outline-offset: -2px;
+  z-index: 1;
+}
+
+.vedit-playhead {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 2px;
+  background: #ff4040;
+  pointer-events: none;
+  z-index: 2;
+  transform: translateX(-1px);
+}
+
+.vedit-splice-list {
+  display: none;
+}
+
 
 .doc-canvas.tab-ascii {
   padding: 0;
@@ -689,7 +1070,7 @@ ul[role="tablist"] li[role="tab"].active {
 }
 
 #taskbar {
-  position: absolute;
+  position: fixed;
   left: 0;
   right: 0;
   bottom: 0;
@@ -752,7 +1133,7 @@ ul[role="tablist"] li[role="tab"].active {
 }
 
 #start-menu {
-  position: absolute;
+  position: fixed;
   left: 4px;
   bottom: calc(var(--taskbar-h) + 2px);
   width: 220px;
@@ -1013,6 +1394,11 @@ ul[role="tablist"] li[role="tab"].active {
   color: var(--ui-muted);
 }
 
+.busy-actions {
+  margin-top: 10px;
+  justify-content: flex-end;
+}
+
 #error-toast {
   position: absolute;
   top: 16px;
@@ -1039,8 +1425,7 @@ code {
 }
 
 .control-tabs {
-  /* Selected 98.css tabs use margin-top: -2px; give room so they aren't clipped
-     by .app-window .window-body { overflow: auto }. */
+  /* Selected 98.css tabs use margin-top: -2px; give room so they aren't clipped. */
   margin-top: 6px;
   margin-bottom: 0;
   padding-top: 2px;
@@ -1049,6 +1434,7 @@ code {
 .control-tab-panel {
   width: 100%;
   box-sizing: border-box;
+  overflow: visible;
 }
 
 .control-pane fieldset {
@@ -1068,6 +1454,20 @@ code {
 .hf-setup-hint {
   max-width: 100%;
   word-break: break-word;
+}
+
+/* Control Panel grows with content — no inner scrollbar. App scrolls if needed. */
+#win-control.app-window {
+  height: auto;
+  max-height: none;
+  overflow: visible;
+}
+
+#win-control > .window-body,
+#win-control .control-tab-panel > .window-body {
+  overflow: visible;
+  flex: 0 0 auto;
+  max-height: none;
 }
 
 #win-control > .title-bar {

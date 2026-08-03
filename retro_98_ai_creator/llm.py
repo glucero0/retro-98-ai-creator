@@ -197,6 +197,7 @@ class ModelManager:
         self._status = "idle"
         self._status_detail = "Model not loaded yet. It will download on first generation."
         self._progress: ProgressCallback | None = None
+        self._cancel_event: threading.Event | None = None
         self._loaded_trust_remote_code = False
 
     @property
@@ -211,6 +212,9 @@ class ModelManager:
 
     def set_progress_callback(self, cb: ProgressCallback | None) -> None:
         self._progress = cb
+
+    def set_cancel_event(self, event: threading.Event | None) -> None:
+        self._cancel_event = event
 
     def _emit(
         self,
@@ -233,7 +237,11 @@ class ModelManager:
             payload["title"] = title
         try:
             self._progress(payload)
-        except Exception:  # noqa: BLE001 — UI callback must not break generation
+        except Exception as exc:  # noqa: BLE001 — UI callback must not break generation
+            from .cancellation import GenerationCancelled
+
+            if isinstance(exc, GenerationCancelled):
+                raise
             pass
 
     def unload(self) -> None:
@@ -376,25 +384,43 @@ class ModelManager:
         with self._lock:
             assert self._model is not None and self._tokenizer is not None
             self._status = "generating"
+            from .creation_utils import (
+                build_text_creation_from_plain,
+                is_generic_studio_request,
+            )
+            from .prompts import build_general_text_prompt
+
+            prompt_text = (creation_description or "").strip() or (game or "").strip()
+            generic = is_generic_studio_request(game, platform, creation_type)
             self._emit(
-                f"Generating {creation_type} for {game}…",
+                "Generating…" if generic else f"Generating {creation_type} for {game}…",
                 phase="generate",
-                title="Generating document",
+                title="Generating text" if generic else "Generating document",
             )
 
-            prompt = build_prompt(
-                game,
-                platform,
-                creation_type,
-                system_extra=system_extra,
-                creation_description=creation_description,
-                exact_title=exact_title,
-            )
+            if generic:
+                prompt = build_general_text_prompt(
+                    prompt_text, system_extra=system_extra
+                )
+                system = (
+                    "You are a helpful creative AI assistant. "
+                    "Follow the user's prompt carefully."
+                )
+            else:
+                prompt = build_prompt(
+                    game,
+                    platform,
+                    creation_type,
+                    system_extra=system_extra,
+                    creation_description=creation_description,
+                    exact_title=exact_title,
+                )
+                system = SYSTEM_MESSAGE
             tokenizer = self._tokenizer
             model = self._model
 
             messages = [
-                {"role": "system", "content": SYSTEM_MESSAGE},
+                {"role": "system", "content": system},
                 {"role": "user", "content": prompt},
             ]
 
@@ -403,14 +429,14 @@ class ModelManager:
             input_ids = _to_input_ids(
                 tokenizer,
                 messages,
-                flat_fallback=f"{SYSTEM_MESSAGE}\n\n{prompt}",
+                flat_fallback=f"{system}\n\n{prompt}",
             )
             device = next(model.parameters()).device
             input_ids = input_ids.to(device)
             prompt_len = input_ids.shape[-1]
 
             max_new = int(model_cfg.get("max_new_tokens") or 4096)
-            temperature = float(model_cfg.get("temperature") or 0.4)
+            temperature = float(model_cfg.get("temperature") or 0.0)
             top_p = float(model_cfg.get("top_p") or 0.9)
             do_sample = temperature > 0
 
@@ -422,6 +448,21 @@ class ModelManager:
             if do_sample:
                 gen_kwargs["temperature"] = max(temperature, 0.01)
                 gen_kwargs["top_p"] = top_p
+
+            cancel_evt = self._cancel_event
+            try:
+                from transformers import StoppingCriteria, StoppingCriteriaList
+
+                class _CancelCriteria(StoppingCriteria):
+                    def __call__(self, input_ids, scores, **kwargs):  # type: ignore[no-untyped-def]
+                        return bool(cancel_evt is not None and cancel_evt.is_set())
+
+                if cancel_evt is not None:
+                    gen_kwargs["stopping_criteria"] = StoppingCriteriaList(
+                        [_CancelCriteria()]
+                    )
+            except Exception:  # noqa: BLE001
+                logger.debug("Could not attach cancel stopping criteria", exc_info=True)
 
             # Heartbeat while generate() blocks so the UI keeps updating
             stop_heartbeat = threading.Event()
@@ -459,23 +500,45 @@ class ModelManager:
                 stop_heartbeat.set()
                 beat.join(timeout=1.0)
 
+            from .cancellation import GenerationCancelled, raise_if_cancelled
+
+            raise_if_cancelled(
+                (lambda: bool(cancel_evt is not None and cancel_evt.is_set()))
+                if cancel_evt is not None
+                else None
+            )
+
             generated = output[0][prompt_len:]
             text = tokenizer.decode(generated, skip_special_tokens=True)
-            self._emit("Parsing model JSON…", phase="generate", title="Generating document")
-
-            parsed = finalize_creation(
-                text,
-                game,
-                platform,
-                creation_type,
-                model_info={
-                    "provider": "huggingface",
-                    "repo_id": self._loaded_repo,
-                    "revision": self._loaded_revision,
-                    "device": self._device,
-                },
-                exact_title=exact_title,
+            if cancel_evt is not None and cancel_evt.is_set():
+                raise GenerationCancelled("Cancelled by user")
+            self._emit(
+                "Formatting response…" if generic else "Parsing model JSON…",
+                phase="generate",
+                title="Generating text" if generic else "Generating document",
             )
+
+            model_info = {
+                "provider": "huggingface",
+                "repo_id": self._loaded_repo,
+                "revision": self._loaded_revision,
+                "device": self._device,
+                "modality": "text",
+            }
+            if generic:
+                parsed = build_text_creation_from_plain(
+                    text, prompt=prompt_text, model_info=model_info
+                )
+            else:
+                parsed = finalize_creation(
+                    text,
+                    game,
+                    platform,
+                    creation_type,
+                    model_info=model_info,
+                    exact_title=exact_title,
+                    prompt=prompt_text,
+                )
 
             self._status = "ready"
             self._emit(f"Ready: {self._loaded_repo} on {self._device}")

@@ -1,0 +1,37 @@
+[
+    {
+        "id": "Quick Reference Card",
+        "label": "Quick Reference Card & Keybindings",
+        "description": "You are an expert video game control binding extractor. Your goal is to provide 100% accurate default control schemes for [GAME] on [PLATFORM].\n\nINSTRUCTIONS:\n1. Grounding Search Strategy: Execute queries aimed at complete documentation (e.g., site:strategywiki.org \"[GAME]\" \"[PLATFORM] controls\", or \"[GAME] [PLATFORM] default controller layout manual\").\n2. Hardware Terminology: Strictly use hardware-appropriate terminology for [PLATFORM] (e.g., PlayStation uses Cross, Circle, Square, Triangle, L1, L2, L3, R1, R2, R3, Touchpad, Options; Xbox uses A, B, X, Y, LB, LT, LSB, RB, RT, RSB, View, Menu). Never mix platform button labels.\n3. State Separation: Group controls logically into distinct states:\n   - On-Foot\n   - Vehicle / Driving\n   - Menus / Navigation\n\nFALLBACK & CONFIDENCE HIERARCHY:\n- Primary Source: Map actions directly confirmed by retrieved search snippets.\n- Secondary Source: If search snippets omit individual inputs (e.g., D-Pad directions or stick clicks), fill them using game-specific knowledge unique to [GAME].\n- Constraint on Genre Conventions: Do NOT assume standard genre conventions (e.g., assuming 'Circle' is crouch or 'Square' is reload) unless confirmed by search results or game-specific data for this exact title.\n- Unmapped Inputs: Only mark an input as \"Unmapped\" if the input is explicitly unused in the game's default layout. If data is genuinely missing after both search and parametric verification, mark it as \"Uncertain\".\n\nOUTPUT FORMAT REQUIREMENTS:\n1. Provide a clean table layout listing EVERY physical controller input for [PLATFORM].\n2. For each input, map its primary action and briefly note its context if applicable."
+    },
+    {
+        "id": "Player Manual & Strategy Guide",
+        "label": "Player Manual & Strategy Guide",
+        "description": "Produce a player manual and beginner-to-intermediate strategy guide. Include setting/lore background, core game mechanics, interface and HUD explanation, character or unit stats when applicable, resource and progression systems, recommended early strategies, and a short walkthrough of the opening hours. Write in clear manual prose with labeled sections a player could follow while playing."
+    },
+    {
+        "id": "Review Aggregation & Retrospective",
+        "label": "Review Aggregation & Retrospective",
+        "description": "Produce a review aggregation and retrospective in the style of period magazine coverage plus modern hindsight. Summarize contemporary 1980s–2000s critical reception (scores, praise, complaints), quote or paraphrase typical review angles of the era, list pros and cons, note commercial impact or controversy, and close with a modern retrospective on how the game holds up and why it still matters."
+    },
+    {
+        "id": "Plot & Lore Summary",
+        "label": "Plot & Lore Summary",
+        "description": "Produce a plot and lore summary with clear spoiler structure. Cover premise and opening setup, act-by-act or chapter narrative beats, key character profiles and relationships, world/setting lore, major twists, and endings (including notable alternate endings when they exist). Prefer accurate story documentation over gameplay tips; mark heavy spoiler sections clearly in section titles."
+    },
+    {
+        "id": "Secret Codes & Cheatsheet",
+        "label": "Secret Codes, Cheats & Passwords",
+        "description": "Produce a cheats, codes, and passwords reference. Document invincibility and weapon/item cheats, level-select or stage passwords, debug keys, developer rooms, easter eggs, and era-specific tricks (POKE codes, Game Genie / Action Replay style notes when historically relevant). For each entry give the exact code/input method, platform caveats, and what it does. Prefer verified lists over rumor."
+    },
+    {
+        "id": "Boss & Enemy Compendium",
+        "label": "Boss & Enemy Compendium",
+        "description": "Produce a boss and enemy compendium useful during combat. Catalog regular enemies and bosses with attack patterns, tells, weaknesses/resistances, recommended tactics, and rewards or loot when applicable. Use consistent stat-style key/value rows where helpful and dedicate sections to major boss fights with phase-by-phase strategy."
+    },
+    {
+        "id": "Soundtrack, Trivia & Historical Companion",
+        "label": "Soundtrack, Trivia & Historical Companion",
+        "description": "Produce a soundtrack, trivia, and historical companion. Cover audio hardware and sound-chip feats for the platform, composers and notable tracks, development anecdotes, box-art and packaging history, regional port differences, censorship or localization changes, and lasting cultural impact. Favor documented trivia and production history over gameplay walkthrough content."
+    }
+]

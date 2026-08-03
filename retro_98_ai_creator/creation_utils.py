@@ -1,4 +1,4 @@
-"""Shared helpers for turning raw model text into a GameCreation document."""
+"""Shared helpers for turning raw model text into a creation document."""
 
 from __future__ import annotations
 
@@ -9,6 +9,7 @@ from datetime import datetime, timezone
 from typing import Any
 
 from .fallbacks import build_emergency_creation, get_dynamic_fallback_meta
+from .modality import normalize_modality
 
 
 class GameNotFoundError(RuntimeError):
@@ -41,6 +42,124 @@ class AmbiguousGameError(RuntimeError):
 
 def _now_iso() -> str:
     return datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
+
+
+def title_from_prompt(prompt: str, fallback: str = "Untitled") -> str:
+    """First non-empty line of the prompt, truncated for display."""
+    for line in str(prompt or "").replace("\r\n", "\n").split("\n"):
+        text = line.strip()
+        if text:
+            return text[:80] + ("…" if len(text) > 80 else "")
+    return fallback
+
+
+def is_generic_studio_request(game: str, platform: str, creation_type: str) -> bool:
+    """True for the freeform Prompt studio path (not classic game-doc mode)."""
+    g = (game or "").strip().casefold()
+    p = (platform or "").strip().casefold()
+    ct = (creation_type or "").strip().casefold()
+    return g in {"", "prompt", "untitled"} or p in {"general", ""} or ct in {
+        "custom",
+        "prompt",
+        "text",
+        "image",
+        "video",
+    }
+
+
+def build_media_creation(
+    *,
+    modality: str,
+    prompt: str,
+    media_path: str,
+    mime_type: str,
+    title: str | None = None,
+    model_info: dict[str, Any] | None = None,
+    creation_id: str | None = None,
+) -> dict[str, Any]:
+    """Build an image/video creation record (media stored on disk)."""
+    modality = normalize_modality(modality, default="image")
+    if modality not in {"image", "video"}:
+        modality = "image"
+    prompt = (prompt or "").strip()
+    display = (title or title_from_prompt(prompt, "Untitled")).strip() or "Untitled"
+    cid = creation_id or f"doc_{uuid.uuid4().hex[:10]}"
+    creation: dict[str, Any] = {
+        "id": cid,
+        "createdAt": _now_iso(),
+        "modality": modality,
+        "prompt": prompt,
+        "title": display,
+        "game": display,
+        "platform": "General",
+        "creationType": "Image" if modality == "image" else "Video",
+        "mediaPath": media_path,
+        "mimeType": mime_type,
+        "overview": prompt,
+        "sections": [],
+        "meta": {},
+        "theme": {
+            "themeName": "Studio Media",
+            "bgColor": "#1a1a1a",
+            "cardBg": "#2a2a2a",
+            "textColor": "#f0f0f0",
+            "accentColor": "#1084d0",
+            "headerBg": "#000080",
+            "fontStyle": "retro-sans",
+            "boxArtStyle": "",
+        },
+        "accuracyNote": "",
+    }
+    if model_info:
+        creation["_model"] = model_info
+    return creation
+
+
+def build_text_creation_from_plain(
+    text: str,
+    *,
+    prompt: str,
+    title: str | None = None,
+    model_info: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    """Wrap freeform model text into a text-modality creation."""
+    body = (text or "").strip() or "(empty response)"
+    prompt = (prompt or "").strip()
+    display = (title or title_from_prompt(prompt or body, "Untitled")).strip() or "Untitled"
+    creation: dict[str, Any] = {
+        "id": f"doc_{uuid.uuid4().hex[:10]}",
+        "createdAt": _now_iso(),
+        "modality": "text",
+        "prompt": prompt,
+        "title": display,
+        "game": display,
+        "platform": "General",
+        "creationType": "Text",
+        # Body lives only in sections — avoid a truncated overview duplicate.
+        "overview": "",
+        "sections": [
+            {
+                "title": "",
+                "content": body,
+                "keyValues": [],
+            }
+        ],
+        "meta": {},
+        "theme": {
+            "themeName": "Studio Text",
+            "bgColor": "#008080",
+            "cardBg": "#c0c0c0",
+            "textColor": "#000000",
+            "accentColor": "#000080",
+            "headerBg": "#000080",
+            "fontStyle": "retro-sans",
+            "boxArtStyle": "",
+        },
+        "accuracyNote": "",
+    }
+    if model_info:
+        creation["_model"] = model_info
+    return creation
 
 
 def is_game_not_found(parsed: dict[str, Any] | None) -> bool:
@@ -170,6 +289,31 @@ def _try_repair_truncated_json(text: str) -> str | None:
     return s
 
 
+def normalize_source_snippets(raw: Any) -> list[dict[str, str]]:
+    """Normalize Pass 1 sourceSnippets into [{source, quote}, ...]."""
+    if not isinstance(raw, list):
+        return []
+    out: list[dict[str, str]] = []
+    seen: set[str] = set()
+    for item in raw:
+        if not isinstance(item, dict):
+            continue
+        quote = str(
+            item.get("quote") or item.get("text") or item.get("snippet") or ""
+        ).strip()
+        if not quote:
+            continue
+        source = str(
+            item.get("source") or item.get("url") or item.get("title") or ""
+        ).strip()
+        key = f"{source.casefold()}|{quote.casefold()}"
+        if key in seen:
+            continue
+        seen.add(key)
+        out.append({"source": source, "quote": quote})
+    return out
+
+
 def finalize_creation(
     text: str,
     game: str,
@@ -179,14 +323,18 @@ def finalize_creation(
     model_info: dict[str, Any] | None = None,
     grounding_sources: list[dict[str, str]] | None = None,
     exact_title: bool = False,
+    prompt: str | None = None,
 ) -> dict[str, Any]:
     """Parse model JSON (or emergency fallback) and attach ids / metadata.
 
     Raises GameNotFoundError when the model reports the title is unrecognized.
     Raises AmbiguousGameError when multiple titles match the query.
     """
+    user_prompt = (prompt if prompt is not None else "").strip()
+    generic = is_generic_studio_request(game, platform, creation_type)
+
     # Known franchise base names → Search Results (do not trust model notFound here)
-    if not exact_title:
+    if not exact_title and not generic:
         from .franchise_disambiguation import resolve_franchise_ambiguity
 
         franchise_hits = resolve_franchise_ambiguity(game)
@@ -194,6 +342,33 @@ def finalize_creation(
             raise AmbiguousGameError(game, franchise_hits)
 
     parsed = extract_json_object(text)
+
+    # Freeform Prompt studio: accept plain text when JSON is missing
+    if generic and (not parsed or not isinstance(parsed.get("game"), str)):
+        if parsed and (parsed.get("overview") or parsed.get("sections") or parsed.get("body")):
+            body = str(parsed.get("body") or parsed.get("overview") or "")
+            if not body and isinstance(parsed.get("sections"), list):
+                parts = []
+                for sec in parsed["sections"]:
+                    if isinstance(sec, dict):
+                        parts.append(str(sec.get("content") or ""))
+                body = "\n\n".join(p for p in parts if p)
+            if body.strip():
+                creation = build_text_creation_from_plain(
+                    body,
+                    prompt=user_prompt or game,
+                    title=str(parsed.get("title") or parsed.get("game") or "") or None,
+                    model_info=model_info,
+                )
+                if grounding_sources:
+                    creation["groundingSources"] = grounding_sources
+                return creation
+        return build_text_creation_from_plain(
+            text,
+            prompt=user_prompt or game,
+            model_info=model_info,
+        )
+
     if is_ambiguous(parsed):
         raise AmbiguousGameError(game, normalize_candidates(parsed.get("candidates")))
     if is_game_not_found(parsed):
@@ -231,9 +406,18 @@ def finalize_creation(
     if isinstance(parsed.get("game"), str):
         parsed["game"] = parsed["game"].strip()
     parsed["_userGame"] = game.strip()
+    parsed["modality"] = normalize_modality(parsed.get("modality"), default="text")
+    parsed["prompt"] = user_prompt or parsed.get("prompt") or game.strip()
+    parsed.setdefault("title", parsed.get("game") or title_from_prompt(parsed["prompt"]))
 
     if grounding_sources:
         parsed["groundingSources"] = grounding_sources
+
+    snippets = normalize_source_snippets(parsed.get("sourceSnippets"))
+    if snippets:
+        parsed["sourceSnippets"] = snippets
+    else:
+        parsed.pop("sourceSnippets", None)
 
     # Drop unused / retired section fields from model output
     cleaned_sections: list[Any] = []
