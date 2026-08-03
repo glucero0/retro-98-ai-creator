@@ -91,8 +91,9 @@ def test_apply_edits_requires_file(tmp_path):
 
     missing = tmp_path / "nope.mp4"
     dest = tmp_path / "out.mp4"
-    with pytest.raises(FileNotFoundError):
-        apply_edits(missing, dest, filters={"brightness": 10})
+    with patch("retro_98_ai_creator.video_edit._require_ffmpeg", return_value="ffmpeg"):
+        with pytest.raises(FileNotFoundError):
+            apply_edits(missing, dest, filters={"brightness": 10})
 
 
 def test_assemble_segments_requires_file(tmp_path):

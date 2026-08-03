@@ -2,15 +2,15 @@
 
 A Windows 98–themed desktop studio for general-purpose AI creation: **text**, **images**, and **video** — with built-in editors, an archive of everything you make, and a fully skinnable retro desktop.
 
-**Default backend: Google Gemini** (text + image + Veo video). **OpenRouter** (many cloud models) and optional **local Hugging Face** models are also available for text.
+**Default backend: Google Gemini** — text, image, and Veo video via separate model pickers. **OpenRouter** and optional **local Hugging Face** are also available; in this app they are wired for **text** generation today (see backend notes below).
 
 ## Features
 
 - Win98 desktop UI (98.css) with draggable/minimizable windows, a taskbar, and a Start menu
 - **Creation Studio** — one freeform prompt box; the app infers text/image/video from your prompt and generation intent
 - **Gemini** text, image, and video generation with separate model pickers per modality
-- **OpenRouter** text generation (route to any supported cloud model with one API key)
-- Optional local Hugging Face text models (Phi-3.5, Qwen, Gemma, etc.)
+- **OpenRouter** — text chat models today (OpenRouter itself hosts many image/video models; this app does not route those yet)
+- Optional **local Hugging Face** text models (Phi-3.5, Qwen, Gemma, etc.; causal-LM path only — not diffusion/video pipelines)
 - **Archives** — every creation (and its prompt/model metadata) is saved automatically; search, import/export JSON, or import existing text/image/video files
 - **Viewer** — displays the active creation (document, image, or video) with export buttons and a jump into editing
 - **Image Edit** and **Video Edit** — standalone editors (and reachable via Viewer → Edit) for crop/rotate, color/filter adjustments, and (for video) a segment timeline for splitting/reordering/trimming clips
@@ -67,7 +67,7 @@ Then open **Control Panel** → paste your Gemini API key → pick a **Text**, *
 1. Create a key at https://openrouter.ai/keys
 2. Control Panel → **Provider: OpenRouter** → paste the key → pick a model → **Save**
 3. Google Search grounding is Gemini-only; OpenRouter uses the model's own knowledge (no grounding tool)
-4. OpenRouter is text-only in this app; use Gemini for image/video
+4. **In this app**, OpenRouter generation is text-only for now. Image/video prompts are blocked with a tip to switch to Gemini. (OpenRouter’s catalog does include image — and some video — models; wiring those into Studio would be a separate feature.)
 
 ## Local Hugging Face backend (optional)
 
@@ -75,7 +75,9 @@ Then open **Control Panel** → paste your Gemini API key → pick a **Text**, *
 pip install -r requirements-local.txt
 ```
 
-Then in Control Panel set **Provider** to **Hugging Face local**, pick a repo (default `microsoft/Phi-3.5-mini-instruct`), and save. First run downloads weights into the HF cache. Text-only; small local models are not recommended for anything requiring factual accuracy or web knowledge.
+Then in Control Panel set **Provider** to **Hugging Face local**, pick a repo (default `microsoft/Phi-3.5-mini-instruct`), and save. First run downloads weights into the HF cache. Small local models are not recommended for anything requiring factual accuracy or web knowledge.
+
+**In this app**, the HF path is a local **causal language model** (text). The Hub also hosts diffusion / video models, but those need different pipelines (e.g. Diffusers) and are not loaded here — use Gemini for image/video generation.
 
 ## Display, sound, and UI scale
 
