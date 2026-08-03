@@ -1,3 +1,2 @@
+# Dev tooling — same pins as requirements.txt (full freeze includes pytest/ruff).
 -r requirements.txt
-pytest>=8.0
-ruff>=0.5
