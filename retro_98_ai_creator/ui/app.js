@@ -19,10 +19,9 @@
     viewerTab: "doc",
     speechPlaying: false,
     controlTab: "ai",
+    archiveSort: { key: "created", dir: "desc" },
     presets: [],
     creationTypes: [],
-    defaultPlatform: "",
-    defaultTheme: "auto",
     appTheme: "light",
     customTheme: {
       desktopColor: "#008080",
@@ -644,7 +643,8 @@
     jobId: null,
   };
 
-  function showConfirm(title, message) {
+  function showConfirm(title, message, opts) {
+    opts = opts || {};
     return new Promise((resolve) => {
       const overlay = $("#confirm-overlay");
       const titleEl = $("#confirm-title");
@@ -655,12 +655,18 @@
         resolve(window.confirm(message || title));
         return;
       }
+      const prevYes = yesBtn.textContent;
+      const prevNo = noBtn.textContent;
       if (titleEl) titleEl.textContent = title || "Confirm";
       if (msgEl) msgEl.textContent = message || "";
+      yesBtn.textContent = opts.yesLabel || "Yes";
+      noBtn.textContent = opts.noLabel || "No";
       overlay.hidden = false;
 
       const finish = (value) => {
         overlay.hidden = true;
+        yesBtn.textContent = prevYes;
+        noBtn.textContent = prevNo;
         yesBtn.removeEventListener("click", onYes);
         noBtn.removeEventListener("click", onNo);
         resolve(value);
@@ -669,7 +675,7 @@
       const onNo = () => finish(false);
       yesBtn.addEventListener("click", onYes);
       noBtn.addEventListener("click", onNo);
-      yesBtn.focus();
+      (opts.focusNo ? noBtn : yesBtn).focus();
     });
   }
 
@@ -1100,10 +1106,18 @@
         return;
       }
       rememberImportedCreation(res.creation);
-      renderDocument(res.creation);
-      if (mod === "image") await openImageEditor(res.creation, { standalone: true });
-      else await openVideoEditor(res.creation, { standalone: true });
-      showToast("Opened a copy as basis — Save updates the copy, original stays intact.");
+      // Keep Archives in sync, but open the editor — do not bounce through Viewer.
+      state.active = res.creation;
+      renderArchives();
+      const opened =
+        mod === "image"
+          ? await openImageEditor(res.creation, { standalone: true })
+          : await openVideoEditor(res.creation, { standalone: true });
+      if (opened) {
+        showToast(
+          "Opened a copy as basis — Save updates the copy, original stays intact."
+        );
+      }
     } catch (err) {
       showToast("Basis failed: " + err);
     } finally {
@@ -1275,7 +1289,6 @@
             text_model: textSel.value,
             image_model: imageSel.value,
             video_model: videoSel.value,
-            model: textSel.value,
           },
         },
       });
@@ -1338,6 +1351,40 @@
     closeWindow("control");
   }
 
+  async function confirmDiscardEditorEdits(kind) {
+    const dirty = kind === "image" ? imageEdit.dirty : videoEdit.dirty;
+    if (!dirty) return true;
+    const label = kind === "image" ? "image" : "video";
+    const winId = kind === "image" ? "image-edit" : "video-edit";
+    const discard = await showConfirm(
+      "Unsaved edits",
+      "You have unsaved " +
+        label +
+        " edits. Closing will discard them.\n\nDiscard and close, or keep editing so you can save?",
+      {
+        yesLabel: "Discard",
+        noLabel: "Keep Editing",
+        focusNo: true,
+      }
+    );
+    if (!discard) {
+      if (state.open[winId]) focusWindow(winId);
+      else openWindow(winId);
+      return false;
+    }
+    return true;
+  }
+
+  async function requestCloseWindow(id) {
+    if (id === "image-edit") {
+      if (!(await confirmDiscardEditorEdits("image"))) return false;
+    } else if (id === "video-edit") {
+      if (!(await confirmDiscardEditorEdits("video"))) return false;
+    }
+    closeWindow(id);
+    return true;
+  }
+
   function closeWindow(id) {
     if (id === "viewer") stopSpeech();
     if (id === "image-edit") {
@@ -1347,6 +1394,7 @@
       imageEdit.cropDrag = null;
       imageEdit.filters = null;
       imageEdit.rotation = 0;
+      imageEdit.dirty = false;
       if (window.R98ImageEdit) {
         writeImageEditFiltersToUi(window.R98ImageEdit.DEFAULT_FILTERS);
         if ($("#edit-rotation")) $("#edit-rotation").value = 0;
@@ -1354,6 +1402,7 @@
       }
     }
     if (id === "video-edit") {
+      videoEdit.dirty = false;
       resetVideoEditRuntime();
     }
     state.open[id] = false;
@@ -1626,10 +1675,6 @@
 
   // ── Document render ────────────────────────────────────────────────
   function resolveTheme(creation) {
-    const override = ($("#theme-override") && $("#theme-override").value) || "auto";
-    if (override !== "auto" && THEMES[override]) {
-      return Object.assign({}, THEMES[override]);
-    }
     const t = (creation && creation.theme) || {};
     return {
       themeName: t.themeName || "Authentic Era Box Art Palette",
@@ -1748,6 +1793,12 @@
     return false;
   }
 
+  /** Hide empty or legacy "Response" section titles from display/export. */
+  function shouldHideSectionHeading(secTitle) {
+    const t = String(secTitle || "").trim();
+    return !t || /^response$/i.test(t);
+  }
+
   function renderDocTab(creation, theme) {
     const meta = creation.meta || {};
     const title = creationTitle(creation);
@@ -1799,12 +1850,8 @@
 
     (creation.sections || []).forEach((sec) => {
       const secTitle = String(sec.title || "").trim();
-      // Skip legacy "Response" heading on freeform Text creations
-      const hideHeading =
-        !secTitle ||
-        (secTitle === "Response" && (creation.creationType || "") === "Text");
       html += '<div class="doc-section">';
-      if (!hideHeading) {
+      if (!shouldHideSectionHeading(secTitle)) {
         html +=
           '<h3 style="color:' +
           escapeHtml(theme.accentColor || "#000080") +
@@ -1833,7 +1880,7 @@
 
     if (creation.accuracyNote) {
       html +=
-        '<p style="margin-top:16px;font-size:11px;opacity:0.85"><em>' +
+        '<p class="doc-export-hide" style="margin-top:16px;font-size:11px;opacity:0.85"><em>' +
         escapeHtml(creation.accuracyNote) +
         "</em></p>";
     }
@@ -1973,7 +2020,10 @@
     html += '<div class="print-grid">';
     (creation.sections || []).forEach((sec) => {
       html += '<div class="print-card">';
-      html += "<h3>" + escapeHtml(sec.title || "Section") + "</h3>";
+      const secTitle = String(sec.title || "").trim();
+      if (!shouldHideSectionHeading(secTitle)) {
+        html += "<h3>" + escapeHtml(secTitle) + "</h3>";
+      }
       html += "<p>" + escapeHtml(sec.content || "") + "</p>";
       (sec.keyValues || []).forEach((kv) => {
         html +=
@@ -1995,8 +2045,6 @@
   function renderDocument(creation) {
     state.active = creation;
     const canvas = $("#doc-canvas");
-    const paletteEl = $("#viewer-palette");
-    const boxArtEl = $("#theme-boxart");
     const groundingTab = $("#tab-grounding");
 
     if (!creation) {
@@ -2009,8 +2057,6 @@
         '<p class="muted">Open a creation from Archives or generate a new one.</p>';
       $("#viewer-title").textContent = "Viewer";
       $("#viewer-status").textContent = "No creation loaded";
-      if (paletteEl) paletteEl.textContent = "Palette: —";
-      if (boxArtEl) boxArtEl.textContent = "";
       if (groundingTab) groundingTab.textContent = "Sources (0)";
       syncViewerChrome(null);
       renderTaskbar();
@@ -2023,18 +2069,6 @@
     const sources = creation.groundingSources || [];
     if (groundingTab) groundingTab.textContent = "Sources (" + sources.length + ")";
 
-    const autoOpt = $("#theme-override option[value='auto']");
-    if (autoOpt) {
-      autoOpt.textContent =
-        "Auto: " + ((creation.theme && creation.theme.themeName) || "Theme");
-    }
-    if (boxArtEl) {
-      const style =
-        (creation.theme && creation.theme.boxArtStyle) || theme.boxArtStyle || "";
-      boxArtEl.textContent = style ? "Box art: " + style : "";
-      boxArtEl.title = style;
-    }
-
     const title = creationTitle(creation);
     $("#viewer-title").textContent = "Viewer — " + title;
     const model = (creation._model && creation._model.repo_id) || "model";
@@ -2046,7 +2080,6 @@
       " · " +
       model +
       (created ? " · " + created : "");
-    if (paletteEl) paletteEl.textContent = "Palette: " + (theme.themeName || "Custom");
 
     const tab = state.viewerTab || (modality === "text" ? "doc" : "media");
     canvas.classList.toggle("tab-ascii", tab === "ascii");
@@ -2094,66 +2127,52 @@
 
   function creationToAscii(c) {
     if (!c) return "";
-    const meta = c.meta || {};
     const lines = [];
-    const title = creationTitle(c);
-    lines.push("=".repeat(70));
-    lines.push("   RETRO 98 AI CREATOR — " + String(title || "").toUpperCase());
-    lines.push(
-      "   TYPE: " +
-        (c.creationType || creationModality(c)) +
-        " | MODALITY: " +
-        creationModality(c)
-    );
-    lines.push("=".repeat(70));
-    lines.push("");
-    if (c.prompt) {
-      lines.push("PROMPT:");
-      lines.push(c.prompt);
-      lines.push("");
-    }
-    if (meta.developer || meta.publisher || meta.designer) {
-      lines.push("DEVELOPER: " + (meta.developer || "N/A"));
-      lines.push("PUBLISHER: " + (meta.publisher || "N/A"));
-      lines.push("DESIGNER : " + (meta.designer || "N/A"));
-      lines.push("");
-    }
     const overview = String(c.overview || "").trim();
     if (overview && !overviewIsTruncatedBody(c)) {
-      lines.push("-".repeat(70));
-      lines.push("OVERVIEW:");
       lines.push(overview);
-      lines.push("-".repeat(70));
       lines.push("");
     }
-    (c.sections || []).forEach((s, idx) => {
+    (c.sections || []).forEach((s) => {
       const secTitle = String(s.title || "").trim();
-      const hideHeading =
-        !secTitle ||
-        (secTitle === "Response" && (c.creationType || "") === "Text");
-      if (!hideHeading) {
-        lines.push(
-          "[SECTION " + (idx + 1) + ": " + secTitle.toUpperCase() + "]"
-        );
+      if (!shouldHideSectionHeading(secTitle)) {
+        lines.push(secTitle);
+        lines.push("");
       }
-      lines.push(s.content || "");
+      if (s.content) lines.push(s.content);
       lines.push("");
       if (s.keyValues && s.keyValues.length) {
-        lines.push("KEY VALUES:");
         s.keyValues.forEach((kv) => {
-          const label = String(kv.label || "").padEnd(24, " ");
-          lines.push("  * " + label + " : " + (kv.value || ""));
+          lines.push("  * " + (kv.label || "") + " : " + (kv.value || ""));
         });
         lines.push("");
       }
     });
-    lines.push("=".repeat(70));
-    if (c.accuracyNote) {
-      lines.push("NOTE:");
-      lines.push(c.accuracyNote);
-      lines.push("=".repeat(70));
-    }
-    return lines.join("\n");
+    return lines.join("\n").replace(/\n+$/, "\n");
+  }
+
+  function exportCreationMetadata(creation) {
+    if (!creation) return {};
+    const model = Object.assign({}, creation._model || {});
+    const meta = {
+      id: creation.id || null,
+      title: creationTitle(creation),
+      creationType: creation.creationType || null,
+      modality: creationModality(creation),
+      platform: creation.platform || null,
+      createdAt: creation.createdAt || null,
+      prompt: creation.prompt || "",
+      model: model,
+      overview: creation.overview || "",
+      sections: creation.sections || [],
+      meta: creation.meta || {},
+      groundingSources: creation.groundingSources || [],
+      accuracyNote: creation.accuracyNote || "",
+    };
+    if (creation.mediaPath) meta.mediaPath = creation.mediaPath;
+    if (creation.mimeType) meta.mimeType = creation.mimeType;
+    if (creation.theme) meta.theme = creation.theme;
+    return meta;
   }
 
   function exportBaseName(creation) {
@@ -2163,41 +2182,112 @@
       .slice(0, 60) || "creation";
   }
 
-  async function withUnconstrainedCanvas(fn) {
-    const targetEl = $("#doc-canvas");
-    if (!targetEl || !window.htmlToImage) {
-      throw new Error("Document canvas or html-to-image is unavailable");
+  function buildTextExportBodyHtml(creation, theme) {
+    let html = "";
+    const overview = String(creation.overview || "").trim();
+    if (overview && !overviewIsTruncatedBody(creation)) {
+      html +=
+        '<p class="doc-overview" style="margin:0 0 12px;white-space:pre-wrap;">' +
+        escapeHtml(overview) +
+        "</p>";
     }
-    const origMaxHeight = targetEl.style.maxHeight;
-    const origOverflow = targetEl.style.overflow;
-    const origHeight = targetEl.style.height;
-    const origMinHeight = targetEl.style.minHeight;
+    (creation.sections || []).forEach((sec) => {
+      const secTitle = String(sec.title || "").trim();
+      html += '<div class="doc-section" style="margin:0 0 16px;">';
+      if (!shouldHideSectionHeading(secTitle)) {
+        html +=
+          '<h3 style="margin:0 0 8px;color:' +
+          escapeHtml(theme.accentColor || "#000080") +
+          '">' +
+          escapeHtml(secTitle) +
+          "</h3>";
+      }
+      html +=
+        '<div class="doc-section-body" style="white-space:pre-wrap;word-wrap:break-word;line-height:1.35;margin:0;">' +
+        escapeHtml(sec.content || "") +
+        "</div>";
+      if (sec.keyValues && sec.keyValues.length) {
+        html += '<table class="kv-table" style="margin-top:8px;"><tbody>';
+        sec.keyValues.forEach((kv) => {
+          html +=
+            "<tr><td>" +
+            escapeHtml(kv.label) +
+            "</td><td>" +
+            escapeHtml(kv.value) +
+            "</td></tr>";
+        });
+        html += "</tbody></table>";
+      }
+      html += "</div>";
+    });
+    return html || '<p style="margin:0;">(empty)</p>';
+  }
 
-    targetEl.classList.add("doc-canvas-exporting");
-    targetEl.style.maxHeight = "none";
-    targetEl.style.overflow = "visible";
-    targetEl.style.height = "auto";
-    targetEl.style.minHeight = "0";
-    // Expand to full content height so html-to-image does not clip to the viewport
-    targetEl.scrollTop = 0;
+  async function withOffscreenTextExport(creation, fn) {
+    if (!window.htmlToImage) {
+      throw new Error("html-to-image is unavailable");
+    }
+    const theme = resolveTheme(creation);
+    const host = document.createElement("div");
+    host.setAttribute("data-export-host", "1");
+    // Keep in the layout tree (not far off-screen) so WebView paints full height.
+    host.style.cssText = [
+      "position:fixed",
+      "left:0",
+      "top:0",
+      "width:800px",
+      "max-width:800px",
+      "padding:24px",
+      "box-sizing:border-box",
+      "margin:0",
+      "overflow:visible",
+      "max-height:none",
+      "height:auto",
+      "opacity:0",
+      "pointer-events:none",
+      "z-index:2147483646",
+      "background:" + (theme.cardBg || "#ffffff"),
+      "color:" + (theme.textColor || "#000000"),
+      "font-family:" + fontStackFromStyle(theme.fontStyle),
+      "font-size:14px",
+      "line-height:1.35",
+    ].join(";");
+    host.innerHTML = buildTextExportBodyHtml(creation, theme);
+    document.body.appendChild(host);
+
     await new Promise((resolve) =>
       requestAnimationFrame(() => requestAnimationFrame(resolve))
     );
-    const fullWidth = Math.max(targetEl.scrollWidth, targetEl.offsetWidth, 800);
-    const fullHeight = Math.max(targetEl.scrollHeight, targetEl.offsetHeight, 1);
-    targetEl.style.height = fullHeight + "px";
+
+    const fullWidth = Math.max(host.scrollWidth, host.offsetWidth, 800);
+    const fullHeight = Math.max(host.scrollHeight, host.offsetHeight, 1);
+    host.style.width = fullWidth + "px";
+    host.style.height = fullHeight + "px";
+
     await new Promise((resolve) => requestAnimationFrame(resolve));
 
+    // Stay under typical canvas dimension limits (~16384px) for long documents
+    const maxDim = 16000;
+    let pixelRatio = 2;
+    if (fullWidth * pixelRatio > maxDim || fullHeight * pixelRatio > maxDim) {
+      pixelRatio = Math.max(
+        1,
+        Math.min(maxDim / fullWidth, maxDim / fullHeight)
+      );
+    }
+
     const opts = {
-      pixelRatio: 2,
+      pixelRatio: pixelRatio,
       cacheBust: true,
-      backgroundColor:
-        (targetEl.style && targetEl.style.backgroundColor) ||
-        getComputedStyle(targetEl).backgroundColor ||
-        "#ffffff",
+      backgroundColor: theme.cardBg || "#ffffff",
       width: fullWidth,
       height: fullHeight,
       style: {
+        opacity: "1",
+        position: "static",
+        left: "auto",
+        top: "auto",
+        transform: "none",
         maxHeight: "none",
         overflow: "visible",
         height: fullHeight + "px",
@@ -2206,13 +2296,9 @@
     };
 
     try {
-      return await fn(targetEl, opts);
+      return await fn(host, opts);
     } finally {
-      targetEl.classList.remove("doc-canvas-exporting");
-      targetEl.style.maxHeight = origMaxHeight;
-      targetEl.style.overflow = origOverflow;
-      targetEl.style.height = origHeight;
-      targetEl.style.minHeight = origMinHeight;
+      if (host.parentNode) host.parentNode.removeChild(host);
     }
   }
 
@@ -2273,11 +2359,12 @@
       return;
     }
 
+    // Text: render full body offscreen so parent window overflow cannot clip it
     showToast(format === "pdf" ? "Building PDF…" : "Capturing PNG…");
     try {
       const base = exportBaseName(state.active);
       if (format === "png") {
-        const pngDataUrl = await withUnconstrainedCanvas((el, opts) =>
+        const pngDataUrl = await withOffscreenTextExport(state.active, (el, opts) =>
           window.htmlToImage.toPng(el, opts)
         );
         const res = await a.save_binary_file_dialog(base + ".png", pngDataUrl);
@@ -2294,7 +2381,7 @@
       const JsPDF = jspdfNS && (jspdfNS.jsPDF || jspdfNS);
       if (!JsPDF) throw new Error("jsPDF is unavailable");
 
-      const canvas = await withUnconstrainedCanvas((el, opts) =>
+      const canvas = await withOffscreenTextExport(state.active, (el, opts) =>
         window.htmlToImage.toCanvas(el, opts)
       );
       const imgData = canvas.toDataURL("image/png");
@@ -2318,33 +2405,139 @@
     }
   }
 
+  function creationModalityLabel(creation) {
+    const m = creationModality(creation);
+    if (m === "image") return "Image";
+    if (m === "video") return "Video";
+    return "Text";
+  }
+
+  function archiveSortValue(creation, key) {
+    if (key === "name") return creationTitle(creation).toLowerCase();
+    if (key === "type") return creationModalityLabel(creation).toLowerCase();
+    if (key === "created") {
+      const t = Date.parse(creation && creation.createdAt);
+      return Number.isFinite(t) ? t : 0;
+    }
+    return "";
+  }
+
+  function compareArchiveRows(a, b, key, dir) {
+    const av = archiveSortValue(a, key);
+    const bv = archiveSortValue(b, key);
+    let cmp = 0;
+    if (typeof av === "number" && typeof bv === "number") {
+      cmp = av - bv;
+    } else {
+      cmp = String(av).localeCompare(String(bv), undefined, {
+        sensitivity: "base",
+        numeric: true,
+      });
+    }
+    if (cmp === 0) {
+      // Stable-ish secondary: newest id / created
+      const at = archiveSortValue(a, "created");
+      const bt = archiveSortValue(b, "created");
+      cmp = bt - at;
+    }
+    return dir === "desc" ? -cmp : cmp;
+  }
+
+  function syncArchiveSortHeaders() {
+    const sort = state.archiveSort || { key: "created", dir: "desc" };
+    document.querySelectorAll(".archive-table thead th[aria-sort]").forEach((th) => {
+      const btn = th.querySelector(".arch-sort-btn");
+      const key = btn && btn.getAttribute("data-sort");
+      if (!key) return;
+      const label =
+        key === "name" ? "Name" : key === "type" ? "Type" : "Created";
+      if (sort.key === key) {
+        th.setAttribute("aria-sort", sort.dir === "asc" ? "ascending" : "descending");
+        btn.textContent = label + (sort.dir === "asc" ? " ▲" : " ▼");
+        btn.setAttribute("aria-pressed", "true");
+      } else {
+        th.setAttribute("aria-sort", "none");
+        btn.textContent = label;
+        btn.setAttribute("aria-pressed", "false");
+      }
+    });
+  }
+
+  function setArchiveSort(key) {
+    if (!key) return;
+    const cur = state.archiveSort || { key: "created", dir: "desc" };
+    if (cur.key === key) {
+      state.archiveSort = { key: key, dir: cur.dir === "asc" ? "desc" : "asc" };
+    } else {
+      // Dates default newest-first; text columns start A→Z
+      state.archiveSort = {
+        key: key,
+        dir: key === "created" ? "desc" : "asc",
+      };
+    }
+    renderArchives();
+    beep(650, 0.02);
+  }
+
   function renderArchives() {
     const q = ($("#archive-search").value || "").toLowerCase();
     const list = $("#archive-list");
+    if (!list) return;
     list.innerHTML = "";
+    const sort = state.archiveSort || { key: "created", dir: "desc" };
+    syncArchiveSortHeaders();
     state.creations
-      .filter(
-        (c) =>
-          !q ||
+      .filter((c) => {
+        if (!q) return true;
+        const typeLabel = creationModalityLabel(c).toLowerCase();
+        return (
           (c.game || "").toLowerCase().includes(q) ||
           (c.title || "").toLowerCase().includes(q) ||
           (c.prompt || "").toLowerCase().includes(q) ||
           (c.creationType || "").toLowerCase().includes(q) ||
-          (c.platform || "").toLowerCase().includes(q)
-      )
+          (c.platform || "").toLowerCase().includes(q) ||
+          typeLabel.includes(q) ||
+          creationModality(c).includes(q)
+        );
+      })
+      .slice()
+      .sort((a, b) => compareArchiveRows(a, b, sort.key, sort.dir))
       .forEach((c) => {
-        const li = document.createElement("li");
+        const tr = document.createElement("tr");
+        const mod = creationModality(c);
+        const isMedia = mod === "image" || mod === "video";
+
+        const tdName = document.createElement("td");
+        tdName.className = "arch-col-name";
         const openBtn = document.createElement("button");
         openBtn.type = "button";
         openBtn.className = "arch-open";
-        openBtn.textContent =
-          creationTitle(c) +
-          " — " +
-          (c.creationType || creationModality(c)) +
-          (c.createdAt ? " · " + formatCreatedAt(c.createdAt) : "");
+        openBtn.textContent = creationTitle(c);
+        openBtn.title = "Open in Viewer";
         openBtn.addEventListener("click", () => {
           renderDocument(c);
           beep(700, 0.04);
+        });
+        tdName.appendChild(openBtn);
+
+        const tdType = document.createElement("td");
+        tdType.className = "arch-col-type";
+        tdType.textContent = creationModalityLabel(c);
+
+        const tdDate = document.createElement("td");
+        tdDate.className = "arch-col-date";
+        tdDate.textContent = c.createdAt ? formatCreatedAt(c.createdAt) : "—";
+
+        const tdActions = document.createElement("td");
+        tdActions.className = "arch-col-actions";
+        const basis = document.createElement("button");
+        basis.type = "button";
+        basis.textContent = isMedia ? "Edit…" : "Basis";
+        basis.title = isMedia
+          ? "Open a copy in the " + mod + " editor"
+          : "Use as basis for a new text creation";
+        basis.addEventListener("click", () => {
+          useCreationAsBasis(c);
         });
         const del = document.createElement("button");
         del.type = "button";
@@ -2359,17 +2552,14 @@
           renderArchives();
           beep(300, 0.08);
         });
-        const basis = document.createElement("button");
-        basis.type = "button";
-        basis.textContent = "Basis";
-        basis.title = "Use as basis for a new " + creationModality(c);
-        basis.addEventListener("click", () => {
-          useCreationAsBasis(c);
-        });
-        li.appendChild(openBtn);
-        li.appendChild(basis);
-        li.appendChild(del);
-        list.appendChild(li);
+        tdActions.appendChild(basis);
+        tdActions.appendChild(del);
+
+        tr.appendChild(tdName);
+        tr.appendChild(tdType);
+        tr.appendChild(tdDate);
+        tr.appendChild(tdActions);
+        list.appendChild(tr);
       });
   }
 
@@ -2469,6 +2659,38 @@
     if (pick) sel.value = pick;
   }
 
+  /** Fill an OpenRouter modality picker with only compatible models. */
+  function fillOpenRouterModalitySelect(sel, selected, suggestions, modality) {
+    if (!sel) return;
+    const want = (modality || "text").toLowerCase();
+    const defaults = {
+      text: "google/gemini-2.5-flash",
+      image: "google/gemini-2.5-flash-image",
+      video: "google/veo-2.0",
+    };
+    const filtered = (suggestions || []).filter(
+      (m) => (m.modality || "text").toLowerCase() === want
+    );
+    sel.innerHTML = "";
+    filtered.forEach((m) => {
+      const opt = document.createElement("option");
+      opt.value = m.repo_id;
+      opt.textContent = m.label + (m.notes ? " — " + m.notes : "");
+      opt.dataset.modality = want;
+      sel.appendChild(opt);
+    });
+    let pick = selected || defaults[want] || "";
+    if (pick && ![...sel.options].some((o) => o.value === pick)) {
+      const opt = document.createElement("option");
+      opt.value = pick;
+      opt.textContent = pick + " (saved)";
+      opt.dataset.modality = want;
+      sel.appendChild(opt);
+    }
+    if (!pick && sel.options.length) pick = sel.options[0].value;
+    if (pick) sel.value = pick;
+  }
+
   function creationModality(creation) {
     if (!creation) return "text";
     const m = String(creation.modality || "").toLowerCase();
@@ -2518,7 +2740,6 @@
     const showMp4 = modality === "video";
     const showAscii = modality === "text";
     const showVoice = modality === "text";
-    const showTheme = modality === "text";
     const showEditImage = modality === "image";
     const showEditVideo = modality === "video";
     const showMetadata = !!creation;
@@ -2548,9 +2769,6 @@
       $("#btn-export-json").textContent = "Export Metadata";
     }
 
-    const themeBar = document.querySelector(".viewer-theme-bar");
-    if (themeBar) themeBar.hidden = !showTheme;
-
     if (isMedia && (state.viewerTab === "doc" || state.viewerTab === "print" || state.viewerTab === "ascii")) {
       state.viewerTab = "media";
     }
@@ -2561,12 +2779,12 @@
 
   function fillControlPanel(boot) {
     if (boot && boot.config) state.config = boot.config;
-    const model = (boot.config && boot.config.model) || {};
+    const model = (boot.config && boot.config.huggingface) || {};
     const gemini = (boot.config && boot.config.gemini) || {};
     const openrouter = (boot.config && boot.config.openrouter) || {};
     const backend = (boot.config && boot.config.backend) || {};
     const ui = (boot.config && boot.config.ui) || {};
-    const gen = (boot.config && boot.config.generation) || {};
+    const promptCfg = (boot.config && boot.config.prompt) || {};
 
     if ($("#backend-provider")) {
       $("#backend-provider").value = backend.provider || "gemini";
@@ -2586,7 +2804,7 @@
     const suggested = boot.suggestedGeminiModels || [];
     fillGeminiModalitySelect(
       $("#gemini-text-model"),
-      gemini.text_model || gemini.model || "gemini-2.5-flash",
+      gemini.text_model || "gemini-2.5-flash",
       suggested,
       "text"
     );
@@ -2606,10 +2824,24 @@
     if ($("#openrouter-temp")) {
       $("#openrouter-temp").value = openrouter.temperature ?? 0;
     }
-    fillModelSelect(
-      $("#openrouter-model"),
-      openrouter.model || "google/gemini-2.5-flash",
-      boot.suggestedOpenRouterModels || []
+    const orSuggested = boot.suggestedOpenRouterModels || [];
+    fillOpenRouterModalitySelect(
+      $("#openrouter-text-model"),
+      openrouter.text_model || "google/gemini-2.5-flash",
+      orSuggested,
+      "text"
+    );
+    fillOpenRouterModalitySelect(
+      $("#openrouter-image-model"),
+      openrouter.image_model || "google/gemini-2.5-flash-image",
+      orSuggested,
+      "image"
+    );
+    fillOpenRouterModalitySelect(
+      $("#openrouter-video-model"),
+      openrouter.video_model || "google/veo-2.0",
+      orSuggested,
+      "video"
     );
 
     updateApiKeyIndicators();
@@ -2624,7 +2856,7 @@
     if ($("#model-tokens")) $("#model-tokens").value = model.max_new_tokens || 2048;
     if ($("#model-temp")) $("#model-temp").value = model.temperature ?? 0;
     if ($("#model-token")) $("#model-token").value = model.hf_token || "";
-    if ($("#system-extra")) $("#system-extra").value = gen.system_extra || "";
+    if ($("#system-extra")) $("#system-extra").value = promptCfg.extra_instructions || "";
     $("#opt-sound").checked = ui.sound_enabled !== false;
     $("#opt-crt").checked = !!ui.crt_enabled;
     state.soundEnabled = $("#opt-sound").checked;
@@ -2644,8 +2876,6 @@
     }
 
     fillAppThemeSelect();
-    state.defaultPlatform = ui.default_platform || "";
-    state.defaultTheme = ui.default_theme || "auto";
     const custom = ui.custom_theme || {};
     state.customTheme = {
       desktopColor: normalizeHexColor(custom.desktop_color, "#008080"),
@@ -2683,18 +2913,35 @@
       : "";
     if (provider === "huggingface") {
       const repo =
-        (boot && boot.config && boot.config.model && boot.config.model.repo_id) ||
+        (boot && boot.config && boot.config.huggingface && boot.config.huggingface.repo_id) ||
         ($("#model-repo") && $("#model-repo").value) ||
         "local HF";
       modelField.textContent =
         "Backend: Hugging Face · " + repo + (modLabel ? " · " + modLabel : "");
     } else if (provider === "openrouter") {
-      const model =
-        (boot && boot.config && boot.config.openrouter && boot.config.openrouter.model) ||
-        ($("#openrouter-model") && $("#openrouter-model").value) ||
+      const o =
+        (boot && boot.config && boot.config.openrouter) ||
+        (state.config && state.config.openrouter) ||
+        {};
+      const textM =
+        o.text_model ||
+        ($("#openrouter-text-model") && $("#openrouter-text-model").value) ||
         "google/gemini-2.5-flash";
+      const imageM =
+        o.image_model ||
+        ($("#openrouter-image-model") && $("#openrouter-image-model").value) ||
+        "google/gemini-2.5-flash-image";
+      const videoM =
+        o.video_model ||
+        ($("#openrouter-video-model") && $("#openrouter-video-model").value) ||
+        "google/veo-2.0";
       modelField.textContent =
-        "Backend: OpenRouter · " + model + (modLabel ? " · " + modLabel : " · Text");
+        "Backend: OpenRouter · text " +
+        textM +
+        " · image " +
+        imageM +
+        " · video " +
+        videoM;
     } else {
       const g =
         (boot && boot.config && boot.config.gemini) ||
@@ -2703,7 +2950,6 @@
       const textM =
         g.text_model ||
         ($("#gemini-text-model") && $("#gemini-text-model").value) ||
-        g.model ||
         "gemini-2.5-flash";
       const imageM =
         g.image_model ||
@@ -2862,7 +3108,21 @@
       video_model:
         ($("#gemini-video-model") && $("#gemini-video-model").value) ||
         "veo-2.0-generate-001",
-      model: text,
+    };
+  }
+
+  function currentOpenRouterUiConfig() {
+    const text =
+      ($("#openrouter-text-model") && $("#openrouter-text-model").value) ||
+      "google/gemini-2.5-flash";
+    return {
+      text_model: text,
+      image_model:
+        ($("#openrouter-image-model") && $("#openrouter-image-model").value) ||
+        "google/gemini-2.5-flash-image",
+      video_model:
+        ($("#openrouter-video-model") && $("#openrouter-video-model").value) ||
+        "google/veo-2.0",
     };
   }
 
@@ -2881,24 +3141,27 @@
         video_model:
           ($("#gemini-video-model") && $("#gemini-video-model").value.trim()) ||
           "veo-2.0-generate-001",
-        model:
-          ($("#gemini-text-model") && $("#gemini-text-model").value.trim()) ||
-          "gemini-2.5-flash",
         api_key: ($("#gemini-key") && $("#gemini-key").value.trim()) || "",
         google_search: $("#gemini-search") ? $("#gemini-search").checked : true,
         two_pass_verify: $("#gemini-two-pass") ? $("#gemini-two-pass").checked : true,
         temperature: $("#gemini-temp") ? Number($("#gemini-temp").value) || 0 : 0,
       },
       openrouter: {
-        model:
-          ($("#openrouter-model") && $("#openrouter-model").value.trim()) ||
+        text_model:
+          ($("#openrouter-text-model") && $("#openrouter-text-model").value.trim()) ||
           "google/gemini-2.5-flash",
+        image_model:
+          ($("#openrouter-image-model") && $("#openrouter-image-model").value.trim()) ||
+          "google/gemini-2.5-flash-image",
+        video_model:
+          ($("#openrouter-video-model") && $("#openrouter-video-model").value.trim()) ||
+          "google/veo-2.0",
         api_key: ($("#openrouter-key") && $("#openrouter-key").value.trim()) || "",
         temperature: $("#openrouter-temp")
           ? Number($("#openrouter-temp").value) || 0
           : 0,
       },
-      model: {
+      huggingface: {
         repo_id: ($("#model-repo") && $("#model-repo").value.trim()) || "microsoft/Phi-3.5-mini-instruct",
         device: ($("#model-device") && $("#model-device").value) || "auto",
         torch_dtype: ($("#model-dtype") && $("#model-dtype").value) || "auto",
@@ -2907,15 +3170,13 @@
         hf_token: ($("#model-token") && $("#model-token").value.trim()) || null,
         trust_remote_code: false,
       },
-      generation: {
-        system_extra: ($("#system-extra") && $("#system-extra").value) || "",
+      prompt: {
+        extra_instructions: ($("#system-extra") && $("#system-extra").value) || "",
       },
       ui: {
         sound_enabled: $("#opt-sound").checked,
         crt_enabled: $("#opt-crt").checked,
         ui_scale: readUiScaleFromControl(),
-        default_platform: state.defaultPlatform || null,
-        default_theme: state.defaultTheme || "auto",
         app_theme: ($("#app-theme") && $("#app-theme").value) || state.appTheme || "light",
         custom_theme: (function () {
           const c =
@@ -2999,37 +3260,16 @@
   function themeDisplayName(themeKey) {
     if (!themeKey || themeKey === "auto") return "Auto Box Art Palette";
     if (THEMES[themeKey] && THEMES[themeKey].themeName) return THEMES[themeKey].themeName;
-    const sel = $("#theme-override");
-    if (sel) {
-      const match = [...sel.options].find((o) => o.value === themeKey);
-      if (match) return match.textContent;
-    }
     return themeKey;
   }
 
   function updateStudioThemeField() {
     const el = $("#studio-theme-field");
     if (!el) return;
-    el.textContent = "Theme Engine: " + themeDisplayName(state.defaultTheme || "auto");
+    el.textContent = "Theme Engine: " + themeDisplayName("auto");
   }
 
-  function applyGameDefaults(opts) {
-    opts = opts || {};
-    const platform = state.defaultPlatform || "";
-    const themeKey = state.defaultTheme || "auto";
-
-    if (opts.applyPlatform !== false && platform) {
-      setStudioPlatform(platform);
-      syncCreationDescription();
-    }
-
-    if (opts.applyTheme !== false) {
-      if ($("#theme-override")) {
-        $("#theme-override").value = themeKey;
-      }
-      if (state.active) renderDocument(state.active);
-    }
-
+  function applyGameDefaults(_opts) {
     updateStudioThemeField();
   }
 
@@ -3456,8 +3696,13 @@
     rotation: 0,
     crop: null, // {x,y,w,h} in source pixels
     cropDrag: null,
+    dirty: false,
     raf: 0,
   };
+
+  function markImageEditDirty() {
+    imageEdit.dirty = true;
+  }
 
   function setImageEditLoadedLabel(creation) {
     const el = $("#iedit-loaded-label");
@@ -3476,8 +3721,8 @@
     const hint = $("#image-edit-hint");
     if (hint) {
       hint.textContent = imageEdit.standalone
-        ? "Load an image to begin. At 0° rotation, drag to set a crop. Save writes Archives; Save As… exports a file."
-        : "At 0° rotation, drag on the image to set a crop (yellow box; outside dims). Clear Crop to reset. Apply saves to this creation.";
+        ? "Load an image to begin. At 0° rotation, drag to set a crop, then drag the box or handles to adjust. Save writes Archives; Save As… exports a file."
+        : "At 0° rotation, drag on the image to set a crop. Drag the yellow box to move, or use the handles to resize. Clear Crop to reset. Apply saves to this creation.";
     }
   }
 
@@ -3487,6 +3732,7 @@
     imageEdit.standalone = true;
     imageEdit.crop = null;
     imageEdit.cropDrag = null;
+    imageEdit.dirty = false;
     imageEdit.rotation = 0;
     if (window.R98ImageEdit) {
       imageEdit.filters = Object.assign({}, window.R98ImageEdit.DEFAULT_FILTERS);
@@ -3533,14 +3779,6 @@
     } finally {
       endBusy("Ready");
     }
-  }
-
-  async function loadImageIntoEditorFromActive() {
-    if (!state.active || creationModality(state.active) !== "image") {
-      showToast("Open an image in the Viewer first, or Load Image…");
-      return;
-    }
-    await useCreationAsBasis(state.active);
   }
 
   function readImageEditFiltersFromUi() {
@@ -3653,7 +3891,8 @@
   }
 
   /** Map pointer → source image pixels using the visible canvas box. */
-  function imageEditClientToSourcePixels(clientX, clientY) {
+  function imageEditClientToSourcePixels(clientX, clientY, opts) {
+    opts = opts || {};
     const canvas = $("#image-edit-canvas");
     const img = imageEdit.sourceImg;
     if (!canvas || !img) return null;
@@ -3661,15 +3900,41 @@
     if (rect.width < 1 || rect.height < 1) return null;
     const sw = img.naturalWidth || img.width || canvas.width;
     const sh = img.naturalHeight || img.height || canvas.height;
-    const nx = (clientX - rect.left) / rect.width;
-    const ny = (clientY - rect.top) / rect.height;
-    if (nx < 0 || ny < 0 || nx > 1 || ny > 1) return null;
+    let nx = (clientX - rect.left) / rect.width;
+    let ny = (clientY - rect.top) / rect.height;
+    if (!opts.clamp) {
+      if (nx < 0 || ny < 0 || nx > 1 || ny > 1) return null;
+    } else {
+      nx = Math.min(1, Math.max(0, nx));
+      ny = Math.min(1, Math.max(0, ny));
+    }
     return {
       x: Math.min(sw, Math.max(0, nx * sw)),
       y: Math.min(sh, Math.max(0, ny * sh)),
       sw: sw,
       sh: sh,
     };
+  }
+
+  function clampImageEditCrop(crop, sw, sh) {
+    if (!crop) return null;
+    let w = Math.max(1, Math.min(Number(crop.w) || 1, sw));
+    let h = Math.max(1, Math.min(Number(crop.h) || 1, sh));
+    let x = Number(crop.x) || 0;
+    let y = Number(crop.y) || 0;
+    x = Math.min(Math.max(0, x), Math.max(0, sw - w));
+    y = Math.min(Math.max(0, y), Math.max(0, sh - h));
+    return { x: x, y: y, w: w, h: h };
+  }
+
+  function ensureImageEditCropHandles(box) {
+    if (!box || box.querySelector(".crop-handle")) return;
+    ["nw", "n", "ne", "e", "se", "s", "sw", "w"].forEach((dir) => {
+      const handle = document.createElement("div");
+      handle.className = "crop-handle crop-handle-" + dir;
+      handle.dataset.handle = dir;
+      box.appendChild(handle);
+    });
   }
 
   function updateCropBoxOverlay() {
@@ -3681,6 +3946,7 @@
       box.hidden = true;
       return;
     }
+    ensureImageEditCropHandles(box);
     // Crop box is positioned inside .image-edit-canvas-wrap (same box as the canvas),
     // so percentages track CSS scaling / centering without stage scroll math.
     const sw = imageEdit.sourceImg.naturalWidth || imageEdit.sourceImg.width || canvas.width;
@@ -3692,39 +3958,74 @@
     box.style.height = (crop.h / sh) * 100 + "%";
   }
 
+  function resizeImageEditCropFromHandle(startCrop, handle, x1, y1, sw, sh) {
+    const left0 = startCrop.x;
+    const top0 = startCrop.y;
+    const right0 = startCrop.x + startCrop.w;
+    const bottom0 = startCrop.y + startCrop.h;
+    let left = left0;
+    let top = top0;
+    let right = right0;
+    let bottom = bottom0;
+    if (handle.indexOf("w") !== -1) left = x1;
+    if (handle.indexOf("e") !== -1) right = x1;
+    if (handle.indexOf("n") !== -1) top = y1;
+    if (handle.indexOf("s") !== -1) bottom = y1;
+    left = Math.min(Math.max(0, left), sw);
+    right = Math.min(Math.max(0, right), sw);
+    top = Math.min(Math.max(0, top), sh);
+    bottom = Math.min(Math.max(0, bottom), sh);
+    return clampImageEditCrop(
+      {
+        x: Math.min(left, right),
+        y: Math.min(top, bottom),
+        w: Math.max(1, Math.abs(right - left)),
+        h: Math.max(1, Math.abs(bottom - top)),
+      },
+      sw,
+      sh
+    );
+  }
+
   async function openImageEditor(creation, opts) {
     opts = opts || {};
     if (!creation || creationModality(creation) !== "image") {
       showToast("Edit is available for image creations.");
-      return;
+      return false;
     }
     if (!window.R98ImageEdit) {
       showToast("Image edit module failed to load.");
-      return;
+      return false;
     }
     const a = api();
     if (!a) {
       showToast("Python bridge required to edit images.");
-      return;
+      return false;
     }
     const payload = await a.get_media_payload(creation);
     if (!payload || !payload.ok || !payload.dataUrl) {
       showToast((payload && payload.error) || "Could not load image.");
-      return;
+      return false;
     }
 
     const img = new Image();
-    await new Promise((resolve, reject) => {
-      img.onload = resolve;
-      img.onerror = reject;
-      img.src = payload.dataUrl;
-    });
+    try {
+      await new Promise((resolve, reject) => {
+        img.onload = resolve;
+        img.onerror = reject;
+        img.src = payload.dataUrl;
+      });
+    } catch (_) {
+      showToast("Could not decode image for editing.");
+      return false;
+    }
 
     imageEdit.sourceImg = img;
     imageEdit.creationId = creation.id;
     imageEdit.standalone = typeof opts.standalone === "boolean" ? opts.standalone : true;
     imageEdit.crop = null;
     imageEdit.cropDrag = null;
+    imageEdit.dirty = false;
     imageEdit.rotation = 0;
     imageEdit.filters = Object.assign({}, window.R98ImageEdit.DEFAULT_FILTERS);
     if ($("#edit-rotation")) $("#edit-rotation").value = 0;
@@ -3735,6 +4036,7 @@
     // Preview after the window is shown/laid out
     requestAnimationFrame(() => scheduleImageEditPreview());
     beep(700, 0.04);
+    return true;
   }
 
   function resetImageEditor() {
@@ -3742,6 +4044,7 @@
     imageEdit.filters = Object.assign({}, window.R98ImageEdit.DEFAULT_FILTERS);
     imageEdit.crop = null;
     imageEdit.rotation = 0;
+    imageEdit.dirty = false;
     if ($("#edit-rotation")) $("#edit-rotation").value = 0;
     writeImageEditFiltersToUi(imageEdit.filters);
     scheduleImageEditPreview();
@@ -3824,6 +4127,7 @@
     imageEdit.crop = null;
     imageEdit.cropDrag = null;
     imageEdit.rotation = 0;
+    imageEdit.dirty = false;
     if (window.R98ImageEdit) {
       imageEdit.filters = Object.assign({}, window.R98ImageEdit.DEFAULT_FILTERS);
       writeImageEditFiltersToUi(imageEdit.filters);
@@ -3924,6 +4228,10 @@
     closeWindow("image-edit");
   }
 
+  async function requestCloseImageEditor() {
+    await requestCloseWindow("image-edit");
+  }
+
   function setupImageEditCropInteraction() {
     const stage = $("#image-edit-stage");
     const canvas = $("#image-edit-canvas");
@@ -3935,15 +4243,50 @@
         showToast("Set rotation to 0° before drawing a crop (or crop first, then rotate).");
         return;
       }
-      const pt = imageEditClientToSourcePixels(e.clientX, e.clientY);
+      const handleEl =
+        e.target && e.target.closest
+          ? e.target.closest(".crop-handle")
+          : null;
+      const onCropBox =
+        e.target && e.target.closest
+          ? e.target.closest("#image-edit-crop-box")
+          : null;
+      const clamp = !!(handleEl || onCropBox || imageEdit.crop);
+      const pt = imageEditClientToSourcePixels(e.clientX, e.clientY, {
+        clamp: clamp,
+      });
       if (!pt) return;
-      imageEdit.cropDrag = {
-        x0: pt.x,
-        y0: pt.y,
-        pointerId: e.pointerId,
-      };
-      // Tiny seed rect so overlay appears immediately
-      imageEdit.crop = { x: pt.x, y: pt.y, w: 1, h: 1 };
+
+      if (handleEl && imageEdit.crop) {
+        imageEdit.cropDrag = {
+          mode: "resize",
+          handle: handleEl.getAttribute("data-handle") || "se",
+          x0: pt.x,
+          y0: pt.y,
+          startCrop: Object.assign({}, imageEdit.crop),
+          pointerId: e.pointerId,
+        };
+      } else if (onCropBox && imageEdit.crop) {
+        imageEdit.cropDrag = {
+          mode: "move",
+          handle: null,
+          x0: pt.x,
+          y0: pt.y,
+          startCrop: Object.assign({}, imageEdit.crop),
+          pointerId: e.pointerId,
+        };
+      } else {
+        imageEdit.cropDrag = {
+          mode: "draw",
+          handle: null,
+          x0: pt.x,
+          y0: pt.y,
+          startCrop: null,
+          pointerId: e.pointerId,
+        };
+        // Tiny seed rect so overlay appears immediately
+        imageEdit.crop = { x: pt.x, y: pt.y, w: 1, h: 1 };
+      }
       updateCropBoxOverlay();
       stage.setPointerCapture(e.pointerId);
       e.preventDefault();
@@ -3951,47 +4294,71 @@
 
     stage.addEventListener("pointermove", (e) => {
       if (!imageEdit.cropDrag || e.pointerId !== imageEdit.cropDrag.pointerId) return;
-      const canvasEl = $("#image-edit-canvas");
-      if (!canvasEl || !imageEdit.sourceImg) return;
-      const rect = canvasEl.getBoundingClientRect();
-      const sw =
-        imageEdit.sourceImg.naturalWidth ||
-        imageEdit.sourceImg.width ||
-        canvasEl.width;
-      const sh =
-        imageEdit.sourceImg.naturalHeight ||
-        imageEdit.sourceImg.height ||
-        canvasEl.height;
-      // Clamp to canvas bounds while dragging (unlike pointerdown miss)
-      const nx = Math.min(1, Math.max(0, (e.clientX - rect.left) / Math.max(1, rect.width)));
-      const ny = Math.min(1, Math.max(0, (e.clientY - rect.top) / Math.max(1, rect.height)));
-      const x1 = nx * sw;
-      const y1 = ny * sh;
-      const x0 = imageEdit.cropDrag.x0;
-      const y0 = imageEdit.cropDrag.y0;
-      imageEdit.crop = {
-        x: Math.min(x0, x1),
-        y: Math.min(y0, y1),
-        w: Math.max(1, Math.abs(x1 - x0)),
-        h: Math.max(1, Math.abs(y1 - y0)),
-      };
+      const drag = imageEdit.cropDrag;
+      const pt = imageEditClientToSourcePixels(e.clientX, e.clientY, {
+        clamp: true,
+      });
+      if (!pt) return;
+      const sw = pt.sw;
+      const sh = pt.sh;
+
+      if (drag.mode === "move" && drag.startCrop) {
+        const dx = pt.x - drag.x0;
+        const dy = pt.y - drag.y0;
+        imageEdit.crop = clampImageEditCrop(
+          {
+            x: drag.startCrop.x + dx,
+            y: drag.startCrop.y + dy,
+            w: drag.startCrop.w,
+            h: drag.startCrop.h,
+          },
+          sw,
+          sh
+        );
+      } else if (drag.mode === "resize" && drag.startCrop && drag.handle) {
+        imageEdit.crop = resizeImageEditCropFromHandle(
+          drag.startCrop,
+          drag.handle,
+          pt.x,
+          pt.y,
+          sw,
+          sh
+        );
+      } else {
+        const x0 = drag.x0;
+        const y0 = drag.y0;
+        imageEdit.crop = clampImageEditCrop(
+          {
+            x: Math.min(x0, pt.x),
+            y: Math.min(y0, pt.y),
+            w: Math.max(1, Math.abs(pt.x - x0)),
+            h: Math.max(1, Math.abs(pt.y - y0)),
+          },
+          sw,
+          sh
+        );
+      }
       updateCropBoxOverlay();
     });
 
     const endDrag = (e) => {
       if (!imageEdit.cropDrag || e.pointerId !== imageEdit.cropDrag.pointerId) return;
+      const mode = imageEdit.cropDrag.mode;
       imageEdit.cropDrag = null;
       try {
         stage.releasePointerCapture(e.pointerId);
       } catch (_) {
         /* ignore */
       }
-      // Drop accidental clicks (no real drag)
+      // Drop accidental clicks when drawing a new crop (no real drag)
       if (
+        mode === "draw" &&
         imageEdit.crop &&
         (imageEdit.crop.w < 2 || imageEdit.crop.h < 2)
       ) {
         imageEdit.crop = null;
+      } else if (imageEdit.crop || mode === "move" || mode === "resize") {
+        markImageEditDirty();
       }
       updateCropBoxOverlay();
     };
@@ -4004,7 +4371,7 @@
   function wireImageEditEvents() {
     if ($("#btn-edit-image")) {
       $("#btn-edit-image").addEventListener("click", () => {
-        openImageEditor(state.active, { standalone: false });
+        void openImageEditor(state.active, { standalone: false });
       });
     }
     const controlIds = [
@@ -4028,11 +4395,13 @@
       const el = $("#" + id);
       if (!el) return;
       el.addEventListener("input", () => {
+        markImageEditDirty();
         syncImageEditValueLabels();
         scheduleImageEditPreview();
       });
       // Some WebView hosts fire change more reliably than input on ranges
       el.addEventListener("change", () => {
+        markImageEditDirty();
         syncImageEditValueLabels();
         scheduleImageEditPreview();
       });
@@ -4042,6 +4411,7 @@
         const el = $("#" + id);
         if (!el) return;
         el.addEventListener("change", () => {
+          markImageEditDirty();
           syncBgRemoveRows();
           scheduleImageEditPreview();
         });
@@ -4051,6 +4421,7 @@
       $("#btn-edit-rot-cw").addEventListener("click", () => {
         const cur = Number($("#edit-rotation").value) || 0;
         $("#edit-rotation").value = String((cur + 90) % 360);
+        markImageEditDirty();
         syncImageEditValueLabels();
         scheduleImageEditPreview();
       });
@@ -4059,12 +4430,14 @@
       $("#btn-edit-rot-ccw").addEventListener("click", () => {
         const cur = Number($("#edit-rotation").value) || 0;
         $("#edit-rotation").value = String((cur + 270) % 360);
+        markImageEditDirty();
         syncImageEditValueLabels();
         scheduleImageEditPreview();
       });
     }
     if ($("#btn-edit-crop-clear")) {
       $("#btn-edit-crop-clear").addEventListener("click", () => {
+        if (imageEdit.crop) markImageEditDirty();
         imageEdit.crop = null;
         scheduleImageEditPreview();
         beep(650, 0.03);
@@ -4078,7 +4451,7 @@
     }
     if ($("#btn-edit-cancel")) {
       $("#btn-edit-cancel").addEventListener("click", () => {
-        closeImageEditor();
+        requestCloseImageEditor();
       });
     }
     if ($("#btn-edit-apply")) {
@@ -4112,9 +4485,15 @@
     selectedSegId: null,
     segSeq: 0,
     playSegIdx: 0, // which segment is playing in edit order
+    boundarySeeking: false, // ignore timeupdates while jumping between segments
     raf: 0,
     showFilterPreview: false,
+    dirty: false,
   };
+
+  function markVideoEditDirty() {
+    videoEdit.dirty = true;
+  }
 
   function setVideoEditLoadedLabel(creation) {
     const el = $("#vedit-loaded-label");
@@ -4141,6 +4520,7 @@
   function prepareEmptyVideoEditor() {
     resetVideoEditRuntime();
     videoEdit.standalone = true;
+    videoEdit.dirty = false;
     setVideoEditLoadedLabel(null);
     syncVideoEditChrome();
   }
@@ -4164,14 +4544,6 @@
     } finally {
       endBusy("Ready");
     }
-  }
-
-  async function loadVideoIntoEditorFromActive() {
-    if (!state.active || creationModality(state.active) !== "video") {
-      showToast("Open a video in the Viewer first, or Load Video…");
-      return;
-    }
-    await useCreationAsBasis(state.active);
   }
 
   function nextSegId() {
@@ -4343,6 +4715,7 @@
     videoEdit.segments.splice(idx, 1, left, right);
     videoEdit.selectedSegId = right.id;
     videoEdit.playSegIdx = idx + 1;
+    markVideoEditDirty();
     renderVideoSegments();
     updateVideoEditTimeLabel();
     beep(700, 0.04);
@@ -4366,6 +4739,7 @@
     const nextIdx = Math.min(idx, videoEdit.segments.length - 1);
     videoEdit.selectedSegId = videoEdit.segments[nextIdx].id;
     videoEdit.playSegIdx = nextIdx;
+    markVideoEditDirty();
     snapPlayerToEditedTimeline(keepEdited);
     renderVideoSegments();
     updateVideoEditTimeLabel();
@@ -4387,6 +4761,7 @@
     videoEdit.segments[idx] = videoEdit.segments[j];
     videoEdit.segments[j] = tmp;
     videoEdit.playSegIdx = j;
+    markVideoEditDirty();
     const newEditStart = editedOffsetForSegment(j);
     snapPlayerToEditedTimeline(newEditStart + within);
     renderVideoSegments();
@@ -4423,6 +4798,7 @@
       player.ontimeupdate = null;
       player.onpause = null;
       player.onseeked = null;
+      player.onended = null;
       player.removeAttribute("src");
       player.load();
     }
@@ -4434,6 +4810,7 @@
     videoEdit.rotation = 0;
     videoEdit.segments = [];
     videoEdit.selectedSegId = null;
+    videoEdit.boundarySeeking = false;
     if (window.R98ImageEdit) {
       writeVideoEditFiltersToUi(window.R98ImageEdit.DEFAULT_FILTERS);
     }
@@ -4447,6 +4824,10 @@
 
   function closeVideoEditor() {
     closeWindow("video-edit");
+  }
+
+  async function requestCloseVideoEditor() {
+    await requestCloseWindow("video-edit");
   }
 
   function readVideoEditFiltersFromUi() {
@@ -4520,10 +4901,79 @@
     if (idx >= 0) videoEdit.playSegIdx = idx;
   }
 
+  /**
+   * Seek to an edit-order segment. Guards against stale timeupdate races while seeking,
+   * and resumes playback when continuing past source EOF (HTMLVideoElement 'ended').
+   */
+  function seekToEditedSegment(idx, opts) {
+    opts = opts || {};
+    const play = opts.play !== false;
+    const player = $("#video-edit-player");
+    const segs = videoEdit.segments;
+    if (!player || idx < 0 || idx >= segs.length) return;
+    const target = Math.max(0, segs[idx].start);
+    videoEdit.playSegIdx = idx;
+    if (segs[idx]) videoEdit.selectedSegId = segs[idx].id;
+    videoEdit.boundarySeeking = true;
+
+    const clearGuard = () => {
+      videoEdit.boundarySeeking = false;
+      player.removeEventListener("seeked", onSeeked);
+    };
+    const onSeeked = () => clearGuard();
+    player.addEventListener("seeked", onSeeked);
+    window.setTimeout(clearGuard, 500);
+
+    try {
+      player.currentTime = target;
+    } catch (_) {
+      /* ignore */
+    }
+    if (play) {
+      const p = player.play();
+      if (p && typeof p.catch === "function") {
+        p.catch(() => {
+          /* autoplay / play() rejection */
+        });
+      }
+    }
+  }
+
+  /** Jump from the current edit-order segment to the next, or stop at timeline end. */
+  function continueEditedPlaybackFromBoundary() {
+    const player = $("#video-edit-player");
+    if (!player || !videoEdit.segments.length) return false;
+    const segs = videoEdit.segments;
+    let idx = videoEdit.playSegIdx;
+    if (idx < 0 || idx >= segs.length) {
+      idx = findSegmentIndexAtTime(player.currentTime);
+      if (idx < 0) idx = 0;
+      videoEdit.playSegIdx = idx;
+    }
+    const next = idx + 1;
+    if (next >= segs.length) {
+      videoEdit.playSegIdx = Math.max(0, segs.length - 1);
+      try {
+        player.pause();
+      } catch (_) {
+        /* ignore */
+      }
+      scheduleVideoFilterPreview();
+      return false;
+    }
+    seekToEditedSegment(next, { play: true });
+    return true;
+  }
+
   /** During playback, stay inside segments in edit order (skip deletes / honor reorder). */
   function advanceEditedPlayback() {
     const player = $("#video-edit-player");
-    if (!player || player.paused || !videoEdit.segments.length) return;
+    if (!player || !videoEdit.segments.length) return;
+    if (videoEdit.boundarySeeking) return;
+    // When a segment ends at source EOF, the element pauses via 'ended' before
+    // the next timeupdate — still allow advancing in that case.
+    if (player.paused && !player.ended) return;
+
     const segs = videoEdit.segments;
     let idx = videoEdit.playSegIdx;
     if (idx < 0 || idx >= segs.length) {
@@ -4533,22 +4983,31 @@
     }
     const seg = segs[idx];
     const t = player.currentTime;
-    if (t < seg.start - 0.02) {
-      player.currentTime = seg.start;
+    const mediaDur = Number(player.duration);
+    const nearMediaEnd =
+      Number.isFinite(mediaDur) && mediaDur > 0 && t >= mediaDur - 0.15;
+
+    if (!player.ended && t < seg.start - 0.02) {
+      seekToEditedSegment(idx, { play: !player.paused });
       return;
     }
-    if (t >= seg.end - 0.04) {
-      const next = idx + 1;
-      if (next >= segs.length) {
-        player.pause();
-        videoEdit.playSegIdx = 0;
-        if ($("#btn-vedit-pause")) $("#btn-vedit-pause").textContent = "Play";
-        scheduleVideoFilterPreview();
-        return;
-      }
-      videoEdit.playSegIdx = next;
-      player.currentTime = segs[next].start;
+
+    // Only treat as segment-complete when time is actually in/near this segment
+    // (avoids stale currentTime after a seek to an earlier source range).
+    const inOrPastSeg =
+      player.ended ||
+      nearMediaEnd ||
+      (t >= seg.start - 0.05 && t >= seg.end - 0.05);
+    if (inOrPastSeg && (player.ended || nearMediaEnd || t >= seg.end - 0.04)) {
+      continueEditedPlaybackFromBoundary();
     }
+  }
+
+  function onVideoEditEnded() {
+    // Source EOF while more edit-order clips remain (e.g. end clip moved first).
+    if (videoEdit.boundarySeeking) return;
+    continueEditedPlaybackFromBoundary();
+    updateVideoEditTimeLabel();
   }
 
   function updateVideoEditTimeLabel() {
@@ -4682,12 +5141,12 @@
     opts = opts || {};
     if (!creation || creationModality(creation) !== "video") {
       showToast("Edit is available for video creations.");
-      return;
+      return false;
     }
     const a = api();
     if (!a) {
       showToast("Python bridge required to edit videos.");
-      return;
+      return false;
     }
     const status = await a.ffmpeg_status();
     if (!status || !status.ok) {
@@ -4695,13 +5154,13 @@
         (status && status.error) ||
           "ffmpeg not found. Install ffmpeg and add it to PATH."
       );
-      return;
+      return false;
     }
 
     const payload = await a.get_media_payload(creation);
     if (!payload || !payload.ok || !payload.fileUrl) {
       showToast((payload && payload.error) || "Could not load video.");
-      return;
+      return false;
     }
 
     let info = { duration: 0 };
@@ -4719,6 +5178,7 @@
     videoEdit.crop = null;
     videoEdit.cropDrag = null;
     videoEdit.rotation = 0;
+    videoEdit.dirty = false;
     clearVideoFilterPreview();
     if ($("#vedit-rotation")) $("#vedit-rotation").value = 0;
     writeVideoEditFiltersToUi(
@@ -4741,6 +5201,7 @@
       player.ontimeupdate = () => updateVideoEditTimeLabel();
       player.onpause = () => scheduleVideoFilterPreview();
       player.onseeked = () => scheduleVideoFilterPreview();
+      player.onended = () => onVideoEditEnded();
     }
 
     renderVideoSegments();
@@ -4749,6 +5210,7 @@
     openWindow("video-edit");
     scheduleVideoFilterPreview();
     beep(700, 0.04);
+    return true;
   }
 
   function resetVideoEditor() {
@@ -4757,6 +5219,7 @@
     );
     videoEdit.crop = null;
     videoEdit.rotation = 0;
+    videoEdit.dirty = false;
     if ($("#vedit-rotation")) $("#vedit-rotation").value = 0;
     initVideoSegments(videoEdit.duration || 0.1);
     syncVideoEditValueLabels();
@@ -4951,6 +5414,7 @@
       } catch (_) {
         /* ignore */
       }
+      if (videoEdit.crop) markVideoEditDirty();
       scheduleVideoFilterPreview();
     };
     stage.addEventListener("pointerup", endDrag);
@@ -4960,7 +5424,7 @@
   function wireVideoEditEvents() {
     if ($("#btn-edit-video")) {
       $("#btn-edit-video").addEventListener("click", () => {
-        openVideoEditor(state.active, { standalone: false });
+        void openVideoEditor(state.active, { standalone: false });
       });
     }
     const sliderIds = [
@@ -4983,10 +5447,12 @@
       const el = $("#" + id);
       if (!el) return;
       el.addEventListener("input", () => {
+        markVideoEditDirty();
         syncVideoEditValueLabels();
         scheduleVideoFilterPreview();
       });
       el.addEventListener("change", () => {
+        markVideoEditDirty();
         syncVideoEditValueLabels();
         scheduleVideoFilterPreview();
       });
@@ -4994,7 +5460,10 @@
     ["vedit-grayscale", "vedit-sharpen"].forEach((id) => {
       const el = $("#" + id);
       if (!el) return;
-      el.addEventListener("change", () => scheduleVideoFilterPreview());
+      el.addEventListener("change", () => {
+        markVideoEditDirty();
+        scheduleVideoFilterPreview();
+      });
     });
 
     if ($("#vedit-scrub")) {
@@ -5010,24 +5479,15 @@
         updateVideoEditTimeLabel();
       });
     }
-    if ($("#btn-vedit-pause")) {
-      $("#btn-vedit-pause").addEventListener("click", () => {
+    if ($("#btn-vedit-rewind")) {
+      $("#btn-vedit-rewind").addEventListener("click", () => {
         const player = $("#video-edit-player");
-        if (!player) return;
-        if (player.paused) {
-          let idx = findSegmentIndexAtTime(player.currentTime);
-          if (idx < 0 && videoEdit.segments.length) {
-            idx = 0;
-            player.currentTime = videoEdit.segments[0].start;
-          }
-          videoEdit.playSegIdx = Math.max(0, idx);
-          player.play();
-          $("#btn-vedit-pause").textContent = "Pause";
-        } else {
-          player.pause();
-          $("#btn-vedit-pause").textContent = "Play";
-          scheduleVideoFilterPreview();
-        }
+        if (!player || !videoEdit.segments.length) return;
+        player.pause();
+        snapPlayerToEditedTimeline(0);
+        updateVideoEditTimeLabel();
+        scheduleVideoFilterPreview();
+        beep(650, 0.03);
       });
     }
     if ($("#btn-vedit-split")) {
@@ -5054,6 +5514,7 @@
       $("#btn-vedit-rot-cw").addEventListener("click", () => {
         const cur = Number($("#vedit-rotation").value) || 0;
         $("#vedit-rotation").value = String((cur + 90) % 360);
+        markVideoEditDirty();
         syncVideoEditValueLabels();
         scheduleVideoFilterPreview();
       });
@@ -5062,12 +5523,14 @@
       $("#btn-vedit-rot-ccw").addEventListener("click", () => {
         const cur = Number($("#vedit-rotation").value) || 0;
         $("#vedit-rotation").value = String((cur + 270) % 360);
+        markVideoEditDirty();
         syncVideoEditValueLabels();
         scheduleVideoFilterPreview();
       });
     }
     if ($("#btn-vedit-crop-clear")) {
       $("#btn-vedit-crop-clear").addEventListener("click", () => {
+        if (videoEdit.crop) markVideoEditDirty();
         videoEdit.crop = null;
         scheduleVideoFilterPreview();
       });
@@ -5079,7 +5542,9 @@
       });
     }
     if ($("#btn-vedit-cancel")) {
-      $("#btn-vedit-cancel").addEventListener("click", () => closeVideoEditor());
+      $("#btn-vedit-cancel").addEventListener("click", () =>
+        requestCloseVideoEditor()
+      );
     }
     if ($("#btn-vedit-apply")) {
       $("#btn-vedit-apply").addEventListener("click", () => applyVideoEditor());
@@ -5117,7 +5582,7 @@
           chromeBtn.getAttribute("aria-label") ||
           "";
         const a = action.toLowerCase();
-        if (a === "close") closeWindow(id);
+        if (a === "close") requestCloseWindow(id);
         else if (a === "minimize") minimizeWindow(id);
         return;
       }
@@ -5180,19 +5645,9 @@
         loadImageIntoEditorFromFile()
       );
     }
-    if ($("#btn-iedit-from-active")) {
-      $("#btn-iedit-from-active").addEventListener("click", () =>
-        loadImageIntoEditorFromActive()
-      );
-    }
     if ($("#btn-vedit-load")) {
       $("#btn-vedit-load").addEventListener("click", () =>
         loadVideoIntoEditorFromFile()
-      );
-    }
-    if ($("#btn-vedit-from-active")) {
-      $("#btn-vedit-from-active").addEventListener("click", () =>
-        loadVideoIntoEditorFromActive()
       );
     }
 
@@ -5203,6 +5658,11 @@
     }
 
     $("#archive-search").addEventListener("input", renderArchives);
+    document.querySelectorAll(".arch-sort-btn").forEach((btn) => {
+      btn.addEventListener("click", () => {
+        setArchiveSort(btn.getAttribute("data-sort"));
+      });
+    });
 
     $("#btn-export-all").addEventListener("click", async () => {
       const a = api();
@@ -5263,7 +5723,8 @@
       const a = api();
       if (!a) return;
       const name = exportBaseName(state.active) + ".json";
-      await a.save_file_dialog(name, JSON.stringify(state.active, null, 2));
+      const payload = exportCreationMetadata(state.active);
+      await a.save_file_dialog(name, JSON.stringify(payload, null, 2));
     });
 
     $("#btn-export-png").addEventListener("click", () => {
@@ -5319,10 +5780,6 @@
       }
     });
 
-    $("#theme-override").addEventListener("change", () => {
-      if (state.active) renderDocument(state.active);
-    });
-
     if ($("#model-repo")) {
       $("#model-repo").addEventListener("change", () => {
         updateStudioBackendLabel({
@@ -5333,11 +5790,8 @@
                 "huggingface",
             },
             gemini: currentGeminiUiConfig(),
-            openrouter: {
-              model:
-                ($("#openrouter-model") && $("#openrouter-model").value) || "",
-            },
-            model: { repo_id: $("#model-repo").value },
+            openrouter: currentOpenRouterUiConfig(),
+            huggingface: { repo_id: $("#model-repo").value },
           },
         });
       });
@@ -5356,11 +5810,8 @@
                   "gemini",
               },
               gemini: currentGeminiUiConfig(),
-              openrouter: {
-                model:
-                  ($("#openrouter-model") && $("#openrouter-model").value) || "",
-              },
-              model: {
+              openrouter: currentOpenRouterUiConfig(),
+              huggingface: {
                 repo_id: ($("#model-repo") && $("#model-repo").value) || "",
               },
             },
@@ -5369,8 +5820,14 @@
       }
     );
 
-    if ($("#openrouter-model")) {
-      $("#openrouter-model").addEventListener("change", () => {
+    [
+      "openrouter-text-model",
+      "openrouter-image-model",
+      "openrouter-video-model",
+    ].forEach((id) => {
+      const el = $("#" + id);
+      if (!el) return;
+      el.addEventListener("change", () => {
         updateStudioBackendLabel({
           config: {
             backend: {
@@ -5379,14 +5836,14 @@
                 "openrouter",
             },
             gemini: currentGeminiUiConfig(),
-            openrouter: { model: $("#openrouter-model").value },
-            model: {
+            openrouter: currentOpenRouterUiConfig(),
+            huggingface: {
               repo_id: ($("#model-repo") && $("#model-repo").value) || "",
             },
           },
         });
       });
-    }
+    });
 
     if ($("#backend-provider")) {
       $("#backend-provider").addEventListener("change", () => {
@@ -5396,10 +5853,10 @@
           config: {
             backend: { provider: $("#backend-provider").value },
             gemini: currentGeminiUiConfig(),
-            openrouter: {
-              model: ($("#openrouter-model") && $("#openrouter-model").value) || "",
+            openrouter: currentOpenRouterUiConfig(),
+            huggingface: {
+              repo_id: ($("#model-repo") && $("#model-repo").value) || "",
             },
-            model: { repo_id: ($("#model-repo") && $("#model-repo").value) || "" },
           },
         });
       });

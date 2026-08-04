@@ -31,17 +31,9 @@ logger = logging.getLogger(__name__)
 
 ProgressCallback = Callable[[Any], None]
 
-DEFAULT_GEMINI_MODEL = "gemini-2.5-flash"
 DEFAULT_GEMINI_TEXT_MODEL = "gemini-2.5-flash"
 DEFAULT_GEMINI_IMAGE_MODEL = "gemini-2.5-flash-image"
 DEFAULT_GEMINI_VIDEO_MODEL = "veo-2.0-generate-001"
-
-# Retired model IDs still present in older configs
-DEPRECATED_GEMINI_MODELS: dict[str, str] = {
-    "gemini-2.0-flash": "gemini-2.5-flash",
-    "gemini-2.0-flash-001": "gemini-2.5-flash",
-    "models/gemini-2.0-flash": "gemini-2.5-flash",
-}
 
 SUGGESTED_GEMINI_MODELS: list[dict[str, str]] = [
     {
@@ -188,7 +180,6 @@ def _is_studio_gemini_model(
     return True
 
 
-# Back-compat alias used by older tests
 def _is_text_generation_gemini_model(
     model_id: str,
     *,
@@ -286,64 +277,21 @@ def list_available_gemini_models(api_key: str) -> list[dict[str, str]]:
 
 
 def normalize_gemini_model(model_name: str | None) -> str:
-    name = (model_name or DEFAULT_GEMINI_TEXT_MODEL).strip() or DEFAULT_GEMINI_TEXT_MODEL
-    return DEPRECATED_GEMINI_MODELS.get(name, name)
-
-
-def migrate_gemini_model_config(gemini_cfg: dict[str, Any]) -> dict[str, Any]:
-    """
-    Ensure text_model / image_model / video_model exist.
-
-    Older configs only had ``model``. Place that id into the matching modality
-    slot and fill the rest with cheapest defaults.
-    """
-    cfg = gemini_cfg
-    legacy = normalize_gemini_model(cfg.get("model"))
-    legacy_mod = classify_model_modality(legacy) or "text"
-
-    text = (cfg.get("text_model") or "").strip()
-    image = (cfg.get("image_model") or "").strip()
-    video = (cfg.get("video_model") or "").strip()
-
-    if not text and not image and not video:
-        # Pure legacy: one model covering one modality
-        if legacy_mod == "image":
-            image = legacy
-            text = DEFAULT_GEMINI_TEXT_MODEL
-            video = DEFAULT_GEMINI_VIDEO_MODEL
-        elif legacy_mod == "video":
-            video = legacy
-            text = DEFAULT_GEMINI_TEXT_MODEL
-            image = DEFAULT_GEMINI_IMAGE_MODEL
-        else:
-            text = legacy or DEFAULT_GEMINI_TEXT_MODEL
-            image = DEFAULT_GEMINI_IMAGE_MODEL
-            video = DEFAULT_GEMINI_VIDEO_MODEL
-    else:
-        text = text or (legacy if legacy_mod == "text" else DEFAULT_GEMINI_TEXT_MODEL)
-        image = image or DEFAULT_GEMINI_IMAGE_MODEL
-        video = video or DEFAULT_GEMINI_VIDEO_MODEL
-
-    cfg["text_model"] = normalize_gemini_model(text) or DEFAULT_GEMINI_TEXT_MODEL
-    cfg["image_model"] = normalize_gemini_model(image) or DEFAULT_GEMINI_IMAGE_MODEL
-    cfg["video_model"] = normalize_gemini_model(video) or DEFAULT_GEMINI_VIDEO_MODEL
-    # Keep legacy key aligned with text for older callers / UI labels
-    cfg["model"] = cfg["text_model"]
-    return cfg
+    name = (model_name or "").strip()
+    return name or DEFAULT_GEMINI_TEXT_MODEL
 
 
 def resolve_gemini_model_for_modality(
     gemini_cfg: dict[str, Any] | None, modality: str
 ) -> str:
     """Pick the configured model id for text / image / video."""
-    cfg = dict(gemini_cfg or {})
-    migrate_gemini_model_config(cfg)
+    cfg = gemini_cfg or {}
     mod = (modality or "text").lower().strip()
     if mod == "image":
-        return normalize_gemini_model(cfg.get("image_model")) or DEFAULT_GEMINI_IMAGE_MODEL
+        return (cfg.get("image_model") or "").strip() or DEFAULT_GEMINI_IMAGE_MODEL
     if mod == "video":
-        return normalize_gemini_model(cfg.get("video_model")) or DEFAULT_GEMINI_VIDEO_MODEL
-    return normalize_gemini_model(cfg.get("text_model") or cfg.get("model")) or DEFAULT_GEMINI_TEXT_MODEL
+        return (cfg.get("video_model") or "").strip() or DEFAULT_GEMINI_VIDEO_MODEL
+    return (cfg.get("text_model") or "").strip() or DEFAULT_GEMINI_TEXT_MODEL
 
 
 def resolve_api_key(gemini_cfg: dict[str, Any] | None = None) -> str | None:
@@ -426,11 +374,10 @@ def generate_with_gemini(
     """Call Gemini; prompt intent selects text / image / video model from config."""
     from .modality import infer_prompt_modality
 
-    cfg = migrate_gemini_model_config(dict(gemini_cfg or {}))
+    cfg = dict(gemini_cfg or {})
     prompt_text = (creation_description or "").strip() or (game or "").strip()
     modality = infer_prompt_modality(prompt_text) or "text"
     model_name = resolve_gemini_model_for_modality(cfg, modality)
-    cfg["model"] = model_name
 
     if modality == "image":
         from .gemini_media import generate_image_with_gemini
@@ -470,7 +417,7 @@ def _generate_text_with_gemini(
     progress: ProgressCallback | None = None,
     exact_title: bool = False,
     prompt_text: str = "",
-    model_name: str = DEFAULT_GEMINI_MODEL,
+    model_name: str = DEFAULT_GEMINI_TEXT_MODEL,
 ) -> dict[str, Any]:
     """Text generation path (freeform Prompt or classic structured document)."""
 
@@ -569,6 +516,7 @@ def _generate_text_with_gemini(
                 "provider": "gemini",
                 "repo_id": model_name,
                 "modality": "text",
+                "temperature": temperature,
                 "google_search": False,
                 "two_pass_verify": False,
             },
@@ -664,6 +612,7 @@ def _generate_text_with_gemini(
                 "provider": "gemini",
                 "repo_id": model_name,
                 "modality": "text",
+                "temperature": temperature,
                 "google_search": bool(search_used),
                 "two_pass_verify": False,
             },
@@ -732,6 +681,7 @@ def _generate_text_with_gemini(
             "provider": "gemini",
             "repo_id": model_name,
             "modality": "text",
+            "temperature": temperature,
             "google_search": bool(search_used),
             "two_pass_verify": bool(verified),
         },

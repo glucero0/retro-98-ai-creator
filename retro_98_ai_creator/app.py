@@ -231,9 +231,9 @@ def main() -> int:
     logger.info("Window: %sx%s", width, height)
     logger.info("Backend: %s", provider)
     if provider == "gemini":
-        logger.info("Gemini model: %s", (cfg.get("gemini") or {}).get("model"))
+        logger.info("Gemini text model: %s", (cfg.get("gemini") or {}).get("text_model"))
     else:
-        logger.info("HF model: %s", (cfg.get("model") or {}).get("repo_id"))
+        logger.info("HF model: %s", (cfg.get("huggingface") or {}).get("repo_id"))
     try:
         webview.start(debug=bool(ui_cfg.get("debug")))
     finally:

@@ -13,14 +13,13 @@ PROJECT_ROOT = PACKAGE_ROOT.parent
 DEFAULT_CONFIG_PATH = PROJECT_ROOT / "config.yaml"
 EXAMPLE_CONFIG_PATH = PROJECT_ROOT / "config.example.yaml"
 
-DEFAULT_GEMINI_MODEL = "gemini-2.5-flash"
 DEFAULT_GEMINI_TEXT_MODEL = "gemini-2.5-flash"
 DEFAULT_GEMINI_IMAGE_MODEL = "gemini-2.5-flash-image"
 DEFAULT_GEMINI_VIDEO_MODEL = "veo-2.0-generate-001"
-DEFAULT_OPENROUTER_MODEL = "google/gemini-2.5-flash"
+DEFAULT_OPENROUTER_TEXT_MODEL = "google/gemini-2.5-flash"
+DEFAULT_OPENROUTER_IMAGE_MODEL = "google/gemini-2.5-flash-image"
+DEFAULT_OPENROUTER_VIDEO_MODEL = "google/veo-2.0"
 DEFAULT_HF_MODEL = "microsoft/Phi-3.5-mini-instruct"
-# Back-compat alias used by older tests / docs
-DEFAULT_MODEL = DEFAULT_HF_MODEL
 
 DEFAULTS: dict[str, Any] = {
     "backend": {
@@ -28,8 +27,6 @@ DEFAULTS: dict[str, Any] = {
         "provider": "gemini",
     },
     "gemini": {
-        # Legacy single-model key — kept in sync with text_model
-        "model": DEFAULT_GEMINI_TEXT_MODEL,
         "text_model": DEFAULT_GEMINI_TEXT_MODEL,
         "image_model": DEFAULT_GEMINI_IMAGE_MODEL,
         "video_model": DEFAULT_GEMINI_VIDEO_MODEL,
@@ -40,12 +37,14 @@ DEFAULTS: dict[str, Any] = {
         "temperature": 0.0,
     },
     "openrouter": {
-        "model": DEFAULT_OPENROUTER_MODEL,
+        "text_model": DEFAULT_OPENROUTER_TEXT_MODEL,
+        "image_model": DEFAULT_OPENROUTER_IMAGE_MODEL,
+        "video_model": DEFAULT_OPENROUTER_VIDEO_MODEL,
         "api_key": None,  # set via Control Panel → saved in config.yaml
         "temperature": 0.0,
         "base_url": "https://openrouter.ai/api/v1",
     },
-    "model": {
+    "huggingface": {
         "repo_id": DEFAULT_HF_MODEL,
         "revision": "main",
         "device": "auto",
@@ -56,15 +55,14 @@ DEFAULTS: dict[str, Any] = {
         "trust_remote_code": False,
         "hf_token": None,
     },
-    "generation": {
-        "system_extra": "",
+    "prompt": {
+        # Appended to generation prompts (Control Panel → Extra system instructions)
+        "extra_instructions": "",
     },
     "ui": {
         "sound_enabled": True,
         "crt_enabled": False,
         "ui_scale": 1.0,
-        "default_platform": None,
-        "default_theme": "auto",
         "app_theme": "light",
         "custom_theme": {
             "desktop_color": "#008080",
@@ -120,27 +118,11 @@ def load_config() -> dict[str, Any]:
     for path in (DEFAULT_CONFIG_PATH, PROJECT_ROOT / "config.local.yaml"):
         cfg = _deep_merge(cfg, _load_yaml(path))
 
-    # Drop legacy home-dir path keys if present in older files
     paths = cfg.setdefault("paths", {})
-    paths.pop("user_config", None)
     if not paths.get("archives"):
         paths["archives"] = DEFAULTS["paths"]["archives"]
     if not paths.get("media"):
         paths["media"] = DEFAULTS["paths"]["media"]
-
-    # Drop retired Game Defaults key (preset → platform)
-    ui = cfg.setdefault("ui", {})
-    ui.pop("default_preset", None)
-
-    # Remap / migrate Gemini model settings (legacy single model → three slots)
-    from .gemini_provider import migrate_gemini_model_config, normalize_gemini_model
-
-    gemini = cfg.setdefault("gemini", {})
-    migrate_gemini_model_config(gemini)
-    gemini["model"] = normalize_gemini_model(gemini.get("model") or gemini.get("text_model"))
-    gemini["text_model"] = normalize_gemini_model(gemini.get("text_model"))
-    gemini["image_model"] = normalize_gemini_model(gemini.get("image_model"))
-    gemini["video_model"] = normalize_gemini_model(gemini.get("video_model"))
     return cfg
 
 
@@ -175,19 +157,20 @@ def save_config(updates: dict[str, Any], existing: dict[str, Any] | None = None)
 
     merged = _deep_merge(current, updates)
     paths = merged.setdefault("paths", {})
-    paths.pop("user_config", None)
     ui_out = dict(merged.get("ui") or {})
-    ui_out.pop("default_preset", None)
 
     gemini_out = _normalize_api_key(merged.get("gemini") or {})
     openrouter_out = _normalize_api_key(merged.get("openrouter") or {})
+    huggingface_out = dict(merged.get("huggingface") or {})
+    prompt_out = dict(merged.get("prompt") or {})
+    prompt_out.setdefault("extra_instructions", "")
 
     to_write = {
         "backend": merged.get("backend", {}),
         "gemini": gemini_out,
         "openrouter": openrouter_out,
-        "model": merged["model"],
-        "generation": merged["generation"],
+        "huggingface": huggingface_out,
+        "prompt": prompt_out,
         "ui": ui_out,
         "paths": {
             "archives": paths.get("archives") or DEFAULTS["paths"]["archives"],
@@ -198,18 +181,15 @@ def save_config(updates: dict[str, Any], existing: dict[str, Any] | None = None)
 
     merged["gemini"] = gemini_out
     merged["openrouter"] = openrouter_out
+    merged["huggingface"] = huggingface_out
+    merged["prompt"] = prompt_out
     merged["ui"] = ui_out
     return merged
-
-
-# Back-compat aliases
-save_user_config = save_config
 
 
 def archives_path(cfg: dict[str, Any] | None = None) -> Path:
     cfg = cfg or load_config()
     return expand_path(cfg["paths"]["archives"])
-
 
 # Suggested Hugging Face models (local backend)
 SUGGESTED_MODELS: list[dict[str, str]] = [

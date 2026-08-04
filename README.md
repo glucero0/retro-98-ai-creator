@@ -24,7 +24,7 @@ A Windows 98–themed desktop studio for general-purpose AI creation: **text**, 
 
 - Python 3.10+
 - A [Gemini API key](https://aistudio.google.com/apikey) (for the default backend)
-- [ffmpeg + ffprobe](https://ffmpeg.org/) on `PATH` (or a common Windows install location) — only needed for **Video Edit**
+- **ffmpeg + ffprobe** — only needed for **Video Edit** (apply filters, split/reorder segments, export). See [Installing ffmpeg](#installing-ffmpeg) below.
 
 ## Quick start
 
@@ -42,6 +42,68 @@ python -m retro_98_ai_creator
 
 Then open **Control Panel** → paste your Gemini API key → pick a **Text**, **Image**, and/or **Video** model → **Save**.
 
+## Installing ffmpeg
+
+Video Edit shells out to system `ffmpeg` and `ffprobe`. They are **not** bundled with this app — install them yourself and put them on your `PATH` (or, on Windows, in a common install folder the app already checks).
+
+Official builds and docs: [https://ffmpeg.org/download.html](https://ffmpeg.org/download.html)
+
+### Windows
+
+Pick one:
+
+```bash
+winget install ffmpeg
+```
+
+```bash
+choco install ffmpeg
+```
+
+```bash
+scoop install ffmpeg
+```
+
+Or download a build from [ffmpeg.org](https://ffmpeg.org/download.html) / [gyan.dev](https://www.gyan.dev/ffmpeg/builds/) and add the `bin` folder (containing `ffmpeg.exe` and `ffprobe.exe`) to your user or system **PATH**. Then open a **new** terminal and confirm:
+
+```bash
+ffmpeg -version
+ffprobe -version
+```
+
+### macOS
+
+With [Homebrew](https://brew.sh/):
+
+```bash
+brew install ffmpeg
+ffmpeg -version
+ffprobe -version
+```
+
+### Linux
+
+Use your distro package manager (names vary slightly):
+
+```bash
+# Debian / Ubuntu
+sudo apt update && sudo apt install ffmpeg
+
+# Fedora
+sudo dnf install ffmpeg
+
+# Arch
+sudo pacman -S ffmpeg
+```
+
+Then confirm:
+
+```bash
+ffmpeg -version
+ffprobe -version
+```
+
+Use a reasonably current build (roughly ffmpeg 4+). Very old copies on `PATH` (for example ancient helper scripts) can break Video Edit — remove or reorder `PATH` so the modern `ffmpeg` wins.
 ## The apps
 
 | Window | What it does |
@@ -114,14 +176,19 @@ gemini:
   temperature: 0.0
 
 openrouter:
-  model: google/gemini-2.5-flash
+  text_model: google/gemini-2.5-flash
+  image_model: google/gemini-2.5-flash-image
+  video_model: google/veo-2.0
   api_key: your_openrouter_key
   temperature: 0.0
 
-model:               # used when provider: huggingface
+huggingface:         # used when provider: huggingface
   repo_id: microsoft/Phi-3.5-mini-instruct
   device: auto
   max_new_tokens: 2048
+
+prompt:
+  extra_instructions: ""
 
 ui:
   app_theme: light    # light | dark | custom

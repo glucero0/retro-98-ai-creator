@@ -11,7 +11,7 @@
   <div id="desktop">
     <div class="desktop-icons" id="desktop-icons">
       <button type="button" class="desktop-icon" data-open="form" title="Creation Studio">
-        <div class="icon-glyph">🕹️</div>
+        <div class="icon-glyph">✨</div>
         <span>Creation Studio</span>
       </button>
       <button type="button" class="desktop-icon" data-open="library" title="Archives">
@@ -19,7 +19,7 @@
         <span>Archives</span>
       </button>
       <button type="button" class="desktop-icon" data-open="viewer" title="Viewer">
-        <div class="icon-glyph">🎮</div>
+        <div class="icon-glyph">👁️</div>
         <span>Viewer</span>
       </button>
       <button type="button" class="desktop-icon" data-open="image-edit" title="Image Edit">
@@ -127,55 +127,12 @@
             <button type="button" id="btn-copy-ascii">Copy ASCII</button>
             <button type="button" id="btn-voice">Voice Reader</button>
           </div>
-          <div class="viewer-theme-bar" hidden>
-            <label class="theme-label" for="theme-override">
-              Palette Theme
-              <select id="theme-override">
-                <option value="auto">Auto (from document)</option>
-                <optgroup label="Vintage Computers">
-                  <option value="apple2-green">Apple II Phosphor Green</option>
-                  <option value="apple2-amber">Apple II Phosphor Amber</option>
-                  <option value="sinclair-spectrum">Timex Sinclair / ZX Spectrum</option>
-                  <option value="c64">Commodore 64 Classic Blue</option>
-                  <option value="workbench">Commodore Amiga Workbench 1.3</option>
-                  <option value="atari2600">Atari 2600 Woodgrain &amp; Sunset</option>
-                  <option value="atari-st">Atari ST TOS Desktop</option>
-                  <option value="amstrad-cpc">Amstrad CPC Color Palette</option>
-                  <option value="bbc-micro">BBC Micro / Acorn Palette</option>
-                  <option value="vectrex">Vectrex Vector Monitor</option>
-                  <option value="dos-vga">MS-DOS Cyber VGA Green</option>
-                </optgroup>
-                <optgroup label="Classic Consoles &amp; Handhelds">
-                  <option value="gameboy">Game Boy Monochromatic Green</option>
-                  <option value="nes">NES Gray</option>
-                  <option value="snes-parchment">SNES 16-Bit Parchment</option>
-                  <option value="sega-genesis">Sega Genesis / Mega Drive Gold</option>
-                  <option value="dreamcast">Sega Dreamcast Orange</option>
-                  <option value="ps1-classic">PlayStation 1 Classic Gray</option>
-                  <option value="ps2-darkness">PlayStation 2 Deep Space</option>
-                  <option value="gamecube">Nintendo GameCube Indigo</option>
-                </optgroup>
-                <optgroup label="Modern Consoles &amp; Systems">
-                  <option value="xbox-original">Original Xbox Matrix Green</option>
-                  <option value="xbox-360">Xbox 360 Blade Emerald</option>
-                  <option value="xbox-series">Xbox Series X Dark Minimal</option>
-                  <option value="wii-menu">Nintendo Wii Menu Cyan</option>
-                  <option value="switch-neon">Nintendo Switch Joy-Con Neon</option>
-                  <option value="ps3-xmb">PlayStation 3 XMB Crimson</option>
-                  <option value="ps4-ps5">PlayStation 4 / PS5 Midnight Blue</option>
-                  <option value="win98">Windows 98 Standard</option>
-                </optgroup>
-              </select>
-            </label>
-            <span id="theme-boxart" class="theme-boxart"></span>
-          </div>
           <div id="doc-canvas" class="doc-canvas">
             <p class="muted">Open a document from Archives or generate a new one.</p>
           </div>
         </div>
         <div class="status-bar">
           <p class="status-bar-field" id="viewer-status">No document loaded</p>
-          <p class="status-bar-field" id="viewer-palette">Palette: —</p>
         </div>
       </div>
 
@@ -192,7 +149,7 @@
         <div class="window-body">
           <div class="field-row">
             <label for="archive-search">Search</label>
-            <input id="archive-search" type="text" placeholder="Filter by game…" />
+            <input id="archive-search" type="text" />
           </div>
           <div class="archive-actions">
             <button type="button" id="btn-import">Import JSON…</button>
@@ -201,7 +158,25 @@
             <button type="button" id="btn-import-image">Import Image…</button>
             <button type="button" id="btn-import-video">Import Video…</button>
           </div>
-          <ul id="archive-list" class="archive-list"></ul>
+          <div class="archive-list-wrap">
+            <table class="archive-table">
+              <thead>
+                <tr>
+                  <th scope="col" class="arch-col-name" aria-sort="none">
+                    <button type="button" class="arch-sort-btn" data-sort="name">Name</button>
+                  </th>
+                  <th scope="col" class="arch-col-type" aria-sort="none">
+                    <button type="button" class="arch-sort-btn" data-sort="type">Type</button>
+                  </th>
+                  <th scope="col" class="arch-col-date" aria-sort="none">
+                    <button type="button" class="arch-sort-btn" data-sort="created">Created</button>
+                  </th>
+                  <th scope="col" class="arch-col-actions" aria-label="Actions"></th>
+                </tr>
+              </thead>
+              <tbody id="archive-list" class="archive-list"></tbody>
+            </table>
+          </div>
         </div>
       </div>
 
@@ -299,13 +274,25 @@
                     <a href="https://openrouter.ai/keys" target="_blank" rel="noreferrer">openrouter.ai/keys</a>.
                     Paste it below and save — it is stored in <code>config.yaml</code>.
                     Google Search grounding is Gemini-only (not available through OpenRouter).
-                    Prefer routing to <strong>google/gemini-2.5-flash</strong> or
+                    Prefer routing text to <strong>google/gemini-2.5-flash</strong> or
                     <strong>google/gemini-2.5-pro</strong> for documentation quality.
                   </p>
                   <div class="field-row-stacked">
-                    <label for="openrouter-model">Model</label>
-                    <select id="openrouter-model"></select>
+                    <label for="openrouter-text-model">Text model</label>
+                    <select id="openrouter-text-model"></select>
                   </div>
+                  <div class="field-row-stacked">
+                    <label for="openrouter-image-model">Image model</label>
+                    <select id="openrouter-image-model"></select>
+                  </div>
+                  <div class="field-row-stacked">
+                    <label for="openrouter-video-model">Video model</label>
+                    <select id="openrouter-video-model"></select>
+                  </div>
+                  <p class="hint" id="openrouter-model-hint">
+                    Each list shows only models compatible with that modality.
+                    Studio picks the slot from your prompt (text / image / video).
+                  </p>
                   <div class="field-row-stacked">
                     <label for="openrouter-key">
                       <span>API key</span>
@@ -328,8 +315,8 @@
                   </p>
                   <p class="hint disclaimer">
                     <strong>Text-only in this app.</strong> Local Hugging Face loads causal
-                    instruct models for text. Image/video need Gemini (or a future Diffusers
-                    path). Pick a small instruct repo below — Hub has millions of models;
+                    instruct models for text. Image/video need Gemini or OpenRouter.
+                    Pick a small instruct repo below — Hub has millions of models;
                     you're on your own beyond this curated list / typing a known text repo id.
                   </p>
                   <p class="hint disclaimer">
@@ -372,7 +359,7 @@
                 </fieldset>
 
                 <fieldset>
-                  <legend>Shared</legend>
+                  <legend>Prompt</legend>
                   <div class="field-row-stacked">
                     <label for="system-extra">Extra system instructions</label>
                     <textarea id="system-extra" rows="3" placeholder="Optional custom prompt additions…"></textarea>
@@ -396,7 +383,6 @@
                     </select>
                     <p class="hint">
                       Recolors the whole app — desktop, windows, title bars, buttons, and text.
-                      Separate from the Viewer Palette Theme used on documents.
                     </p>
                   </div>
                   <div id="app-theme-custom" class="theme-custom-controls" hidden>
@@ -464,7 +450,9 @@
                     </p>
                   </div>
                   <p class="hint">
-                    Video Edit (Viewer → Edit) requires <strong>ffmpeg</strong> on PATH
+                    Video Edit requires a <strong>current ffmpeg</strong> on PATH
+                    (https://ffmpeg.org/ or <code>winget install ffmpeg</code>).
+                    Avoid outdated copies under <code>Python\Scripts</code>
                     (see <code>config.example.yaml</code>).
                   </p>
                 </fieldset>
@@ -490,9 +478,9 @@
 
     <div id="start-menu" hidden>
       <div class="start-banner">Start Here</div>
-      <button type="button" data-open="form">🕹️ Creation Studio</button>
+      <button type="button" data-open="form">✨ Creation Studio</button>
       <button type="button" data-open="library">📁 Archives</button>
-      <button type="button" data-open="viewer">🎮 Viewer</button>
+      <button type="button" data-open="viewer">👁️ Viewer</button>
       <button type="button" data-open="image-edit">🖼️ Image Edit</button>
       <button type="button" data-open="video-edit">🎬 Video Edit</button>
       <button type="button" data-open="control">⚙️ Control Panel</button>
@@ -563,7 +551,6 @@
         <div class="window-body image-edit-body">
           <div class="editor-app-toolbar form-actions">
             <button type="button" id="btn-iedit-load">Load Image…</button>
-            <button type="button" id="btn-iedit-from-active">From Active</button>
             <span class="label-hint" id="iedit-loaded-label">No image loaded</span>
           </div>
           <div class="image-edit-layout">
@@ -576,7 +563,8 @@
               </div>
               <p class="hint" id="image-edit-hint">
                 Load an image to begin, or open Edit from the Viewer. At 0° rotation, drag on the
-                image to set a crop (yellow box; outside dims). Clear Crop to reset. Apply saves.
+                image to set a crop. Drag the yellow box to move it, or use the corner/edge handles
+                to resize. Clear Crop to reset. Apply saves.
               </p>
             </div>
             <div class="image-edit-controls">
@@ -717,7 +705,6 @@
         <div class="window-body image-edit-body">
           <div class="editor-app-toolbar form-actions">
             <button type="button" id="btn-vedit-load">Load Video…</button>
-            <button type="button" id="btn-vedit-from-active">From Active</button>
             <span class="label-hint" id="vedit-loaded-label">No video loaded</span>
           </div>
           <div class="image-edit-layout">
@@ -728,7 +715,7 @@
                 <div id="video-edit-crop-box" class="image-edit-crop-box" hidden></div>
               </div>
               <div class="video-edit-transport field-row">
-                <button type="button" id="btn-vedit-pause">Pause</button>
+                <button type="button" id="btn-vedit-rewind">Rewind to Start</button>
                 <label for="vedit-scrub">Time</label>
                 <input id="vedit-scrub" type="range" min="0" max="1000" step="1" value="0" />
                 <span id="vedit-time-label" class="label-hint">0.0s / 0.0s</span>

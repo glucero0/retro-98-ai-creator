@@ -9,8 +9,6 @@ gemini:
   text_model: gemini-2.5-flash
   image_model: gemini-2.5-flash-image
   video_model: veo-2.0-generate-001
-  # Legacy alias kept in sync with text_model
-  model: gemini-2.5-flash
   api_key: null
   google_search: true
   # Pass 1: search & extract with sourceSnippets; Pass 2: verify at temperature 0
@@ -18,12 +16,16 @@ gemini:
   temperature: 0.0
 
 openrouter:
-  model: google/gemini-2.5-flash
+  # Three modality slots — Studio picks by prompt intent
+  text_model: google/gemini-2.5-flash
+  image_model: google/gemini-2.5-flash-image
+  video_model: google/veo-2.0
   api_key: null
   temperature: 0.0
   base_url: https://openrouter.ai/api/v1
 
-model:
+huggingface:
+  # used when provider: huggingface
   repo_id: microsoft/Phi-3.5-mini-instruct
   revision: main
   device: auto
@@ -34,15 +36,14 @@ model:
   trust_remote_code: false
   hf_token: null
 
-generation:
-  system_extra: ""
+prompt:
+  # Control Panel → Extra system instructions (appended to generation prompts)
+  extra_instructions: ""
 
 ui:
   sound_enabled: true
   crt_enabled: false
   ui_scale: 1.0
-  default_platform: null
-  default_theme: auto
   app_theme: light  # light | dark | custom
   custom_theme:
     desktop_color: "#008080"

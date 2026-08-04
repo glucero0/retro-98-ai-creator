@@ -15,6 +15,11 @@ _IMAGE_ID_TOKENS: tuple[str, ...] = (
     "-image-preview",
     "-image-generation",
     "nano-banana",
+    "gpt-image",
+    "flux",
+    "seedream",
+    "dall-e",
+    "stable-diffusion",
 )
 
 _VIDEO_ID_TOKENS: tuple[str, ...] = (
@@ -224,12 +229,13 @@ def check_prompt_model_compatibility(
     *,
     provider: str = "gemini",
     gemini_cfg: dict[str, Any] | None = None,
+    openrouter_cfg: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     """
     Compare prompt intent with the selected backend.
 
-    Gemini: three modality slots — Studio routes by prompt; always ok when configured.
-    OpenRouter / Hugging Face: text-only here; image/video prompts are blocked.
+    Gemini / OpenRouter: three modality slots — Studio routes by prompt; always ok
+    when configured. Hugging Face: text-only here; image/video prompts are blocked.
     """
     prompt_mod = infer_prompt_modality(prompt)
     provider_l = (provider or "gemini").lower().strip()
@@ -239,6 +245,19 @@ def check_prompt_model_compatibility(
 
         routed_mod = prompt_mod or "text"
         model = resolve_gemini_model_for_modality(gemini_cfg, routed_mod)
+        return {
+            "ok": True,
+            "promptModality": prompt_mod,
+            "modelModality": routed_mod,
+            "model": model,
+            "routed": True,
+        }
+
+    if provider_l in {"openrouter", "open-router", "or"}:
+        from .openrouter_provider import resolve_openrouter_model_for_modality
+
+        routed_mod = prompt_mod or "text"
+        model = resolve_openrouter_model_for_modality(openrouter_cfg, routed_mod)
         return {
             "ok": True,
             "promptModality": prompt_mod,
@@ -262,21 +281,13 @@ def check_prompt_model_compatibility(
         if suggestions
         else f"a {modality_label(prompt_mod)}-capable model"
     )
-    if provider_l in {"openrouter", "open-router", "or"} and prompt_mod in {
-        "image",
-        "video",
-    }:
-        where = (
-            "Switch Provider to Google Gemini in Control Panel "
-            f"(configure the {modality_label(prompt_mod)} model there)"
-        )
-    elif provider_l in {"huggingface", "hf", "local", "phi"} and prompt_mod in {
+    if provider_l in {"huggingface", "hf", "local", "phi"} and prompt_mod in {
         "image",
         "video",
     }:
         where = (
             "Local Hugging Face in this app is text-only. Switch Provider to "
-            f"Google Gemini for {modality_label(prompt_mod)}"
+            f"Google Gemini or OpenRouter for {modality_label(prompt_mod)}"
         )
     else:
         where = f"Open Control Panel and switch to {suggest_txt}"
