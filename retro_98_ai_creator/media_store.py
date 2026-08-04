@@ -45,6 +45,20 @@ def media_dir(config: dict[str, Any] | None = None) -> Path:
     return path.resolve()
 
 
+def _resolve_within_media_root(
+    candidate: Path, config: dict[str, Any] | None = None, *, must_exist: bool
+) -> Path | None:
+    root = media_dir(config).resolve()
+    resolved = candidate.resolve()
+    try:
+        resolved.relative_to(root)
+    except ValueError:
+        return None
+    if must_exist and (not resolved.exists() or not resolved.is_file()):
+        return None
+    return resolved
+
+
 def _safe_stem(creation_id: str) -> str:
     stem = _SAFE_ID.sub("_", (creation_id or "media").strip()) or "media"
     return stem[:80]
@@ -81,7 +95,10 @@ def write_media_bytes(
     if not ext.startswith("."):
         ext = "." + ext
     filename = f"{_safe_stem(creation_id)}{ext}"
-    dest = media_dir(config) / filename
+    candidate = media_dir(config) / filename
+    dest = _resolve_within_media_root(candidate, config, must_exist=False)
+    if dest is None:
+        raise ValueError("Invalid media destination path")
     dest.write_bytes(data)
     # Store path relative to project root for portability
     try:
@@ -97,11 +114,7 @@ def resolve_media_path(media_path: str | None, config: dict[str, Any] | None = N
     p = Path(str(media_path).strip())
     if not p.is_absolute():
         p = PROJECT_ROOT / p
-    p = p.resolve()
-    if not p.exists() or not p.is_file():
-        return None
-    # Soft safety: prefer files under project or configured media dir
-    return p
+    return _resolve_within_media_root(p, config, must_exist=True)
 
 
 def read_media_bytes(media_path: str | None, config: dict[str, Any] | None = None) -> bytes | None:
