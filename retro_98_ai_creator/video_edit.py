@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 import logging
 import os
+import re
 import shutil
 import subprocess
 import tempfile
@@ -43,36 +44,143 @@ _WIN_FFMPEG_CANDIDATES = (
 )
 
 
+def _winget_package_ffmpeg_bins() -> tuple[str, ...]:
+    """Locate ffmpeg.exe under WinGet package folders (Gyan builds, etc.)."""
+    root = Path(os.path.expandvars(r"%LOCALAPPDATA%\Microsoft\WinGet\Packages"))
+    if not root.is_dir():
+        return ()
+    found: list[str] = []
+    try:
+        for path in root.glob("*FFmpeg*/**/bin/ffmpeg.exe"):
+            if path.is_file():
+                found.append(str(path))
+    except OSError:
+        return ()
+    # Newest package path last alphabetically often wins; sort for stability.
+    found.sort()
+    return tuple(found)
+
+
+def _windows_ffmpeg_search_paths() -> tuple[str, ...]:
+    return _WIN_FFMPEG_CANDIDATES + _winget_package_ffmpeg_bins()
+
+
 class FfmpegNotFoundError(RuntimeError):
     """Raised when ffmpeg/ffprobe cannot be located."""
 
 
-def _which_or_candidate(name: str, candidates: tuple[str, ...] = ()) -> str | None:
-    found = shutil.which(name)
-    if found:
-        return found
-    for raw in candidates:
-        p = Path(raw)
-        if p.is_file():
-            return str(p.resolve())
-    return None
+def _candidate_paths(name: str, extra: tuple[str, ...] = ()) -> list[str]:
+    """Ordered unique existing paths for a tool (PATH first, then extras)."""
+    seen: set[str] = set()
+    out: list[str] = []
+
+    def _add(raw: str | None) -> None:
+        if not raw:
+            return
+        try:
+            resolved = str(Path(raw).resolve())
+        except OSError:
+            resolved = os.path.normpath(raw)
+        key = resolved.lower()
+        if key in seen:
+            return
+        if not Path(resolved).is_file():
+            return
+        seen.add(key)
+        out.append(resolved)
+
+    _add(shutil.which(name))
+    for raw in extra:
+        _add(raw)
+    return out
+
+
+def _is_python_scripts_stub(path: str) -> bool:
+    low = path.lower().replace("/", "\\")
+    return "\\python" in low and "\\scripts\\" in low
+
+
+def _ffmpeg_version_line(path: str) -> str:
+    try:
+        kwargs: dict[str, Any] = {
+            "capture_output": True,
+            "text": True,
+            "timeout": 15,
+        }
+        if os.name == "nt":
+            kwargs["creationflags"] = getattr(subprocess, "CREATE_NO_WINDOW", 0)
+        proc = subprocess.run([path, "-version"], **kwargs)
+        text = (proc.stdout or "") + "\n" + (proc.stderr or "")
+        for line in text.splitlines():
+            if line.strip():
+                return line.strip()
+    except Exception:  # noqa: BLE001
+        logger.debug("Could not read ffmpeg version from %s", path, exc_info=True)
+    return ""
+
+
+def _ffmpeg_looks_modern(path: str, version_line: str | None = None) -> bool:
+    """
+    Prefer builds new enough for Video Edit filtergraphs.
+
+    Skips tiny Python Scripts stubs that ship ancient (e.g. 2013) binaries which
+    reject options like -hide_banner and lack modern scale/pad flags.
+    """
+    line = version_line if version_line is not None else _ffmpeg_version_line(path)
+    if not line:
+        return False
+    m = re.search(r"ffmpeg version (\d+)\.", line, re.I)
+    if m:
+        return int(m.group(1)) >= 4
+    m = re.search(r"ffmpeg version n-(\d+)", line, re.I)
+    if m:
+        # Nightlies: N-55702 ≈ 2013; require a much newer git rev.
+        return int(m.group(1)) >= 90000
+    # Unknown banner — accept only if the binary is a full-sized build.
+    try:
+        return Path(path).stat().st_size >= 1_000_000
+    except OSError:
+        return False
 
 
 def find_ffmpeg() -> str | None:
-    return _which_or_candidate("ffmpeg", _WIN_FFMPEG_CANDIDATES)
+    extras = (
+        _windows_ffmpeg_search_paths() if os.name == "nt" else _WIN_FFMPEG_CANDIDATES
+    )
+    candidates = _candidate_paths("ffmpeg", extras)
+    if not candidates:
+        return None
+    modern = [p for p in candidates if _ffmpeg_looks_modern(p)]
+    if modern:
+        # Prefer full installs over ancient Python\\Scripts stubs still on PATH.
+        preferred = [p for p in modern if not _is_python_scripts_stub(p)]
+        return preferred[0] if preferred else modern[0]
+    # Fall back to whatever we found (may still fail modern filtergraphs).
+    return candidates[0]
 
 
 def find_ffprobe() -> str | None:
     ffmpeg = find_ffmpeg()
-    candidates: list[str] = []
+    extras: list[str] = []
     if ffmpeg:
         sibling = Path(ffmpeg).with_name("ffprobe.exe" if os.name == "nt" else "ffprobe")
-        candidates.append(str(sibling))
-    candidates.extend(
-        c.replace("ffmpeg.exe", "ffprobe.exe").replace("ffmpeg", "ffprobe")
-        for c in _WIN_FFMPEG_CANDIDATES
+        extras.append(str(sibling))
+    win_paths = (
+        _windows_ffmpeg_search_paths() if os.name == "nt" else _WIN_FFMPEG_CANDIDATES
     )
-    return _which_or_candidate("ffprobe", tuple(candidates))
+    extras.extend(
+        c.replace("ffmpeg.exe", "ffprobe.exe").replace("ffmpeg", "ffprobe")
+        for c in win_paths
+    )
+    candidates = _candidate_paths("ffprobe", tuple(extras))
+    if not candidates:
+        return None
+    if ffmpeg:
+        # Prefer ffprobe next to the ffmpeg we selected.
+        for path in candidates:
+            if Path(path).parent == Path(ffmpeg).parent:
+                return path
+    return candidates[0]
 
 
 def ffmpeg_available() -> dict[str, Any]:
@@ -81,25 +189,52 @@ def ffmpeg_available() -> dict[str, Any]:
     if not ffmpeg:
         return {
             "ok": False,
-            "error": "ffmpeg not found. Install ffmpeg and ensure it is on PATH.",
+            "error": (
+                "ffmpeg not found. Install a current ffmpeg build "
+                "(https://ffmpeg.org/ or `winget install ffmpeg`) and ensure it is on PATH."
+            ),
+        }
+    version = _ffmpeg_version_line(ffmpeg)
+    if not _ffmpeg_looks_modern(ffmpeg, version):
+        return {
+            "ok": False,
+            "ffmpeg": ffmpeg,
+            "ffprobe": ffprobe,
+            "version": version,
+            "error": (
+                "ffmpeg is too old for Video Edit"
+                + (f" ({version})" if version else "")
+                + ". Install a current build from https://ffmpeg.org/ "
+                "or `winget install ffmpeg`, and remove outdated copies "
+                "(for example under Python\\Scripts)."
+            ),
         }
     return {
         "ok": True,
         "ffmpeg": ffmpeg,
         "ffprobe": ffprobe,
+        "version": version,
     }
+
+
+def _ffmpeg_quiet_args() -> list[str]:
+    """Global quiet flags compatible with older and newer ffmpeg."""
+    # Avoid -hide_banner: missing on ancient builds (e.g. 2013 Python Scripts stubs).
+    return ["-loglevel", "error"]
 
 
 def _run(cmd: list[str], *, timeout: float | None = 600) -> subprocess.CompletedProcess[str]:
     logger.info("Running: %s", " ".join(cmd))
     try:
-        return subprocess.run(
-            cmd,
-            check=False,
-            capture_output=True,
-            text=True,
-            timeout=timeout,
-        )
+        kwargs: dict[str, Any] = {
+            "check": False,
+            "capture_output": True,
+            "text": True,
+            "timeout": timeout,
+        }
+        if os.name == "nt":
+            kwargs["creationflags"] = getattr(subprocess, "CREATE_NO_WINDOW", 0)
+        return subprocess.run(cmd, **kwargs)
     except subprocess.TimeoutExpired as exc:
         raise RuntimeError(f"Command timed out: {cmd[0]}") from exc
     except FileNotFoundError as exc:
@@ -107,12 +242,17 @@ def _run(cmd: list[str], *, timeout: float | None = 600) -> subprocess.Completed
 
 
 def _require_ffmpeg() -> str:
-    path = find_ffmpeg()
+    status = ffmpeg_available()
+    if not status.get("ok"):
+        raise FfmpegNotFoundError(
+            str(status.get("error") or "ffmpeg not found or not usable.")
+        )
+    path = status.get("ffmpeg") or find_ffmpeg()
     if not path:
         raise FfmpegNotFoundError(
             "ffmpeg not found. Install ffmpeg and ensure it is on PATH."
         )
-    return path
+    return str(path)
 
 
 def _require_ffprobe() -> str:
@@ -380,7 +520,7 @@ def apply_edits(
         source_height=int(info.get("height") or 0),
     )
 
-    cmd = [ffmpeg, "-hide_banner", "-loglevel", "error"]
+    cmd = [ffmpeg, *_ffmpeg_quiet_args()]
     start = None
     end = None
     if trim:
@@ -409,7 +549,7 @@ def apply_edits(
         return out
 
     # Retry without audio (some Veo/clips may lack an audio stream).
-    cmd_an = [ffmpeg, "-hide_banner", "-loglevel", "error"]
+    cmd_an = [ffmpeg, *_ffmpeg_quiet_args()]
     if start is not None and start > 0:
         cmd_an.extend(["-ss", f"{start:.3f}"])
     if end is not None and (start is None or end > start):
@@ -461,9 +601,7 @@ def trim_segment(
 
     cmd = [
         ffmpeg,
-        "-hide_banner",
-        "-loglevel",
-        "error",
+        *_ffmpeg_quiet_args(),
         "-ss",
         f"{start_s:.3f}",
         "-i",
@@ -479,9 +617,7 @@ def trim_segment(
 
     cmd_an = [
         ffmpeg,
-        "-hide_banner",
-        "-loglevel",
-        "error",
+        *_ffmpeg_quiet_args(),
         "-ss",
         f"{start_s:.3f}",
         "-i",
@@ -604,7 +740,7 @@ def concat_videos(paths: list[str | Path], dest: str | Path) -> Path:
 
     # Filter concat is more reliable across mismatched codecs than demuxer copy.
     # For N inputs: [0:v][0:a][1:v][1:a]...concat=n=N:v=1:a=1[v][a]
-    cmd = [ffmpeg, "-hide_banner", "-loglevel", "error"]
+    cmd = [ffmpeg, *_ffmpeg_quiet_args()]
     for path in resolved:
         cmd.extend(["-i", str(path)])
 
@@ -654,7 +790,7 @@ def _concat_video_only(
 ) -> Path:
     ffmpeg = _require_ffmpeg()
     n = len(resolved)
-    cmd = [ffmpeg, "-hide_banner", "-loglevel", "error"]
+    cmd = [ffmpeg, *_ffmpeg_quiet_args()]
     for path in resolved:
         cmd.extend(["-i", str(path)])
     filter_parts: list[str] = []

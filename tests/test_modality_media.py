@@ -22,7 +22,10 @@ def test_normalize_and_classify():
     assert classify_model_modality("gemini-2.5-flash") == "text"
     assert classify_model_modality("gemini-flash-latest") == "text"
     assert classify_model_modality("gemini-2.5-flash-image") == "image"
+    assert classify_model_modality("google/gemini-2.5-flash-image") == "image"
+    assert classify_model_modality("black-forest-labs/flux.2-pro") == "image"
     assert classify_model_modality("veo-3.1-generate-preview") == "video"
+    assert classify_model_modality("google/veo-2.0") == "video"
     assert classify_model_modality("gemini-2.5-flash-preview-tts") is None
 
 
@@ -51,14 +54,15 @@ def test_gemini_routes_image_prompt_ok():
     assert "flash-image" in ok["model"] or "image" in ok["model"]
 
 
-def test_openrouter_blocks_image_prompt():
+def test_openrouter_routes_image_prompt_ok():
     prompt = "create an image of a dragon in a suit"
-    bad = check_prompt_model_compatibility(
+    ok = check_prompt_model_compatibility(
         prompt, "google/gemini-2.5-flash", provider="openrouter"
     )
-    assert bad["ok"] is False
-    assert bad["promptModality"] == "image"
-    assert "Gemini" in bad["error"]
+    assert ok["ok"] is True
+    assert ok.get("routed") is True
+    assert ok["modelModality"] == "image"
+    assert "image" in ok["model"] or "flux" in ok["model"]
 
 
 def test_huggingface_blocks_video_prompt():

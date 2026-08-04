@@ -65,7 +65,7 @@ def generate_image_with_gemini(
     if not prompt:
         raise RuntimeError("Enter a prompt to generate an image.")
 
-    model_name = normalize_model(gemini_cfg.get("model"))
+    model_name = normalize_model(gemini_cfg.get("image_model"))
     if (classify_model_modality(model_name) or "text") != "image":
         from .gemini_provider import DEFAULT_GEMINI_IMAGE_MODEL
 
@@ -179,7 +179,7 @@ def generate_video_with_gemini(
     if not prompt:
         raise RuntimeError("Enter a prompt to generate a video.")
 
-    model_name = normalize_model(gemini_cfg.get("model"))
+    model_name = normalize_model(gemini_cfg.get("video_model"))
     if (classify_model_modality(model_name) or "text") != "video":
         from .gemini_provider import DEFAULT_GEMINI_VIDEO_MODEL
 

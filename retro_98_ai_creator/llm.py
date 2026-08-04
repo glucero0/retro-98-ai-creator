@@ -524,6 +524,9 @@ class ModelManager:
                 "revision": self._loaded_revision,
                 "device": self._device,
                 "modality": "text",
+                "temperature": temperature,
+                "top_p": top_p if do_sample else None,
+                "max_new_tokens": max_new,
             }
             if generic:
                 parsed = build_text_creation_from_plain(

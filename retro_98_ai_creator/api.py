@@ -78,6 +78,9 @@ class Api:
             model_id,
             provider=provider,
             gemini_cfg=self.config.get("gemini") if provider == "gemini" else None,
+            openrouter_cfg=(
+                self.config.get("openrouter") if provider == "openrouter" else None
+            ),
         )
         return result
 
@@ -121,10 +124,10 @@ class Api:
             "backend": dict(cfg.get("backend") or {}),
             "gemini": gemini,
             "openrouter": openrouter,
-            "model": dict(cfg.get("model", {})),
-            "generation": dict(cfg.get("generation", {})),
-            "ui": dict(cfg.get("ui", {})),
-            "paths": dict(cfg.get("paths", {})),
+            "huggingface": dict(cfg.get("huggingface") or {}),
+            "prompt": dict(cfg.get("prompt") or {}),
+            "ui": dict(cfg.get("ui") or {}),
+            "paths": dict(cfg.get("paths") or {}),
         }
 
     def get_model_status(self) -> dict[str, Any]:
@@ -220,7 +223,7 @@ class Api:
                 model_manager.set_progress_callback(
                     lambda payload: self._on_job_progress(job_id, payload)
                 )
-                model_manager.ensure_loaded(self.config.get("model", {}))
+                model_manager.ensure_loaded(self.config.get("huggingface") or {})
                 self._set_job(
                     job_id,
                     status="done",
@@ -290,6 +293,9 @@ class Api:
             model_id,
             provider=provider,
             gemini_cfg=self.config.get("gemini") if provider == "gemini" else None,
+            openrouter_cfg=(
+                self.config.get("openrouter") if provider == "openrouter" else None
+            ),
         )
         if not compat.get("ok"):
             return {
@@ -472,32 +478,12 @@ class Api:
             logger.debug("evaluate_js failed (UI should poll get_job)", exc_info=True)
 
     def export_creation_txt(self, creation: dict[str, Any]) -> str:
-        """Render a plain-text document for save-as."""
+        """Export only the generated text body (no prompt or metadata)."""
         modality = str((creation or {}).get("modality") or "text").lower()
         if modality in {"image", "video"}:
             raise RuntimeError(f"TXT export is not available for {modality} creations.")
 
         lines: list[str] = []
-        title = creation.get("title") or creation.get("game", "")
-        lines.append(f"{title} — {creation.get('creationType', '')}")
-        if creation.get("prompt"):
-            lines.append(f"Prompt: {creation.get('prompt')}")
-        if creation.get("platform") and creation.get("platform") != "General":
-            lines.append(f"Platform: {creation.get('platform', '')}")
-        lines.append("=" * 60)
-        meta = creation.get("meta") or {}
-        for key in (
-            "releaseYear",
-            "developer",
-            "publisher",
-            "designer",
-            "genre",
-            "mediaFormat",
-            "systemRequirements",
-        ):
-            if meta.get(key):
-                lines.append(f"{key}: {meta[key]}")
-        lines.append("")
         overview = str(creation.get("overview") or "").strip()
         sections = creation.get("sections") or []
         skip_overview = False
@@ -513,23 +499,17 @@ class Api:
             lines.append("")
         for section in sections:
             title = str((section or {}).get("title") or "").strip()
-            hide_title = (not title) or (
-                title == "Response"
-                and str(creation.get("creationType") or "") == "Text"
-            )
+            hide_title = (not title) or (title.casefold() == "response")
             if not hide_title:
-                lines.append("-" * 40)
                 lines.append(title)
-            lines.append((section or {}).get("content") or "")
+                lines.append("")
+            content = str((section or {}).get("content") or "")
+            if content:
+                lines.append(content)
             for kv in (section or {}).get("keyValues") or []:
                 lines.append(f"  • {kv.get('label', '')}: {kv.get('value', '')}")
             lines.append("")
-        if creation.get("accuracyNote"):
-            lines.append(f"Accuracy: {creation['accuracyNote']}")
-        model_info = creation.get("_model") or {}
-        if model_info.get("repo_id"):
-            lines.append(f"Generated with: {model_info['repo_id']}")
-        return "\n".join(lines)
+        return "\n".join(lines).strip() + ("\n" if lines else "")
 
     def get_media_payload(self, creation: dict[str, Any] | None = None) -> dict[str, Any]:
         """Return media for Viewer: data URL (image) or http URL (video)."""

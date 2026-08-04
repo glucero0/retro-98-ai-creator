@@ -15,7 +15,9 @@ logger = logging.getLogger(__name__)
 
 ProgressCallback = Callable[[Any], None]
 
-DEFAULT_OPENROUTER_MODEL = "google/gemini-2.5-flash"
+DEFAULT_OPENROUTER_TEXT_MODEL = "google/gemini-2.5-flash"
+DEFAULT_OPENROUTER_IMAGE_MODEL = "google/gemini-2.5-flash-image"
+DEFAULT_OPENROUTER_VIDEO_MODEL = "google/veo-2.0"
 OPENROUTER_BASE_URL = "https://openrouter.ai/api/v1"
 
 SUGGESTED_OPENROUTER_MODELS: list[dict[str, str]] = [
@@ -61,6 +63,48 @@ SUGGESTED_OPENROUTER_MODELS: list[dict[str, str]] = [
         "notes": "Open-weight via OpenRouter",
         "modality": "text",
     },
+    {
+        "repo_id": "google/gemini-2.5-flash-image",
+        "label": "Gemini 2.5 Flash Image",
+        "notes": "Recommended image default",
+        "modality": "image",
+    },
+    {
+        "repo_id": "black-forest-labs/flux.2-pro",
+        "label": "FLUX.2 Pro",
+        "notes": "High-quality text-to-image",
+        "modality": "image",
+    },
+    {
+        "repo_id": "openai/gpt-image-1",
+        "label": "GPT Image 1",
+        "notes": "OpenAI image generation",
+        "modality": "image",
+    },
+    {
+        "repo_id": "bytedance-seed/seedream-4.5",
+        "label": "Seedream 4.5",
+        "notes": "ByteDance text-to-image",
+        "modality": "image",
+    },
+    {
+        "repo_id": "google/veo-2.0",
+        "label": "Veo 2.0",
+        "notes": "Recommended video default",
+        "modality": "video",
+    },
+    {
+        "repo_id": "google/veo-3.1",
+        "label": "Veo 3.1",
+        "notes": "Newer Google video model",
+        "modality": "video",
+    },
+    {
+        "repo_id": "google/veo-3.1-lite",
+        "label": "Veo 3.1 Lite",
+        "notes": "Faster / lower-cost Veo",
+        "modality": "video",
+    },
 ]
 
 
@@ -71,8 +115,21 @@ def resolve_api_key(openrouter_cfg: dict[str, Any] | None = None) -> str | None:
 
 
 def normalize_openrouter_model(model_name: str | None) -> str:
-    name = (model_name or DEFAULT_OPENROUTER_MODEL).strip()
-    return name or DEFAULT_OPENROUTER_MODEL
+    name = (model_name or "").strip()
+    return name or DEFAULT_OPENROUTER_TEXT_MODEL
+
+
+def resolve_openrouter_model_for_modality(
+    openrouter_cfg: dict[str, Any] | None, modality: str
+) -> str:
+    """Pick the configured OpenRouter model id for text / image / video."""
+    cfg = openrouter_cfg or {}
+    mod = (modality or "text").lower().strip()
+    if mod == "image":
+        return (cfg.get("image_model") or "").strip() or DEFAULT_OPENROUTER_IMAGE_MODEL
+    if mod == "video":
+        return (cfg.get("video_model") or "").strip() or DEFAULT_OPENROUTER_VIDEO_MODEL
+    return (cfg.get("text_model") or "").strip() or DEFAULT_OPENROUTER_TEXT_MODEL
 
 
 def _chat_completion(
@@ -138,7 +195,55 @@ def generate_with_openrouter(
     progress: ProgressCallback | None = None,
     exact_title: bool = False,
 ) -> dict[str, Any]:
-    """Call OpenRouter chat completions and return a creation dict."""
+    """Call OpenRouter; prompt intent selects text / image / video model from config."""
+    from .modality import infer_prompt_modality
+
+    cfg = dict(openrouter_cfg or {})
+    prompt_text = (creation_description or "").strip() or (game or "").strip()
+    modality = infer_prompt_modality(prompt_text) or "text"
+    model_name = resolve_openrouter_model_for_modality(cfg, modality)
+
+    if modality == "image":
+        from .openrouter_media import generate_image_with_openrouter
+
+        return generate_image_with_openrouter(
+            prompt_text, openrouter_cfg=cfg, progress=progress
+        )
+    if modality == "video":
+        from .openrouter_media import generate_video_with_openrouter
+
+        return generate_video_with_openrouter(
+            prompt_text, openrouter_cfg=cfg, progress=progress
+        )
+
+    return _generate_text_with_openrouter(
+        game,
+        platform,
+        creation_type,
+        openrouter_cfg=cfg,
+        system_extra=system_extra,
+        creation_description=creation_description,
+        progress=progress,
+        exact_title=exact_title,
+        prompt_text=prompt_text,
+        model_name=model_name,
+    )
+
+
+def _generate_text_with_openrouter(
+    game: str,
+    platform: str,
+    creation_type: str,
+    *,
+    openrouter_cfg: dict[str, Any],
+    system_extra: str = "",
+    creation_description: str = "",
+    progress: ProgressCallback | None = None,
+    exact_title: bool = False,
+    prompt_text: str = "",
+    model_name: str = DEFAULT_OPENROUTER_TEXT_MODEL,
+) -> dict[str, Any]:
+    """Text generation path (freeform Prompt or classic structured document)."""
 
     def emit(message: str, percent: float | None = None, **extra: Any) -> None:
         if not progress:
@@ -166,16 +271,16 @@ def generate_with_openrouter(
             "OpenRouter API key missing. Paste your key in Control Panel → AI Model (OpenRouter)."
         )
 
-    model_name = normalize_openrouter_model(openrouter_cfg.get("model"))
     temperature = float(
         openrouter_cfg.get("temperature")
         if openrouter_cfg.get("temperature") is not None
         else 0.0
     )
-    base_url = (openrouter_cfg.get("base_url") or OPENROUTER_BASE_URL).strip() or OPENROUTER_BASE_URL
+    base_url = (
+        (openrouter_cfg.get("base_url") or OPENROUTER_BASE_URL).strip() or OPENROUTER_BASE_URL
+    )
 
     emit(f"Contacting OpenRouter ({model_name})…", percent=10)
-    prompt_text = (creation_description or "").strip() or (game or "").strip()
     generic = is_generic_studio_request(game, platform, creation_type)
 
     if generic:
@@ -229,6 +334,7 @@ def generate_with_openrouter(
                 "provider": "openrouter",
                 "repo_id": model_name,
                 "modality": "text",
+                "temperature": temperature,
                 "google_search": False,
             },
         )
@@ -243,6 +349,7 @@ def generate_with_openrouter(
             "provider": "openrouter",
             "repo_id": model_name,
             "modality": "text",
+            "temperature": temperature,
             "google_search": False,
         },
         grounding_sources=None,
