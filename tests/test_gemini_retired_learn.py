@@ -81,7 +81,7 @@ def test_suggested_list_includes_veo_31_fast():
 
 def test_bootstrap_exposes_retired_and_keeps_veo_fast(tmp_path, monkeypatch):
     import retro_98_ai_creator.api as api_mod
-    from retro_98_ai_creator.api import AppApi
+    from retro_98_ai_creator.api import Api
 
     cfg = {
         "backend": {"provider": "gemini"},
@@ -98,7 +98,7 @@ def test_bootstrap_exposes_retired_and_keeps_veo_fast(tmp_path, monkeypatch):
         "huggingface": {},
     }
     monkeypatch.setattr(api_mod, "load_config", lambda: cfg)
-    api = AppApi()
+    api = Api()
     api.config = cfg
     boot = api.get_bootstrap()
     assert "gemini-mystery-flash" in boot["retiredGeminiModels"]
