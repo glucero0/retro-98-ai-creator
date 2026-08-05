@@ -25,7 +25,11 @@ openrouter:
   base_url: https://openrouter.ai/api/v1
 
 huggingface:
-  # used when provider: huggingface
+  # Three modality slots — Studio picks by prompt intent
+  text_model: microsoft/Phi-3.5-mini-instruct
+  image_model: stable-diffusion-v1-5/stable-diffusion-v1-5
+  video_model: ali-vilab/text-to-video-ms-1.7b
+  # repo_id is kept as an alias of text_model for older configs
   repo_id: microsoft/Phi-3.5-mini-instruct
   revision: main
   device: auto
@@ -44,13 +48,15 @@ ui:
   sound_enabled: true
   crt_enabled: false
   ui_scale: 1.0
+  # App chrome font (Control Panel → Display). Default Inter is more readable than Retro Pixel.
+  ui_font: inter
   app_theme: light  # light | dark | custom
   custom_theme:
     desktop_color: "#008080"
     window_color: "#c0c0c0"
     title_color: "#000080"
     text_color: "#222222"
-    font: sans  # sans | serif | mono
+    font: sans  # legacy; ui_font is preferred
   window_width: 1280
   window_height: 800
   title: "Retro 98 AI Creator"

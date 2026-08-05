@@ -36,7 +36,7 @@
   --ui-border-mid: #dfdfdf;
   --ui-border-dark: #808080;
   --ui-border-darker: #0a0a0a;
-  --ui-font: "Pixelated MS Sans Serif", "MS Sans Serif", Tahoma, sans-serif;
+  --ui-font: Inter, "Segoe UI", Tahoma, sans-serif;
 }
 
 * {
@@ -246,6 +246,7 @@ html[data-ui-button-dark="1"] .title-bar-controls button[aria-label].close {
 
 /* ── App Theme: windows, chrome, controls (overrides 98.css hardcodes) ── */
 
+.title-bar,
 .window,
 .window-body,
 button,
@@ -253,9 +254,49 @@ input,
 select,
 textarea,
 label,
+legend,
+li[role="tab"],
+option,
+table,
+ul.tree-view,
 .field-row,
 .status-bar-field {
   font-family: var(--ui-font);
+}
+
+/* Pixel font looks correct crisp; modern faces need antialiasing */
+html:not([data-ui-font="retro-pixel"]) .title-bar,
+html:not([data-ui-font="retro-pixel"]) .window,
+html:not([data-ui-font="retro-pixel"]) .window-body,
+html:not([data-ui-font="retro-pixel"]) button,
+html:not([data-ui-font="retro-pixel"]) input,
+html:not([data-ui-font="retro-pixel"]) select,
+html:not([data-ui-font="retro-pixel"]) textarea,
+html:not([data-ui-font="retro-pixel"]) label,
+html:not([data-ui-font="retro-pixel"]) legend,
+html:not([data-ui-font="retro-pixel"]) li[role="tab"],
+html:not([data-ui-font="retro-pixel"]) option,
+html:not([data-ui-font="retro-pixel"]) table,
+html:not([data-ui-font="retro-pixel"]) ul.tree-view {
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+html[data-ui-font="retro-pixel"] .title-bar,
+html[data-ui-font="retro-pixel"] .window,
+html[data-ui-font="retro-pixel"] button,
+html[data-ui-font="retro-pixel"] input,
+html[data-ui-font="retro-pixel"] select,
+html[data-ui-font="retro-pixel"] textarea,
+html[data-ui-font="retro-pixel"] label,
+html[data-ui-font="retro-pixel"] legend,
+html[data-ui-font="retro-pixel"] li[role="tab"],
+html[data-ui-font="retro-pixel"] option {
+  -webkit-font-smoothing: none;
+}
+
+#ui-font {
+  max-width: 100%;
 }
 
 .window {
@@ -758,27 +799,20 @@ ul[role="tablist"] li[role="tab"].active {
   display: block;
   max-width: 100%;
   max-height: min(52vh, 420px);
+  width: auto;
+  height: auto;
   margin: 0 auto;
   background: #000;
+  /* Live filter/rotate preview — keep layout size stable */
+  transform-origin: center center;
 }
 
 .video-edit-preview-canvas {
-  display: block;
-  max-width: 100%;
-  height: auto;
-  margin: 0 auto;
+  display: none !important;
 }
 
 .video-edit-preview-canvas[hidden] {
   display: none !important;
-}
-
-.video-edit-stage.previewing-filters .video-edit-player {
-  display: none;
-}
-
-.video-edit-stage.previewing-filters .video-edit-preview-canvas:not([hidden]) {
-  display: block;
 }
 
 .video-edit-transport {
@@ -798,6 +832,60 @@ ul[role="tablist"] li[role="tab"].active {
 .studio-load-actions {
   flex-wrap: wrap;
   margin-top: 6px;
+}
+
+.studio-layout {
+  display: flex;
+  gap: 10px;
+  align-items: flex-start;
+  min-width: 0;
+}
+
+.studio-main {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.studio-basis-panel {
+  flex: 0 0 280px;
+  max-width: 300px;
+  min-width: 220px;
+}
+
+.studio-basis-panel fieldset {
+  margin: 0;
+}
+
+.studio-basis-preview {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 140px;
+  max-height: 320px;
+  overflow: hidden;
+  background: #111;
+  box-shadow:
+    inset -1px -1px var(--ui-border-light),
+    inset 1px 1px var(--ui-border-dark);
+}
+
+.studio-basis-preview img,
+.studio-basis-preview video {
+  display: block;
+  max-width: 100%;
+  max-height: 320px;
+  width: auto;
+  height: auto;
+  background: #000;
+}
+
+.studio-basis-preview .muted {
+  padding: 12px;
+  text-align: center;
+}
+
+#win-form.has-studio-basis {
+  min-width: 720px;
 }
 
 .editor-app-toolbar {

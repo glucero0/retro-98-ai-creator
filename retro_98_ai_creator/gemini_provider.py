@@ -370,26 +370,38 @@ def generate_with_gemini(
     creation_description: str = "",
     progress: ProgressCallback | None = None,
     exact_title: bool = False,
+    basis_media: dict[str, Any] | None = None,
+    forced_modality: str | None = None,
 ) -> dict[str, Any]:
-    """Call Gemini; prompt intent selects text / image / video model from config."""
+    """Call Gemini; prompt intent (or forced modality / media basis) selects the slot."""
     from .modality import infer_prompt_modality
 
     cfg = dict(gemini_cfg or {})
     prompt_text = (creation_description or "").strip() or (game or "").strip()
-    modality = infer_prompt_modality(prompt_text) or "text"
+    modality = (forced_modality or "").strip().lower() or infer_prompt_modality(
+        prompt_text
+    ) or "text"
+    if basis_media and modality not in {"image", "video"}:
+        modality = str(basis_media.get("modality") or "image")
     model_name = resolve_gemini_model_for_modality(cfg, modality)
 
     if modality == "image":
         from .gemini_media import generate_image_with_gemini
 
         return generate_image_with_gemini(
-            prompt_text, gemini_cfg=cfg, progress=progress
+            prompt_text,
+            gemini_cfg=cfg,
+            progress=progress,
+            basis_media=basis_media,
         )
     if modality == "video":
         from .gemini_media import generate_video_with_gemini
 
         return generate_video_with_gemini(
-            prompt_text, gemini_cfg=cfg, progress=progress
+            prompt_text,
+            gemini_cfg=cfg,
+            progress=progress,
+            basis_media=basis_media,
         )
 
     return _generate_text_with_gemini(

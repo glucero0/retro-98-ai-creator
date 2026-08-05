@@ -98,6 +98,7 @@ def generate_image_with_openrouter(
     *,
     openrouter_cfg: dict[str, Any],
     progress: ProgressCallback | None = None,
+    basis_media: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     """Generate an image via OpenRouter ``POST /images`` and store under media/."""
     from .openrouter_provider import (
@@ -131,14 +132,32 @@ def generate_image_with_openrouter(
         percent=15,
         title="Generating image",
     )
-    _emit(progress, "Generating image…", percent=40, title="Generating image")
+    _emit(
+        progress,
+        "Generating image from basis…" if basis_media else "Generating image…",
+        percent=40,
+        title="Generating image",
+    )
+
+    payload: dict[str, Any] = {"model": model_name, "prompt": prompt, "n": 1}
+    basis_bytes = (basis_media or {}).get("bytes") if basis_media else None
+    basis_mime = str((basis_media or {}).get("mime_type") or "image/png")
+    if basis_bytes:
+        b64 = base64.b64encode(bytes(basis_bytes)).decode("ascii")
+        data_url = f"data:{basis_mime};base64,{b64}"
+        # Common OpenRouter / OpenAI-style image edit fields
+        payload["image"] = [{"type": "image_url", "image_url": {"url": data_url}}]
+        payload["prompt"] = (
+            "Using the provided reference image as the basis, create a new image. "
+            "Follow this instruction:\n" + prompt
+        )
 
     try:
         body = _request_json(
             method="POST",
             url=url,
             api_key=api_key,
-            payload={"model": model_name, "prompt": prompt, "n": 1},
+            payload=payload,
             timeout=300,
         )
     except Exception as exc:
@@ -146,7 +165,28 @@ def generate_image_with_openrouter(
 
         if isinstance(exc, GenerationCancelled):
             raise
-        raise RuntimeError(f"OpenRouter image generation error: {exc}") from exc
+        # Retry without image field if the provider rejects it
+        if basis_bytes and "image" in payload:
+            try:
+                payload.pop("image", None)
+                body = _request_json(
+                    method="POST",
+                    url=url,
+                    api_key=api_key,
+                    payload={
+                        "model": model_name,
+                        "prompt": payload["prompt"],
+                        "n": 1,
+                        "image_url": data_url,
+                    },
+                    timeout=300,
+                )
+            except Exception as exc2:
+                raise RuntimeError(
+                    f"OpenRouter image generation error (with basis): {exc2}"
+                ) from exc2
+        else:
+            raise RuntimeError(f"OpenRouter image generation error: {exc}") from exc
 
     image_bytes: bytes | None = None
     mime_type = "image/png"
@@ -179,6 +219,7 @@ def generate_image_with_openrouter(
             "provider": "openrouter",
             "repo_id": model_name,
             "modality": "image",
+            "basis": bool(basis_bytes),
         },
         creation_id=creation_id,
     )
@@ -189,6 +230,7 @@ def generate_video_with_openrouter(
     *,
     openrouter_cfg: dict[str, Any],
     progress: ProgressCallback | None = None,
+    basis_media: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     """Generate a video via OpenRouter async ``/videos`` and store under media/."""
     from .openrouter_provider import (
@@ -223,12 +265,24 @@ def generate_video_with_openrouter(
         title="Generating video",
     )
 
+    payload: dict[str, Any] = {"model": model_name, "prompt": prompt}
+    basis_bytes = (basis_media or {}).get("bytes") if basis_media else None
+    basis_mime = str((basis_media or {}).get("mime_type") or "image/png")
+    if basis_bytes:
+        b64 = base64.b64encode(bytes(basis_bytes)).decode("ascii")
+        data_url = f"data:{basis_mime};base64,{b64}"
+        payload["image"] = data_url
+        payload["prompt"] = (
+            "Using the provided reference image as the starting frame / basis, "
+            "generate a new video. Follow this instruction:\n" + prompt
+        )
+
     try:
         job = _request_json(
             method="POST",
             url=submit_url,
             api_key=api_key,
-            payload={"model": model_name, "prompt": prompt},
+            payload=payload,
             timeout=120,
         )
     except Exception as exc:
@@ -236,7 +290,22 @@ def generate_video_with_openrouter(
 
         if isinstance(exc, GenerationCancelled):
             raise
-        raise RuntimeError(f"OpenRouter video submit error: {exc}") from exc
+        if basis_bytes:
+            # Retry without image if the endpoint rejects the field
+            try:
+                job = _request_json(
+                    method="POST",
+                    url=submit_url,
+                    api_key=api_key,
+                    payload={"model": model_name, "prompt": payload["prompt"]},
+                    timeout=120,
+                )
+            except Exception as exc2:
+                raise RuntimeError(
+                    f"OpenRouter video submit error (with basis): {exc2}"
+                ) from exc2
+        else:
+            raise RuntimeError(f"OpenRouter video submit error: {exc}") from exc
 
     job_id = str(job.get("id") or "").strip()
     polling_url = str(job.get("polling_url") or "").strip()

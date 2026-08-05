@@ -65,14 +65,36 @@ def test_openrouter_routes_image_prompt_ok():
     assert "image" in ok["model"] or "flux" in ok["model"]
 
 
-def test_huggingface_blocks_video_prompt():
-    bad = check_prompt_model_compatibility(
+def test_huggingface_routes_image_and_video_prompts():
+    image = check_prompt_model_compatibility(
+        "create an image of a dragon in a suit",
+        "microsoft/Phi-3.5-mini-instruct",
+        provider="huggingface",
+    )
+    assert image["ok"] is True
+    assert image.get("routed") is True
+    assert image["modelModality"] == "image"
+    assert "diffusion" in image["model"] or "sd" in image["model"].lower()
+
+    video = check_prompt_model_compatibility(
         "Generate a video of waves",
         "microsoft/Phi-3.5-mini-instruct",
         provider="huggingface",
     )
-    assert bad["ok"] is False
-    assert bad["promptModality"] == "video"
+    assert video["ok"] is True
+    assert video.get("routed") is True
+    assert video["modelModality"] == "video"
+    assert "video" in video["model"].lower() or "zeroscope" in video["model"].lower()
+
+
+def test_classify_local_diffusion_and_t2v():
+    assert (
+        classify_model_modality("stable-diffusion-v1-5/stable-diffusion-v1-5")
+        == "image"
+    )
+    assert classify_model_modality("stabilityai/sd-turbo") == "image"
+    assert classify_model_modality("ali-vilab/text-to-video-ms-1.7b") == "video"
+    assert classify_model_modality("cerspense/zeroscope_v2_576w") == "video"
 
 
 def test_generic_studio_request():

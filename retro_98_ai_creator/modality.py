@@ -20,6 +20,10 @@ _IMAGE_ID_TOKENS: tuple[str, ...] = (
     "seedream",
     "dall-e",
     "stable-diffusion",
+    "sd-turbo",
+    "sdxl",
+    "dreamshaper",
+    "text-to-image",
 )
 
 _VIDEO_ID_TOKENS: tuple[str, ...] = (
@@ -27,6 +31,15 @@ _VIDEO_ID_TOKENS: tuple[str, ...] = (
     "video-generation",
     "-video-preview",
     "-video-generation",
+    "text-to-video",
+    "zeroscope",
+    "cogvideo",
+    "modelscope",
+    "animatediff",
+    "seedance",
+    "happyhorse",
+    "wan-2",
+    "flux-3-video",
 )
 
 # Non-generative surfaces still excluded from the studio model list
@@ -230,12 +243,13 @@ def check_prompt_model_compatibility(
     provider: str = "gemini",
     gemini_cfg: dict[str, Any] | None = None,
     openrouter_cfg: dict[str, Any] | None = None,
+    huggingface_cfg: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     """
     Compare prompt intent with the selected backend.
 
-    Gemini / OpenRouter: three modality slots — Studio routes by prompt; always ok
-    when configured. Hugging Face: text-only here; image/video prompts are blocked.
+    Gemini / OpenRouter / Hugging Face: three modality slots — Studio routes by
+    prompt intent to the matching configured model.
     """
     prompt_mod = infer_prompt_modality(prompt)
     provider_l = (provider or "gemini").lower().strip()
@@ -266,6 +280,19 @@ def check_prompt_model_compatibility(
             "routed": True,
         }
 
+    if provider_l in {"huggingface", "hf", "local", "phi"}:
+        from .hf_provider import resolve_hf_model_for_modality
+
+        routed_mod = prompt_mod or "text"
+        model = resolve_hf_model_for_modality(huggingface_cfg, routed_mod)
+        return {
+            "ok": True,
+            "promptModality": prompt_mod,
+            "modelModality": routed_mod,
+            "model": model,
+            "routed": True,
+        }
+
     model_mod = classify_model_modality(model_id) or "text"
     if prompt_mod is None or prompt_mod == model_mod:
         return {
@@ -281,16 +308,7 @@ def check_prompt_model_compatibility(
         if suggestions
         else f"a {modality_label(prompt_mod)}-capable model"
     )
-    if provider_l in {"huggingface", "hf", "local", "phi"} and prompt_mod in {
-        "image",
-        "video",
-    }:
-        where = (
-            "Local Hugging Face in this app is text-only. Switch Provider to "
-            f"Google Gemini or OpenRouter for {modality_label(prompt_mod)}"
-        )
-    else:
-        where = f"Open Control Panel and switch to {suggest_txt}"
+    where = f"Open Control Panel and switch to {suggest_txt}"
 
     error = (
         f"This prompt looks like {modality_indefinite(prompt_mod)} request, but the "

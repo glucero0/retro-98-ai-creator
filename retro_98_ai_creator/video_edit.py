@@ -217,6 +217,56 @@ def ffmpeg_available() -> dict[str, Any]:
     }
 
 
+def extract_video_frame_png(
+    source: str | Path,
+    *,
+    at_seconds: float = 0.0,
+) -> bytes:
+    """Grab a single PNG frame from a video via ffmpeg (for media-basis I2V)."""
+    import tempfile
+
+    ffmpeg = find_ffmpeg()
+    if not ffmpeg:
+        raise FfmpegNotFoundError(
+            "ffmpeg not found — needed to use a video as Studio basis for generation."
+        )
+    src = Path(source)
+    if not src.is_file():
+        raise FileNotFoundError(f"Video not found: {src}")
+    t = max(0.0, float(at_seconds or 0.0))
+    with tempfile.TemporaryDirectory(prefix="rgc_frame_") as tmp:
+        out = Path(tmp) / "frame.png"
+        cmd = [
+            ffmpeg,
+            "-hide_banner",
+            "-loglevel",
+            "error",
+            "-ss",
+            f"{t:.3f}",
+            "-i",
+            str(src),
+            "-frames:v",
+            "1",
+            "-y",
+            str(out),
+        ]
+        kwargs: dict[str, Any] = {
+            "capture_output": True,
+            "text": True,
+            "timeout": 60,
+        }
+        if os.name == "nt":
+            kwargs["creationflags"] = getattr(subprocess, "CREATE_NO_WINDOW", 0)
+        proc = subprocess.run(cmd, **kwargs)
+        if proc.returncode != 0 or not out.is_file():
+            detail = (proc.stderr or proc.stdout or "").strip()
+            raise RuntimeError(
+                "Could not extract a frame from the basis video"
+                + (f": {detail}" if detail else ".")
+            )
+        return out.read_bytes()
+
+
 def _ffmpeg_quiet_args() -> list[str]:
     """Global quiet flags compatible with older and newer ffmpeg."""
     # Avoid -hide_banner: missing on ancient builds (e.g. 2013 Python Scripts stubs).
