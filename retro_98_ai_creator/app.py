@@ -82,6 +82,13 @@ class _AppRequestHandler(SimpleHTTPRequestHandler):
         self.end_headers()
         self.wfile.write(body)
 
+    def copyfile(self, source, outputfile):  # noqa: N802 - stdlib API
+        try:
+            super().copyfile(source, outputfile)
+        except (ConnectionAbortedError, ConnectionResetError, BrokenPipeError):
+            # WebView often aborts media GETs when navigating / swapping preview src
+            logger.debug("ui-http: client closed connection during transfer", exc_info=True)
+
     def do_POST(self) -> None:  # noqa: N802
         path = urlparse(self.path).path
         if path not in ("/api/replace-creation-media", "/api/save-media-file"):

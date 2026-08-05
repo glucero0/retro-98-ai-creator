@@ -28,6 +28,27 @@ from .storage import ArchiveStore
 logger = logging.getLogger(__name__)
 
 
+def _file_dialog(kind: str) -> Any:
+    """pywebview file-dialog kind. Prefer FileDialog enum over deprecated constants."""
+    import webview
+
+    fd = getattr(webview, "FileDialog", None)
+    if fd is not None:
+        try:
+            return getattr(fd, kind.upper())
+        except AttributeError as exc:
+            raise ValueError(f"Unknown FileDialog kind: {kind!r}") from exc
+    # Older pywebview (<6) fallback
+    legacy = {
+        "open": "OPEN_DIALOG",
+        "save": "SAVE_DIALOG",
+        "folder": "FOLDER_DIALOG",
+    }
+    name = legacy.get(kind.lower())
+    if not name or not hasattr(webview, name):
+        raise ValueError(f"Unknown file dialog kind: {kind!r}")
+    return getattr(webview, name)
+
 class Api:
     """Methods on this class are callable from window.pywebview.api in the UI."""
 
@@ -657,7 +678,7 @@ class Api:
         }
 
     def get_media_payload(self, creation: dict[str, Any] | None = None) -> dict[str, Any]:
-        """Return media for Viewer: data URL (image) or http URL (video)."""
+        """Return media for Viewer/Studio: data URL and/or same-origin HTTP URL."""
         from .media_store import media_data_url, media_file_uri, mime_for_path, resolve_media_path
 
         creation = creation or {}
@@ -668,29 +689,38 @@ class Api:
             return {"ok": False, "error": "Media file not found"}
         mime = mime or mime_for_path(path)
         modality = str(creation.get("modality") or "").lower()
-        if modality == "video" or (mime or "").startswith("video/"):
-            # Prefer same-origin HTTP URL — WebView blocks file:// from localhost pages.
-            http_url = None
-            if self._ui_origin:
-                http_url = f"{self._ui_origin}/media/{path.name}"
-            uri = http_url or media_file_uri(media_path)
+        is_video = modality == "video" or (mime or "").startswith("video/")
+
+        # Prefer same-origin HTTP — WebView blocks file:// from localhost pages,
+        # and large image data URLs can choke the pywebview bridge.
+        http_url = None
+        if self._ui_origin:
+            http_url = f"{self._ui_origin}/media/{path.name}"
+        file_uri = http_url or media_file_uri(media_path)
+
+        if is_video:
             return {
                 "ok": True,
                 "modality": "video",
                 "mimeType": mime,
-                "fileUrl": uri,
+                "fileUrl": file_uri,
                 "mediaPath": media_path,
             }
+
         data_url = media_data_url(media_path, mime)
-        if not data_url:
+        if not data_url and not file_uri:
             return {"ok": False, "error": "Could not read media"}
-        return {
+        out: dict[str, Any] = {
             "ok": True,
             "modality": "image",
             "mimeType": mime,
-            "dataUrl": data_url,
             "mediaPath": media_path,
         }
+        if file_uri:
+            out["fileUrl"] = file_uri
+        if data_url:
+            out["dataUrl"] = data_url
+        return out
 
     def replace_creation_media(
         self, creation_id: str, base64_data: str, mime_type: str = "image/png"
@@ -873,7 +903,7 @@ class Api:
                 or "video"
             )
             result = self._window.create_file_dialog(
-                webview.SAVE_DIALOG,
+                _file_dialog("save"),
                 save_filename=f"{safe}.mp4",
             )
             if not result:
@@ -1021,7 +1051,7 @@ class Api:
         safe = "".join(c if c.isalnum() or c in "-_ " else "_" for c in title)[:40].strip() or "creation"
         default_name = f"{safe}{ext}"
         result = self._window.create_file_dialog(
-            webview.SAVE_DIALOG,
+            _file_dialog("save"),
             save_filename=default_name,
         )
         if not result:
@@ -1037,7 +1067,7 @@ class Api:
         if self._window is None:
             return {"ok": False, "error": "No window"}
         result = self._window.create_file_dialog(
-            webview.SAVE_DIALOG,
+            _file_dialog("save"),
             save_filename=default_name,
         )
         if not result:
@@ -1067,7 +1097,7 @@ class Api:
             return {"ok": False, "error": f"Invalid base64: {exc}"}
 
         result = self._window.create_file_dialog(
-            webview.SAVE_DIALOG,
+            _file_dialog("save"),
             save_filename=default_name,
         )
         if not result:
@@ -1085,7 +1115,7 @@ class Api:
         if self._window is None:
             return {"ok": False, "error": "No window"}
         result = self._window.create_file_dialog(
-            webview.OPEN_DIALOG,
+            _file_dialog("open"),
             allow_multiple=False,
             file_types=("Text Files (*.txt;*.md;*.markdown;*.csv)", "All Files (*.*)"),
         )
@@ -1144,7 +1174,7 @@ class Api:
             )
 
         result = self._window.create_file_dialog(
-            webview.OPEN_DIALOG,
+            _file_dialog("open"),
             allow_multiple=False,
             file_types=file_types,
         )
@@ -1265,7 +1295,7 @@ class Api:
         if self._window is None:
             return {"ok": False, "error": "No window"}
         result = self._window.create_file_dialog(
-            webview.OPEN_DIALOG,
+            _file_dialog("open"),
             allow_multiple=True,
             file_types=("JSON Files (*.json)",),
         )

@@ -15,6 +15,14 @@ def test_openrouter_model_label():
         "Gemini 2.5 Flash"
     )
     assert _openrouter_model_label("openai/gpt-4o", None) == "gpt-4o"
+    assert (
+        _openrouter_model_label(
+            "nvidia/nemotron",
+            "NVIDIA: Nemotron 3 Ultra (free) — NVIDIA Nemotron 3 Ultra is an open "
+            "frontier-reasoning model that goes on forever",
+        )
+        == "NVIDIA: Nemotron 3 Ultra (free)"
+    )
 
 
 def test_modality_from_openrouter_item():

@@ -136,6 +136,15 @@ def resolve_openrouter_model_for_modality(
 def _openrouter_model_label(model_id: str, display_name: str | None = None) -> str:
     name = (display_name or "").strip()
     if name:
+        # API "name" often embeds a long blurb after an em dash — keep the title
+        for sep in (" — ", " – ", " - "):
+            if sep in name:
+                head = name.split(sep, 1)[0].strip()
+                if len(head) >= 8:
+                    name = head
+                break
+        if len(name) > 56:
+            name = name[:55] + "…"
         return name
     mid = (model_id or "").strip()
     if "/" in mid:
@@ -146,9 +155,9 @@ def _openrouter_model_label(model_id: str, display_name: str | None = None) -> s
 def _openrouter_model_notes(item: dict[str, Any]) -> str:
     desc = str(item.get("description") or "").strip()
     if desc:
-        # Keep picker rows readable
+        # Keep picker rows short — long notes stretch native <select> width
         one = " ".join(desc.split())
-        return one[:72] + ("…" if len(one) > 72 else "")
+        return one[:40] + ("…" if len(one) > 40 else "")
     pricing = item.get("pricing") or {}
     prompt = pricing.get("prompt")
     try:

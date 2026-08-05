@@ -134,6 +134,7 @@
             <button type="button" class="viewer-tab" data-tab="ascii" role="tab" id="tab-ascii">Plain ASCII</button>
           </div>
           <div class="viewer-toolbar">
+            <button type="button" id="btn-save-as">Save As…</button>
             <button type="button" id="btn-export-txt">Export TXT</button>
             <button type="button" id="btn-export-json">Export Metadata</button>
             <button type="button" id="btn-export-png">Export PNG</button>
@@ -199,7 +200,7 @@
       </div>
 
       <!-- Control Panel -->
-      <div class="window app-window" id="win-control" data-window="control" hidden style="left:120px;top:40px;width:560px;">
+      <div class="window app-window control-tab-ai" id="win-control" data-window="control" hidden style="left:120px;top:40px;width:820px;">
         <div class="title-bar">
           <div class="title-bar-text">Control Panel</div>
         </div>
@@ -714,7 +715,7 @@
                 <button type="button" id="btn-edit-cancel">Cancel</button>
                 <button type="button" id="btn-edit-apply" class="default">Apply</button>
                 <button type="button" id="btn-edit-save" class="default" hidden>Save</button>
-                <button type="button" id="btn-edit-save-as" hidden>Save As…</button>
+                <button type="button" id="btn-edit-save-as">Save As…</button>
               </div>
             </div>
           </div>
@@ -876,7 +877,7 @@
                 <button type="button" id="btn-vedit-cancel">Cancel</button>
                 <button type="button" id="btn-vedit-apply" class="default">Apply</button>
                 <button type="button" id="btn-vedit-save" class="default" hidden>Save</button>
-                <button type="button" id="btn-vedit-save-as" hidden>Save As…</button>
+                <button type="button" id="btn-vedit-save-as">Save As…</button>
               </div>
             </div>
           </div>

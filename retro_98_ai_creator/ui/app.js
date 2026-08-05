@@ -1368,14 +1368,16 @@
       return false;
     }
     const payload = await a.get_media_payload(creation);
-    if (!payload || !payload.ok || !payload.fileUrl) {
+    const previewUrl =
+      (payload && (payload.fileUrl || payload.dataUrl)) || "";
+    if (!payload || !payload.ok || !previewUrl) {
       showToast((payload && payload.error) || "Could not load media for basis.");
       return false;
     }
     state.studioBasis = {
       creationId: creation.id,
       modality: mod,
-      fileUrl: payload.fileUrl,
+      fileUrl: previewUrl,
       mimeType: payload.mimeType || creation.mimeType || "",
       title: creationTitle(creation),
       mediaPath: creation.mediaPath || "",
@@ -1486,6 +1488,7 @@
     // Let layout settle (esp. Control Panel height:auto) then extend scroll area
     requestAnimationFrame(() => syncDesktopScrollExtent());
     if (id === "control") {
+      syncControlPanelWidth();
       refreshGeminiModelsForControlPanel();
     }
     if (id === "image-edit" && !imageEdit.creationId) {
@@ -1689,6 +1692,8 @@
       fillOpenRouterModalitySelect(textSel, prev.text, models, "text");
       fillOpenRouterModalitySelect(imageSel, prev.image, models, "image");
       fillOpenRouterModalitySelect(videoSel, prev.video, models, "video");
+      syncControlPanelWidth();
+      requestAnimationFrame(() => syncDesktopScrollExtent());
       if (res && res.ok) {
         const live = res.liveCount != null ? res.liveCount : models.length;
         updateBusy(
@@ -2372,7 +2377,12 @@
           });
         }
       } else {
-        const src = res.dataUrl || res.fileUrl || "";
+        const src = res.fileUrl || res.dataUrl || "";
+        if (!src) {
+          canvas.innerHTML =
+            '<p class="muted">Image URL missing — restart the app and try again.</p>';
+          return;
+        }
         canvas.innerHTML =
           '<div class="media-pane">' +
           '<img class="media-image" alt="' +
@@ -2726,6 +2736,55 @@
     }
   }
 
+  /**
+   * Viewer Save As… — write the active creation's native file (TXT / image / video).
+   */
+  async function viewerSaveAs() {
+    if (!state.active) {
+      showToast("Open a creation in the Viewer first.");
+      return;
+    }
+    const a = api();
+    if (!a) {
+      showToast("Python bridge not ready.");
+      return;
+    }
+    const modality = creationModality(state.active);
+    beginBusy("Save As", "Choosing destination…", { delayMs: 0 });
+    try {
+      if (modality === "image" || modality === "video") {
+        const res = await a.export_creation_media(state.active);
+        if (res && res.cancelled) return;
+        if (!res || !res.ok) {
+          showToast((res && res.error) || "Save As failed");
+          return;
+        }
+        showToast(
+          modality === "video"
+            ? "Saved video to " + (res.path || "file")
+            : "Saved image to " + (res.path || "file")
+        );
+        beep(900, 0.05);
+        return;
+      }
+
+      const txt = await a.export_creation_txt(state.active);
+      const name = exportBaseName(state.active) + ".txt";
+      const res = await a.save_file_dialog(name, txt);
+      if (res && res.cancelled) return;
+      if (!res || !res.ok) {
+        showToast((res && res.error) || "Save As failed");
+        return;
+      }
+      showToast("Saved text to " + (res.path || "file"));
+      beep(900, 0.05);
+    } catch (err) {
+      showToast("Save As failed: " + err);
+    } finally {
+      endBusy("Ready");
+    }
+  }
+
   async function exportDocumentImage(format) {
     if (!state.active) return;
     const a = api();
@@ -3010,6 +3069,40 @@
     }
   }
 
+  function modelOptionLabel(m, maxLen) {
+    // Short labels only — OpenRouter "name" fields can be paragraph-length and
+    // native <select> in WebView2 sizes to the longest option text.
+    maxLen = maxLen == null ? 44 : maxLen;
+    const label = String((m && m.label) || (m && m.repo_id) || "").trim();
+    let text = label || "model";
+    // If the API stuffed a description after an em dash / hyphen, keep the title part
+    const cut = text.search(/\s[—–-]\s/);
+    if (cut > 12 && cut < maxLen) text = text.slice(0, cut);
+    if (text.length > maxLen) text = text.slice(0, maxLen - 1) + "…";
+    return text;
+  }
+
+  function modelOptionTitle(m) {
+    const parts = [
+      (m && m.label) || "",
+      (m && m.notes) || "",
+      (m && m.repo_id) || "",
+    ]
+      .map((s) => String(s || "").trim())
+      .filter(Boolean);
+    return parts.filter((p, i) => p !== parts[i - 1]).join("\n");
+  }
+
+  function appendModelOption(sel, m, modality) {
+    const opt = document.createElement("option");
+    opt.value = m.repo_id;
+    opt.textContent = modelOptionLabel(m);
+    opt.title = modelOptionTitle(m);
+    if (modality) opt.dataset.modality = modality;
+    sel.appendChild(opt);
+    return opt;
+  }
+
   function fillModelSelect(sel, selected, suggestions) {
     if (!sel) return;
     const list = suggestions || [];
@@ -3034,7 +3127,8 @@
       items.forEach((m) => {
         const opt = document.createElement("option");
         opt.value = m.repo_id;
-        opt.textContent = m.label + (m.notes ? " — " + m.notes : "");
+        opt.textContent = modelOptionLabel(m);
+        opt.title = modelOptionTitle(m);
         opt.dataset.modality = m.modality || key;
         og.appendChild(opt);
       });
@@ -3043,7 +3137,8 @@
     if (selected && ![...sel.options].some((o) => o.value === selected)) {
       const opt = document.createElement("option");
       opt.value = selected;
-      opt.textContent = selected;
+      opt.textContent = modelOptionLabel({ label: selected, repo_id: selected });
+      opt.title = selected;
       sel.appendChild(opt);
     }
     if (list.length || sel.options.length) {
@@ -3064,20 +3159,14 @@
       (m) => (m.modality || "text").toLowerCase() === want
     );
     sel.innerHTML = "";
-    filtered.forEach((m) => {
-      const opt = document.createElement("option");
-      opt.value = m.repo_id;
-      opt.textContent = m.label + (m.notes ? " — " + m.notes : "");
-      opt.dataset.modality = want;
-      sel.appendChild(opt);
-    });
+    filtered.forEach((m) => appendModelOption(sel, m, want));
     let pick = selected || defaults[want] || "";
     if (pick && ![...sel.options].some((o) => o.value === pick)) {
-      const opt = document.createElement("option");
-      opt.value = pick;
-      opt.textContent = pick + " (saved)";
-      opt.dataset.modality = want;
-      sel.appendChild(opt);
+      appendModelOption(
+        sel,
+        { repo_id: pick, label: pick, notes: "saved" },
+        want
+      );
     }
     if (!pick && sel.options.length) pick = sel.options[0].value;
     if (pick) sel.value = pick;
@@ -3096,20 +3185,14 @@
       (m) => (m.modality || "text").toLowerCase() === want
     );
     sel.innerHTML = "";
-    filtered.forEach((m) => {
-      const opt = document.createElement("option");
-      opt.value = m.repo_id;
-      opt.textContent = m.label + (m.notes ? " — " + m.notes : "");
-      opt.dataset.modality = want;
-      sel.appendChild(opt);
-    });
+    filtered.forEach((m) => appendModelOption(sel, m, want));
     let pick = selected || defaults[want] || "";
     if (pick && ![...sel.options].some((o) => o.value === pick)) {
-      const opt = document.createElement("option");
-      opt.value = pick;
-      opt.textContent = pick + " (saved)";
-      opt.dataset.modality = want;
-      sel.appendChild(opt);
+      appendModelOption(
+        sel,
+        { repo_id: pick, label: pick, notes: "saved" },
+        want
+      );
     }
     if (!pick && sel.options.length) pick = sel.options[0].value;
     if (pick) sel.value = pick;
@@ -3128,20 +3211,14 @@
       (m) => (m.modality || "text").toLowerCase() === want
     );
     sel.innerHTML = "";
-    filtered.forEach((m) => {
-      const opt = document.createElement("option");
-      opt.value = m.repo_id;
-      opt.textContent = m.label + (m.notes ? " — " + m.notes : "");
-      opt.dataset.modality = want;
-      sel.appendChild(opt);
-    });
+    filtered.forEach((m) => appendModelOption(sel, m, want));
     let pick = selected || defaults[want] || "";
     if (pick && ![...sel.options].some((o) => o.value === pick)) {
-      const opt = document.createElement("option");
-      opt.value = pick;
-      opt.textContent = pick + " (saved)";
-      opt.dataset.modality = want;
-      sel.appendChild(opt);
+      appendModelOption(
+        sel,
+        { repo_id: pick, label: pick, notes: "saved" },
+        want
+      );
     }
     if (!pick && sel.options.length) pick = sel.options[0].value;
     if (pick) sel.value = pick;
@@ -3199,7 +3276,9 @@
     const showEditImage = modality === "image";
     const showEditVideo = modality === "video";
     const showMetadata = !!creation;
+    const showSaveAs = !!creation;
 
+    if ($("#btn-save-as")) $("#btn-save-as").hidden = !showSaveAs;
     if ($("#btn-export-txt")) $("#btn-export-txt").hidden = !showTxt;
     if ($("#btn-export-png")) {
       $("#btn-export-png").hidden = !showPng;
@@ -3503,12 +3582,14 @@
         : "Paste Gemini API key";
     }
     if (geminiStatus) {
-      if (selected === "gemini" && providerChanged) {
+      if (geminiSet) {
+        geminiStatus.textContent =
+          selected === "gemini" && providerChanged
+            ? "A Gemini API key is already saved — Save to switch providers (leave blank to keep it)."
+            : "A Gemini API key is already saved. Leave the field blank to keep it.";
+      } else if (selected === "gemini" && providerChanged) {
         geminiStatus.textContent =
           "Provider changed — paste a Gemini API key before saving.";
-      } else if (geminiSet) {
-        geminiStatus.textContent =
-          "A Gemini API key is already saved. Leave the field blank to keep it.";
       } else {
         geminiStatus.textContent = "No Gemini API key saved yet.";
       }
@@ -3528,12 +3609,14 @@
         : "Paste OpenRouter API key";
     }
     if (orStatus) {
-      if (selected === "openrouter" && providerChanged) {
+      if (openrouterSet) {
+        orStatus.textContent =
+          selected === "openrouter" && providerChanged
+            ? "An OpenRouter API key is already saved — Save to switch providers (leave blank to keep it)."
+            : "An OpenRouter API key is already saved. Leave the field blank to keep it.";
+      } else if (selected === "openrouter" && providerChanged) {
         orStatus.textContent =
           "Provider changed — paste an OpenRouter API key before saving.";
-      } else if (openrouterSet) {
-        orStatus.textContent =
-          "An OpenRouter API key is already saved. Leave the field blank to keep it.";
       } else {
         orStatus.textContent = "No OpenRouter API key saved yet.";
       }
@@ -3547,11 +3630,6 @@
       provider === "openrouter"
         ? (($("#openrouter-key") && $("#openrouter-key").value.trim()) || "")
         : (($("#gemini-key") && $("#gemini-key").value.trim()) || "");
-
-    // Switching providers always requires pasting a key for the new provider.
-    if (provider !== savedBackendProvider()) {
-      return !!typed;
-    }
 
     if (typed) return true;
     if (provider === "openrouter") {
@@ -3740,7 +3818,18 @@
       const id = pane.getAttribute("data-control-pane");
       pane.hidden = id !== state.controlTab;
     });
+    syncControlPanelWidth();
     requestAnimationFrame(() => syncDesktopScrollExtent());
+  }
+
+  function syncControlPanelWidth() {
+    const win = $("#win-control");
+    if (!win) return;
+    const ai = state.controlTab !== "display";
+    win.classList.toggle("control-tab-ai", ai);
+    win.classList.toggle("control-tab-display", !ai);
+    // Keep inline style in sync so open/drag layout matches CSS
+    win.style.width = ai ? "820px" : "560px";
   }
 
   function applyDisplaySettingsFromControls() {
@@ -4281,12 +4370,13 @@
     if (toolbar) toolbar.hidden = !imageEdit.standalone;
     if ($("#btn-edit-apply")) $("#btn-edit-apply").hidden = !!imageEdit.standalone;
     if ($("#btn-edit-save")) $("#btn-edit-save").hidden = !imageEdit.standalone;
-    if ($("#btn-edit-save-as")) $("#btn-edit-save-as").hidden = !imageEdit.standalone;
+    // Save As is always available once an image is loaded (Archives Apply or desktop editor)
+    if ($("#btn-edit-save-as")) $("#btn-edit-save-as").hidden = false;
     const hint = $("#image-edit-hint");
     if (hint) {
       hint.textContent = imageEdit.standalone
         ? "Load an image to begin. At 0° rotation, drag to set a crop, then drag the box or handles to adjust. Save writes Archives; Save As… exports a file."
-        : "At 0° rotation, drag on the image to set a crop. Drag the yellow box to move, or use the handles to resize. Clear Crop to reset. Apply saves to this creation.";
+        : "At 0° rotation, drag on the image to set a crop. Drag the yellow box to move, or use the handles to resize. Clear Crop to reset. Apply saves to Archives; Save As… exports a file.";
     }
   }
 
@@ -5072,12 +5162,13 @@
     if (toolbar) toolbar.hidden = !videoEdit.standalone;
     if ($("#btn-vedit-apply")) $("#btn-vedit-apply").hidden = !!videoEdit.standalone;
     if ($("#btn-vedit-save")) $("#btn-vedit-save").hidden = !videoEdit.standalone;
-    if ($("#btn-vedit-save-as")) $("#btn-vedit-save-as").hidden = !videoEdit.standalone;
+    // Save As is always available once a video is loaded
+    if ($("#btn-vedit-save-as")) $("#btn-vedit-save-as").hidden = false;
     const hint = $("#video-edit-hint");
     if (hint) {
       hint.textContent = videoEdit.standalone
         ? "Load a video to begin. Sliders preview live on the player (play, scrub, and timeline keep working). Save writes Archives; Save As… exports MP4 (ffmpeg required)."
-        : "Sliders preview live on the player while you play and edit the timeline. Apply rebuilds the video with your segment order and filters (requires ffmpeg on PATH). Drag a paused frame (0°) to crop. Timeline starts at 0.00s.";
+        : "Sliders preview live on the player while you play and edit the timeline. Apply rebuilds the video in Archives; Save As… exports MP4 (requires ffmpeg on PATH). Drag a paused frame (0°) to crop. Timeline starts at 0.00s.";
     }
   }
 
@@ -6280,6 +6371,10 @@
       beep(900, 0.05);
     });
 
+    if ($("#btn-save-as")) {
+      $("#btn-save-as").addEventListener("click", () => viewerSaveAs());
+    }
+
     $("#btn-import").addEventListener("click", async () => {
       const a = api();
       if (!a) return;
@@ -6559,6 +6654,7 @@
     fillUiFontSelect();
     applyUiFont(state.uiFont || "inter");
     applyAppTheme(state.appTheme || "light");
+    syncControlPanelWidth();
     wireEvents();
     enableWindowDragging();
     enableWindowResizing();

@@ -430,25 +430,36 @@ fieldset {
     inset 1px 1px var(--ui-border-dark);
 }
 
+menu[role="tablist"],
 ul[role="tablist"] {
   background: var(--ui-window);
 }
 
+menu[role="tablist"] > li[role="tab"],
 ul[role="tablist"] li[role="tab"] {
   background: var(--ui-button);
-  color: transparent;
-  text-shadow: 0 0 var(--ui-button-text);
+  color: var(--ui-button-text);
 }
 
+menu[role="tablist"] > li[role="tab"][aria-selected="true"],
 ul[role="tablist"] li[role="tab"][aria-selected="true"],
 ul[role="tablist"] li[role="tab"].active {
   background: var(--ui-window);
+  color: var(--ui-text);
 }
 
+/* 98.css hardcodes li>a { color:#222 } — override for themed/dark tabs */
+menu[role="tablist"] > li[role="tab"] > a,
 .menu[role="tablist"] a,
-.menu[role="tablist"] li[role="tab"] a {
+.menu[role="tablist"] li[role="tab"] a,
+ul[role="tablist"] li[role="tab"] a {
   color: inherit;
-  text-shadow: inherit;
+  text-shadow: none;
+}
+
+menu[role="tablist"] > li[role="tab"] > a:focus,
+ul[role="tablist"] li[role="tab"] a:focus {
+  outline: 1px dotted currentColor;
 }
 
 .label-hint {
@@ -1685,18 +1696,58 @@ code {
   word-break: break-word;
 }
 
-/* Control Panel grows with content — no inner scrollbar. App scrolls if needed. */
+/* Control Panel — AI Model needs room for provider pickers; Display can be narrower. */
 #win-control.app-window {
   height: auto;
   max-height: none;
-  overflow: visible;
+  overflow-x: hidden;
+  box-sizing: border-box;
+}
+
+#win-control.control-tab-ai {
+  width: 820px !important;
+  max-width: min(820px, calc(100vw - 24px));
+}
+
+#win-control.control-tab-display {
+  width: 560px !important;
+  max-width: min(560px, calc(100vw - 24px));
+}
+
+#win-control > .window-body,
+#win-control .control-tab-panel,
+#win-control .control-tab-panel > .window-body,
+#win-control .control-pane,
+#win-control fieldset,
+#win-control .field-row-stacked {
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
 }
 
 #win-control > .window-body,
 #win-control .control-tab-panel > .window-body {
-  overflow: visible;
+  overflow-x: hidden;
+  overflow-y: visible;
   flex: 0 0 auto;
   max-height: none;
+}
+
+#win-control select,
+#win-control input[type="text"],
+#win-control input[type="password"],
+#win-control input:not([type]),
+#win-control textarea {
+  display: block;
+  width: 100%;
+  max-width: 100%;
+  box-sizing: border-box;
+}
+
+#win-control select {
+  /* Prevent option text from expanding the control in WebView2 */
+  field-sizing: fixed;
 }
 
 #win-control > .title-bar {
@@ -1705,6 +1756,27 @@ code {
 
 #win-control > .title-bar .title-bar-controls {
   display: none;
+}
+
+/* Inactive tabs: 98.css hardcodes #222 on anchors — force theme contrast */
+menu.control-tabs[role="tablist"] > li[role="tab"]:not([aria-selected="true"]) {
+  color: var(--ui-button-text);
+}
+
+menu.control-tabs[role="tablist"] > li[role="tab"]:not([aria-selected="true"]) > a {
+  color: var(--ui-button-text) !important;
+}
+
+menu.control-tabs[role="tablist"] > li[role="tab"][aria-selected="true"] {
+  color: var(--ui-text);
+}
+
+menu.control-tabs[role="tablist"] > li[role="tab"][aria-selected="true"] > a {
+  color: var(--ui-text) !important;
+}
+
+html[data-app-theme="dark"] menu.control-tabs[role="tablist"] > li[role="tab"]:not([aria-selected="true"]) > a {
+  color: #dce1e8 !important;
 }
 
 .scale-row {
