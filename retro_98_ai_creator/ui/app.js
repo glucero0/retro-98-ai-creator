@@ -9,6 +9,8 @@
     focused: "form",
     open: { form: true, viewer: false, library: false, control: false, "image-edit": false, "video-edit": false },
     minimized: { form: false, viewer: false, library: false, control: false, "image-edit": false, "video-edit": false },
+    maximized: { form: false, viewer: false, library: false, control: false, "image-edit": false, "video-edit": false },
+    preMaximizeRect: {},
     generating: false,
     modelLoading: false,
     preloadJobId: null,
@@ -17,6 +19,7 @@
     crtEnabled: false,
     uiScale: 1,
     uiFont: "inter",
+    retiredGeminiModels: [],
     config: null,
     viewerTab: "doc",
     speechPlaying: false,
@@ -1842,7 +1845,6 @@
     requestAnimationFrame(() => syncDesktopScrollExtent());
     if (id === "control") {
       syncControlPanelWidth();
-      refreshGeminiModelsForControlPanel();
     }
     if (id === "image-edit" && !imageEdit.creationId) {
       prepareEmptyImageEditor();
@@ -2189,11 +2191,14 @@
     }
     state.open[id] = false;
     state.minimized[id] = false;
+    state.maximized[id] = false;
     const el = document.getElementById("win-" + id);
     if (el) {
       el.hidden = true;
       el.classList.remove("minimized");
+      el.classList.remove("maximized");
     }
+    updateMaximizeButton(id);
     // Focus another already-open window — never open a closed one
     if (state.focused === id) {
       const preferred =
@@ -2220,6 +2225,71 @@
     if (el) el.classList.add("minimized");
     renderTaskbar();
     syncDesktopScrollExtent();
+  }
+
+  function updateMaximizeButton(id) {
+    const el = document.getElementById("win-" + id);
+    if (!el) return;
+    const btn = el.querySelector(
+      '.title-bar-controls button[data-action="maximize"]'
+    );
+    if (!btn) return;
+    const isMax = !!state.maximized[id];
+    btn.setAttribute("aria-label", isMax ? "Restore" : "Maximize");
+    btn.title = isMax ? "Restore" : "Maximize";
+  }
+
+  // Snapshot the window's current on-screen geometry (relative to the
+  // windows layer) so maximize can be undone later.
+  function captureWindowGeometry(win, layerRect) {
+    const rect = win.getBoundingClientRect();
+    const left = parseFloat(win.style.left);
+    const top = parseFloat(win.style.top);
+    return {
+      left: Number.isFinite(left) ? left : rect.left - layerRect.left,
+      top: Number.isFinite(top) ? top : rect.top - layerRect.top,
+      width: win.style.width || rect.width + "px",
+      height: win.style.height || rect.height + "px",
+    };
+  }
+
+  function maximizeWindow(id) {
+    const el = document.getElementById("win-" + id);
+    if (!el || state.maximized[id]) return;
+    if (state.minimized[id]) {
+      state.minimized[id] = false;
+      el.classList.remove("minimized");
+    }
+    const layer = $("#windows-layer") || $("#desktop");
+    const layerRect = layer.getBoundingClientRect();
+    state.preMaximizeRect[id] = captureWindowGeometry(el, layerRect);
+    state.maximized[id] = true;
+    el.classList.add("maximized");
+    updateMaximizeButton(id);
+    focusWindow(id);
+    requestAnimationFrame(() => syncDesktopScrollExtent());
+  }
+
+  function restoreWindow(id) {
+    const el = document.getElementById("win-" + id);
+    if (!el || !state.maximized[id]) return;
+    const prev = state.preMaximizeRect[id];
+    state.maximized[id] = false;
+    el.classList.remove("maximized");
+    if (prev) {
+      el.style.left = typeof prev.left === "number" ? prev.left + "px" : prev.left;
+      el.style.top = typeof prev.top === "number" ? prev.top + "px" : prev.top;
+      el.style.width = prev.width;
+      el.style.height = prev.height;
+    }
+    updateMaximizeButton(id);
+    focusWindow(id);
+    requestAnimationFrame(() => syncDesktopScrollExtent());
+  }
+
+  function toggleMaximizeWindow(id) {
+    if (state.maximized[id]) restoreWindow(id);
+    else maximizeWindow(id);
   }
 
   function toggleStartMenu(force) {
@@ -2267,6 +2337,7 @@
       if (!win || !win.classList.contains("app-window")) return;
 
       const id = win.dataset.window;
+      if (id && state.maximized[id]) restoreWindow(id);
       if (id) focusWindow(id);
 
       const rect = win.getBoundingClientRect();
@@ -2344,7 +2415,8 @@
       const handle = e.target.closest(".window-resize-handle");
       if (!handle) return;
       const win = handle.closest(".app-window");
-      if (!win || win.id === "win-control") return;
+      if (!win || win.id === "win-control" || win.classList.contains("maximized"))
+        return;
       const id = win.dataset.window;
       if (id) focusWindow(id);
 
@@ -3418,14 +3490,10 @@
   }
 
   function modelOptionLabel(m, maxLen) {
-    // Short labels only — OpenRouter "name" fields can be paragraph-length and
-    // native <select> in WebView2 sizes to the longest option text.
+    // Always show the model id in the picker so labels match config / save /
+    // restart (friendly display names are only in the option title tooltip).
     maxLen = maxLen == null ? 44 : maxLen;
-    const label = String((m && m.label) || (m && m.repo_id) || "").trim();
-    let text = label || "model";
-    // If the API stuffed a description after an em dash / hyphen, keep the title part
-    const cut = text.search(/\s[—–-]\s/);
-    if (cut > 12 && cut < maxLen) text = text.slice(0, cut);
+    let text = String((m && m.repo_id) || (m && m.label) || "").trim() || "model";
     if (text.length > maxLen) text = text.slice(0, maxLen - 1) + "…";
     return text;
   }
@@ -3503,15 +3571,27 @@
       image: "gemini-2.5-flash-image",
       video: "veo-2.0-generate-001",
     };
+    const retired = new Set(
+      (state.retiredGeminiModels || []).map((id) => String(id || "").toLowerCase())
+    );
     const filtered = (suggestions || []).filter(
       (m) => (m.modality || "text").toLowerCase() === want
     );
     sel.innerHTML = "";
     filtered.forEach((m) => appendModelOption(sel, m, want));
     let pick = selected || defaults[want] || "";
-    // Do not re-inject ids missing from the catalog (retired models disappear here).
-    if (pick && ![...sel.options].some((o) => o.value === pick)) {
+    const pickKey = String(pick || "").toLowerCase();
+    if (pick && retired.has(pickKey)) {
+      // Learned/built-in retired ids must not stick in the picker
       pick = defaults[want] || (sel.options[0] && sel.options[0].value) || "";
+    } else if (pick && ![...sel.options].some((o) => o.value === pick)) {
+      // Keep a valid saved config choice even when the short suggested list
+      // doesn't include it yet (e.g. veo-3.1-fast before live Refresh).
+      appendModelOption(
+        sel,
+        { repo_id: pick, label: pick, notes: "saved" },
+        want
+      );
     }
     if (!pick && sel.options.length) pick = sel.options[0].value;
     if (pick) sel.value = pick;
@@ -3681,6 +3761,9 @@
 
   function fillControlPanel(boot) {
     if (boot && boot.config) state.config = boot.config;
+    if (boot && Array.isArray(boot.retiredGeminiModels)) {
+      state.retiredGeminiModels = boot.retiredGeminiModels.slice();
+    }
     const model = (boot.config && boot.config.huggingface) || {};
     const gemini = (boot.config && boot.config.gemini) || {};
     const openrouter = (boot.config && boot.config.openrouter) || {};
@@ -4358,6 +4441,12 @@
     state.generating = false;
     setCreateBlocked(false);
     endBusy("Ready");
+    const retiredId = String((info && info.retired) || "").toLowerCase();
+    if (retiredId) {
+      const set = new Set(state.retiredGeminiModels || []);
+      set.add(retiredId);
+      state.retiredGeminiModels = [...set];
+    }
     const msg =
       (info && info.message) ||
       "A Gemini model was retired. Open Control Panel → AI Model to pick another.";
@@ -6779,6 +6868,7 @@
         const a = action.toLowerCase();
         if (a === "close") requestCloseWindow(id);
         else if (a === "minimize") minimizeWindow(id);
+        else if (a === "maximize") toggleMaximizeWindow(id);
         return;
       }
 

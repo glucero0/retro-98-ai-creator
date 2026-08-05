@@ -221,6 +221,12 @@ SUGGESTED_GEMINI_MODELS: list[dict[str, str]] = [
         "modality": "video",
     },
     {
+        "repo_id": "veo-3.1-fast-generate-preview",
+        "label": "Veo 3.1 Fast Generate Preview",
+        "notes": "Faster Veo 3.1 preview",
+        "modality": "video",
+    },
+    {
         "repo_id": "veo-3.1-generate-preview",
         "label": "Veo 3.1 Generate Preview",
         "notes": "Newer video preview (usually costlier)",

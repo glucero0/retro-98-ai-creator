@@ -23,7 +23,10 @@ A Windows 98–themed desktop studio for general-purpose AI creation: **text**, 
 ## Requirements
 
 - Python 3.10+
-- A [Gemini API key](https://aistudio.google.com/apikey) (for the default backend)
+- An API key for at least one backend, set via **Control Panel** (saved to `config.yaml`):
+  - **Gemini** (default backend) — a [Gemini API key](https://aistudio.google.com/apikey)
+  - **OpenRouter** — an [OpenRouter API key](https://openrouter.ai/keys)
+  - **Hugging Face** (optional local backend) — no key required for public models; a [Hugging Face access token](https://huggingface.co/settings/tokens) is only needed for gated/private models or to avoid rate limits, plus `pip install -r requirements-local.txt` and, for GPU use, sufficient VRAM
 - **ffmpeg + ffprobe** — only needed for **Video Edit** (apply filters, split/reorder segments, export). See [Installing ffmpeg](#installing-ffmpeg) below.
 
 ## Quick start

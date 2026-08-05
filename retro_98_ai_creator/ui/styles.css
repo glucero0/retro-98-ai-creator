@@ -185,6 +185,20 @@ body {
   z-index: 50 !important;
 }
 
+.app-window.maximized {
+  left: 0 !important;
+  top: 0 !important;
+  right: 0 !important;
+  width: 100% !important;
+  height: 100% !important;
+  max-width: 100% !important;
+  max-height: 100% !important;
+}
+
+.app-window.maximized .window-resize-handle {
+  display: none;
+}
+
 .app-window.dragging .window-body {
   pointer-events: none;
 }
