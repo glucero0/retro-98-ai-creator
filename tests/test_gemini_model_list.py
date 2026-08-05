@@ -25,7 +25,7 @@ def test_keeps_text_gemini_models():
     for mid in (
         "gemini-2.5-flash",
         "gemini-2.5-pro",
-        "gemini-2.5-flash-lite",
+        "gemini-3.1-flash-lite",
         "gemini-flash-latest",
     ):
         assert _is_text_generation_gemini_model(mid, supported_actions=["generateContent"])
@@ -37,6 +37,7 @@ def test_retired_gemini_2_0_models_are_hidden():
         "gemini-2.0-flash",
         "gemini-2.0-flash-lite",
         "models/gemini-2.0-flash-lite",
+        "gemini-2.5-flash-lite",
     ):
         assert not _is_studio_gemini_model(mid, supported_actions=["generateContent"])
 
@@ -44,10 +45,11 @@ def test_retired_gemini_2_0_models_are_hidden():
 def test_normalize_remaps_retired_gemini_models():
     from retro_98_ai_creator.gemini_provider import normalize_gemini_model
 
-    assert normalize_gemini_model("gemini-2.0-flash-lite") == "gemini-2.5-flash-lite"
+    assert normalize_gemini_model("gemini-2.0-flash-lite") == "gemini-3.1-flash-lite"
     assert (
-        normalize_gemini_model("models/gemini-2.0-flash-lite") == "gemini-2.5-flash-lite"
+        normalize_gemini_model("models/gemini-2.0-flash-lite") == "gemini-3.1-flash-lite"
     )
+    assert normalize_gemini_model("gemini-2.5-flash-lite") == "gemini-3.1-flash-lite"
     assert normalize_gemini_model("gemini-2.0-flash") == "gemini-2.5-flash"
     assert normalize_gemini_model("gemini-2.5-flash") == "gemini-2.5-flash"
 

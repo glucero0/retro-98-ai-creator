@@ -14,7 +14,7 @@ CRITERIA = ("economical", "balanced", "quality")
 _GEMINI_PREFS: dict[str, dict[str, tuple[str, ...]]] = {
     "economical": {
         "text": (
-            "gemini-2.5-flash-lite",
+            "gemini-3.1-flash-lite",
             "gemini-flash-lite-latest",
             "gemini-2.5-flash",
             "gemini-flash-latest",
@@ -34,7 +34,7 @@ _GEMINI_PREFS: dict[str, dict[str, tuple[str, ...]]] = {
         "text": (
             "gemini-2.5-flash",
             "gemini-flash-latest",
-            "gemini-2.5-flash-lite",
+            "gemini-3.1-flash-lite",
             "gemini-2.5-pro",
         ),
         "image": (
@@ -254,21 +254,32 @@ def _recommend_gemini(config: dict[str, Any], criteria: str) -> dict[str, Any]:
         DEFAULT_GEMINI_VIDEO_MODEL,
         SUGGESTED_GEMINI_MODELS,
         list_available_gemini_models,
+        merged_retired_aliases,
+        normalize_gemini_model,
         resolve_api_key,
     )
 
     key = resolve_api_key(config.get("gemini") or {})
+    aliases = merged_retired_aliases(config.get("gemini") or {})
     source = "fallback"
     models: list[dict[str, str]]
     if key:
         try:
-            models = list_available_gemini_models(key)
+            models = list_available_gemini_models(key, retired_aliases=aliases)
             source = "live"
         except Exception as exc:  # noqa: BLE001
             logger.warning("Gemini recommend list failed: %s", exc)
-            models = list(SUGGESTED_GEMINI_MODELS)
+            models = [
+                m
+                for m in SUGGESTED_GEMINI_MODELS
+                if (m.get("repo_id") or "").lower() not in {k.lower() for k in aliases}
+            ]
     else:
-        models = list(SUGGESTED_GEMINI_MODELS)
+        models = [
+            m
+            for m in SUGGESTED_GEMINI_MODELS
+            if (m.get("repo_id") or "").lower() not in {k.lower() for k in aliases}
+        ]
 
     buckets = _by_modality(models)
     prefs = _GEMINI_PREFS[criteria]
@@ -281,7 +292,10 @@ def _recommend_gemini(config: dict[str, Any], criteria: str) -> dict[str, Any]:
     labels: dict[str, str] = {}
     for mod in ("text", "image", "video"):
         row = _pick_from_prefs(buckets[mod], prefs[mod])
-        mid = (row or {}).get("repo_id") or defaults[mod]
+        mid = normalize_gemini_model(
+            (row or {}).get("repo_id") or defaults[mod],
+            retired_aliases=aliases,
+        )
         picks[mod] = mid
         labels[mod] = str((row or {}).get("label") or mid)
 

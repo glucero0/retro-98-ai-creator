@@ -1742,9 +1742,10 @@ code {
 }
 
 .control-tab-panel {
-  width: 100%;
+  width: auto;
+  max-width: 100%;
   box-sizing: border-box;
-  overflow: visible;
+  overflow: hidden;
 }
 
 .control-pane fieldset {
@@ -1770,7 +1771,9 @@ code {
 #win-control.app-window {
   height: auto;
   max-height: none;
-  overflow: visible;
+  /* Clip horizontal bleed from nested 98.css margins + fieldset borders */
+  overflow-x: hidden;
+  overflow-y: visible;
   box-sizing: border-box;
   min-height: 0;
 }
@@ -1786,27 +1789,55 @@ code {
 }
 
 #win-control.control-tab-display {
-  width: 560px !important;
-  max-width: min(560px, calc(100vw - 24px));
+  width: 600px !important;
+  max-width: min(600px, calc(100vw - 24px));
 }
 
-#win-control > .window-body,
-#win-control .control-tab-panel,
-#win-control .control-tab-panel > .window-body,
+/*
+  98.css sets .window-body { margin: 8px } (not padding). Forcing width:100% on those
+  bodies made the tab panel + fieldsets wider than the frame (borders spilled onto the desktop).
+*/
+#win-control > .window-body {
+  width: auto;
+  max-width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
+  overflow: hidden;
+  flex: 0 0 auto;
+  max-height: none;
+}
+
+#win-control .control-tab-panel {
+  width: auto;
+  max-width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
+  overflow: hidden;
+  display: block;
+}
+
+#win-control .control-tab-panel > .window-body {
+  width: auto;
+  max-width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
+  overflow: hidden;
+  flex: 0 0 auto;
+  max-height: none;
+}
+
 #win-control .control-pane,
 #win-control fieldset,
-#win-control .field-row-stacked {
-  width: 100%;
+#win-control .field-row-stacked,
+#win-control .field-row,
+#win-control .theme-custom-controls {
   max-width: 100%;
   min-width: 0;
   box-sizing: border-box;
 }
 
-#win-control > .window-body,
-#win-control .control-tab-panel > .window-body {
-  overflow: visible;
-  flex: 0 0 auto;
-  max-height: none;
+#win-control fieldset {
+  width: auto;
 }
 
 #win-control select,
@@ -1820,9 +1851,27 @@ code {
   box-sizing: border-box;
 }
 
-#win-control select {
-  /* Prevent option text from expanding the control in WebView2 */
-  field-sizing: fixed;
+#win-control .sound-volume-row input[type="range"] {
+  flex: 1 1 auto;
+  min-width: 0;
+  max-width: none;
+  width: auto;
+  display: block;
+}
+
+#win-control .scale-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  max-width: 100%;
+  min-width: 0;
+}
+
+#win-control .scale-row select {
+  flex: 1 1 auto;
+  min-width: 0;
+  width: auto;
+  max-width: 100%;
 }
 
 #win-control > .title-bar {

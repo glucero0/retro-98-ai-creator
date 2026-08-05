@@ -457,6 +457,20 @@
                     <input type="checkbox" id="opt-sound" />
                     <label for="opt-sound">Sound effects</label>
                   </div>
+                  <div class="field-row-stacked sound-volume-row">
+                    <label for="opt-sound-volume">Volume</label>
+                    <div class="field-row scale-row">
+                      <input
+                        id="opt-sound-volume"
+                        type="range"
+                        min="0"
+                        max="100"
+                        step="1"
+                        value="100"
+                      />
+                      <span id="opt-sound-volume-label" class="hint">100%</span>
+                    </div>
+                  </div>
                   <p class="hint">
                     Sparse Win95/98-style cues for create / extract success, errors, and cancel —
                     not click chirps. Synthesized in-app (no Microsoft system WAVs).

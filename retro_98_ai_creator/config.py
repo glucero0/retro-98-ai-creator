@@ -39,6 +39,8 @@ DEFAULTS: dict[str, Any] = {
         # When google_search is on: Pass 1 extract + Pass 2 verify at temperature 0
         "two_pass_verify": True,
         "temperature": 0.0,
+        # Runtime-learned: { "old-model-id": "replacement-id" } merged with built-ins
+        "retired_model_aliases": {},
     },
     "openrouter": {
         "text_model": DEFAULT_OPENROUTER_TEXT_MODEL,
@@ -70,6 +72,7 @@ DEFAULTS: dict[str, Any] = {
     },
     "ui": {
         "sound_enabled": True,
+        "sound_volume": 100,
         "crt_enabled": False,
         "ui_scale": 1.0,
         "ui_font": "inter",
@@ -151,26 +154,33 @@ def normalize_gemini_cfg(section: dict[str, Any] | None) -> dict[str, Any]:
         DEFAULT_GEMINI_IMAGE_MODEL,
         DEFAULT_GEMINI_TEXT_MODEL,
         DEFAULT_GEMINI_VIDEO_MODEL,
-        GEMINI_RETIRED_MODEL_ALIASES,
         _gemini_model_id,
+        learned_retired_aliases,
+        merged_retired_aliases,
         normalize_gemini_model,
     )
 
     out = dict(section or {})
     raw_key = (out.get("api_key") or "").strip()
     out["api_key"] = raw_key or None
-    text = normalize_gemini_model(out.get("text_model") or DEFAULT_GEMINI_TEXT_MODEL)
+    aliases = merged_retired_aliases(out)
+    text = normalize_gemini_model(
+        out.get("text_model") or DEFAULT_GEMINI_TEXT_MODEL,
+        retired_aliases=aliases,
+    )
     image_raw = _gemini_model_id(out.get("image_model") or DEFAULT_GEMINI_IMAGE_MODEL)
     image = (
-        GEMINI_RETIRED_MODEL_ALIASES.get(image_raw)
-        or GEMINI_RETIRED_MODEL_ALIASES.get(image_raw.lower())
+        aliases.get(image_raw)
+        or aliases.get(image_raw.lower())
         or image_raw
         or DEFAULT_GEMINI_IMAGE_MODEL
     )
     video = _gemini_model_id(out.get("video_model") or "") or DEFAULT_GEMINI_VIDEO_MODEL
+    video = aliases.get(video) or aliases.get(video.lower()) or video
     out["text_model"] = text
     out["image_model"] = image
     out["video_model"] = video
+    out["retired_model_aliases"] = learned_retired_aliases(out)
     return out
 
 

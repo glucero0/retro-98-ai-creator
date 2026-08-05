@@ -13,6 +13,7 @@
     modelLoading: false,
     preloadJobId: null,
     soundEnabled: true,
+    soundVolume: 100,
     crtEnabled: false,
     uiScale: 1,
     uiFont: "inter",
@@ -762,23 +763,81 @@
     o.type = type || "sine";
     o.frequency.setValueAtTime(freq, start);
     const a = attack != null ? attack : 0.01;
-    const r = release != null ? release : Math.max(0.04, dur * 0.55);
-    const p = peak != null ? peak : 0.08;
+    const vol = Math.max(0, Math.min(1, (Number(state.soundVolume) || 0) / 100));
+    const p = Math.max(0.0001, (peak != null ? peak : 0.35) * vol);
+    if (vol <= 0) return;
+    const end = start + Math.max(a + 0.03, dur);
     g.gain.setValueAtTime(0.0001, start);
     g.gain.exponentialRampToValueAtTime(p, start + a);
-    g.gain.exponentialRampToValueAtTime(0.0001, start + Math.max(a + 0.02, dur - 0.01));
+    g.gain.exponentialRampToValueAtTime(0.0001, end);
     o.connect(g);
     g.connect(ctx.destination);
     o.start(start);
-    o.stop(start + dur + 0.02);
+    o.stop(end + 0.02);
+  }
+
+  /** Bright metallic ding (Win95-style notify), not a soft sine beep. */
+  function _playDing(ctx, t0) {
+    const vol = Math.max(0, Math.min(1, (Number(state.soundVolume) || 0) / 100));
+    if (vol <= 0) return;
+
+    // Brief noise strike for the "hit"
+    try {
+      const dur = 0.035;
+      const frames = Math.max(1, Math.floor(ctx.sampleRate * dur));
+      const buf = ctx.createBuffer(1, frames, ctx.sampleRate);
+      const data = buf.getChannelData(0);
+      for (let i = 0; i < frames; i++) {
+        data[i] = (Math.random() * 2 - 1) * (1 - i / frames);
+      }
+      const src = ctx.createBufferSource();
+      src.buffer = buf;
+      const bp = ctx.createBiquadFilter();
+      bp.type = "bandpass";
+      bp.frequency.setValueAtTime(3200, t0);
+      bp.Q.setValueAtTime(2.2, t0);
+      const ng = ctx.createGain();
+      const strikePeak = 0.55 * vol;
+      ng.gain.setValueAtTime(0.0001, t0);
+      ng.gain.exponentialRampToValueAtTime(Math.max(0.0001, strikePeak), t0 + 0.002);
+      ng.gain.exponentialRampToValueAtTime(0.0001, t0 + dur);
+      src.connect(bp);
+      bp.connect(ng);
+      ng.connect(ctx.destination);
+      src.start(t0);
+      src.stop(t0 + dur + 0.01);
+    } catch (_) {
+      /* ignore */
+    }
+
+    // Inharmonic partials — reads as a small metal chime, not a beep
+    const partials = [
+      { freq: 2093.0, peak: 0.52, dur: 0.85, type: "sine" }, // bright fundamental
+      { freq: 3135.96, peak: 0.28, dur: 0.55, type: "sine" },
+      { freq: 4186.01, peak: 0.16, dur: 0.4, type: "sine" },
+      { freq: 1480.0, peak: 0.22, dur: 1.05, type: "triangle" }, // body / ring
+      { freq: 5274.0, peak: 0.08, dur: 0.28, type: "sine" },
+    ];
+    partials.forEach((p) => {
+      _tone(ctx, {
+        freq: p.freq,
+        type: p.type,
+        start: t0,
+        dur: p.dur,
+        peak: p.peak,
+        attack: 0.002,
+      });
+    });
   }
 
   /**
    * Sparse Win95/98-inspired UI cues (synthesized — no Microsoft WAV assets).
    * Kinds: success (chord), error (stop), notify (ding), cancel (soft drop).
+   * Peak levels are audible at 100% volume; Control Panel scales them.
    */
   function playUiSound(kind) {
     if (!state.soundEnabled) return;
+    if ((Number(state.soundVolume) || 0) <= 0) return;
     try {
       const ctx = ensureAudioCtx();
       const t0 = ctx.currentTime + 0.01;
@@ -790,9 +849,9 @@
             freq,
             type: "triangle",
             start: t0 + i * 0.02,
-            dur: 0.42 - i * 0.04,
-            peak: 0.055,
-            attack: 0.02,
+            dur: 0.5 - i * 0.04,
+            peak: 0.38,
+            attack: 0.015,
           });
         });
         return;
@@ -803,17 +862,17 @@
           freq: 185,
           type: "sawtooth",
           start: t0,
-          dur: 0.22,
-          peak: 0.06,
-          attack: 0.005,
+          dur: 0.24,
+          peak: 0.42,
+          attack: 0.004,
         });
         _tone(ctx, {
           freq: 155,
           type: "square",
           start: t0 + 0.12,
-          dur: 0.28,
-          peak: 0.045,
-          attack: 0.005,
+          dur: 0.3,
+          peak: 0.32,
+          attack: 0.004,
         });
         return;
       }
@@ -822,38 +881,42 @@
           freq: 392,
           type: "triangle",
           start: t0,
-          dur: 0.12,
-          peak: 0.04,
+          dur: 0.14,
+          peak: 0.32,
         });
         _tone(ctx, {
           freq: 311,
           type: "triangle",
           start: t0 + 0.09,
-          dur: 0.16,
-          peak: 0.035,
+          dur: 0.18,
+          peak: 0.26,
         });
         return;
       }
-      // notify / ding — soft bell ping
-      _tone(ctx, {
-        freq: 987.77,
-        type: "sine",
-        start: t0,
-        dur: 0.28,
-        peak: 0.07,
-        attack: 0.005,
-      });
-      _tone(ctx, {
-        freq: 1318.5,
-        type: "sine",
-        start: t0,
-        dur: 0.18,
-        peak: 0.03,
-        attack: 0.005,
-      });
+      // notify — metallic ding (also used as volume-slider preview)
+      _playDing(ctx, t0);
     } catch (_) {
       /* ignore */
     }
+  }
+
+  function clampSoundVolume(raw) {
+    const n = Number(raw);
+    if (!Number.isFinite(n)) return 100;
+    return Math.max(0, Math.min(100, Math.round(n)));
+  }
+
+  function syncSoundVolumeLabel(vol) {
+    const label = $("#opt-sound-volume-label");
+    if (label) label.textContent = clampSoundVolume(vol) + "%";
+  }
+
+  function applySoundVolume(raw, { preview } = {}) {
+    const vol = clampSoundVolume(raw);
+    state.soundVolume = vol;
+    if ($("#opt-sound-volume")) $("#opt-sound-volume").value = String(vol);
+    syncSoundVolumeLabel(vol);
+    if (preview) playUiSound("notify");
   }
 
   function api() {
@@ -3446,12 +3509,9 @@
     sel.innerHTML = "";
     filtered.forEach((m) => appendModelOption(sel, m, want));
     let pick = selected || defaults[want] || "";
+    // Do not re-inject ids missing from the catalog (retired models disappear here).
     if (pick && ![...sel.options].some((o) => o.value === pick)) {
-      appendModelOption(
-        sel,
-        { repo_id: pick, label: pick, notes: "saved" },
-        want
-      );
+      pick = defaults[want] || (sel.options[0] && sel.options[0].value) || "";
     }
     if (!pick && sel.options.length) pick = sel.options[0].value;
     if (pick) sel.value = pick;
@@ -3718,6 +3778,10 @@
     $("#opt-sound").checked = ui.sound_enabled !== false;
     $("#opt-crt").checked = !!ui.crt_enabled;
     state.soundEnabled = $("#opt-sound").checked;
+    applySoundVolume(ui.sound_volume != null ? ui.sound_volume : 100);
+    if ($("#opt-sound-volume")) {
+      $("#opt-sound-volume").disabled = !state.soundEnabled;
+    }
     state.crtEnabled = $("#opt-crt").checked;
     $("#crt-overlay").hidden = !state.crtEnabled;
     applyUiScale(ui.ui_scale != null ? ui.ui_scale : 1);
@@ -4072,6 +4136,9 @@
       },
       ui: {
         sound_enabled: $("#opt-sound").checked,
+        sound_volume: clampSoundVolume(
+          $("#opt-sound-volume") ? $("#opt-sound-volume").value : state.soundVolume
+        ),
         crt_enabled: $("#opt-crt").checked,
         ui_scale: readUiScaleFromControl(),
         ui_font:
@@ -4134,7 +4201,7 @@
     win.classList.toggle("control-tab-ai", ai);
     win.classList.toggle("control-tab-display", !ai);
     // Keep inline style in sync so open/drag layout matches CSS
-    win.style.width = ai ? "820px" : "560px";
+    win.style.width = ai ? "820px" : "600px";
     // Drop any leftover resize height so the panel sizes to content / max-height
     win.style.height = "";
     win.style.maxHeight = "";
@@ -4143,6 +4210,12 @@
 
   function applyDisplaySettingsFromControls() {
     state.soundEnabled = $("#opt-sound").checked;
+    applySoundVolume(
+      $("#opt-sound-volume") ? $("#opt-sound-volume").value : state.soundVolume
+    );
+    if ($("#opt-sound-volume")) {
+      $("#opt-sound-volume").disabled = !state.soundEnabled;
+    }
     state.crtEnabled = $("#opt-crt").checked;
     $("#crt-overlay").hidden = !state.crtEnabled;
     applyUiScale(readUiScaleFromControl());
@@ -4278,6 +4351,44 @@
     endBusy("Ready");
     showToast(String(err));
     playUiSound("error");
+  }
+
+  async function applyRetiredGeminiModel(info) {
+    if (!info) return;
+    state.generating = false;
+    setCreateBlocked(false);
+    endBusy("Ready");
+    const msg =
+      (info && info.message) ||
+      "A Gemini model was retired. Open Control Panel → AI Model to pick another.";
+    showToast(msg, 16000);
+    playUiSound("error");
+    openWindow("control");
+    focusWindow("control");
+    setControlTab("ai");
+    const gemini = (info && info.gemini) || {};
+    if ($("#backend-provider")) $("#backend-provider").value = "gemini";
+    // Prefill slots with replacements before refresh so pickers land on them.
+    if ($("#gemini-text-model") && gemini.text_model) {
+      $("#gemini-text-model").value = gemini.text_model;
+    }
+    if ($("#gemini-image-model") && gemini.image_model) {
+      $("#gemini-image-model").value = gemini.image_model;
+    }
+    if ($("#gemini-video-model") && gemini.video_model) {
+      $("#gemini-video-model").value = gemini.video_model;
+    }
+    try {
+      await refreshGeminiModelsForControlPanel();
+    } catch (_) {
+      /* refresh shows its own toast */
+    }
+    updateStudioBackendLabel({
+      config: {
+        backend: { provider: "gemini" },
+        gemini: gemini,
+      },
+    });
   }
 
   function applyGenerationCancelled() {
@@ -4503,6 +4614,10 @@
       }
 
       if (job.status === "error" || job.status === "missing") {
+        if (job.retired_model) {
+          await applyRetiredGeminiModel(job.retired_model);
+          return;
+        }
         if (kind === "generate") {
           applyGenerationError(job.error || "Generation failed");
         } else if (kind === "extract") {
@@ -4699,6 +4814,11 @@
   window.__onGenerateError = function (err) {
     if (!state.generating && !busy.visible) return;
     applyGenerationError(err);
+  };
+
+  window.__onRetiredGeminiModel = function (info) {
+    if (!info) return;
+    applyRetiredGeminiModel(info);
   };
 
   window.__onGenerateCancelled = function () {
@@ -7027,7 +7147,28 @@
 
     $("#opt-sound").addEventListener("change", () => {
       state.soundEnabled = $("#opt-sound").checked;
+      if ($("#opt-sound-volume")) {
+        $("#opt-sound-volume").disabled = !state.soundEnabled;
+      }
+      if (state.soundEnabled) playUiSound("notify");
     });
+    let _soundVolPreviewTimer = null;
+    if ($("#opt-sound-volume")) {
+      $("#opt-sound-volume").disabled = !state.soundEnabled;
+      const onVolumeInput = () => {
+        applySoundVolume($("#opt-sound-volume").value);
+        clearTimeout(_soundVolPreviewTimer);
+        _soundVolPreviewTimer = setTimeout(() => {
+          playUiSound("notify");
+        }, 90);
+      };
+      $("#opt-sound-volume").addEventListener("input", onVolumeInput);
+      $("#opt-sound-volume").addEventListener("change", () => {
+        // Final settle after drag; input debounce may already have previewed.
+        clearTimeout(_soundVolPreviewTimer);
+        applySoundVolume($("#opt-sound-volume").value, { preview: true });
+      });
+    }
     $("#opt-crt").addEventListener("change", () => {
       state.crtEnabled = $("#opt-crt").checked;
       $("#crt-overlay").hidden = !state.crtEnabled;

@@ -39,7 +39,9 @@ def test_resolve_gemini_defaults_when_empty():
 
 def test_resolve_gemini_remaps_retired_text_model():
     cfg = {"text_model": "gemini-2.0-flash-lite"}
-    assert resolve_gemini_model_for_modality(cfg, "text") == "gemini-2.5-flash-lite"
+    assert resolve_gemini_model_for_modality(cfg, "text") == "gemini-3.1-flash-lite"
+    cfg2 = {"text_model": "gemini-2.5-flash-lite"}
+    assert resolve_gemini_model_for_modality(cfg2, "text") == "gemini-3.1-flash-lite"
 
 
 def test_resolve_openrouter_modality_slots():

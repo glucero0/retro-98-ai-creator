@@ -29,11 +29,11 @@ def test_normalize_criteria_aliases():
 def test_pick_from_prefs_prefers_listed_id():
     rows = [
         {"repo_id": "gemini-2.5-flash", "label": "Flash", "modality": "text"},
-        {"repo_id": "gemini-2.5-flash-lite", "label": "Lite", "modality": "text"},
+        {"repo_id": "gemini-3.1-flash-lite", "label": "Lite", "modality": "text"},
         {"repo_id": "gemini-2.5-pro", "label": "Pro", "modality": "text"},
     ]
-    picked = _pick_from_prefs(rows, ("gemini-2.5-flash-lite", "gemini-2.5-flash"))
-    assert picked["repo_id"] == "gemini-2.5-flash-lite"
+    picked = _pick_from_prefs(rows, ("gemini-3.1-flash-lite", "gemini-2.5-flash"))
+    assert picked["repo_id"] == "gemini-3.1-flash-lite"
 
 
 def test_openrouter_economical_balanced_quality_picks():
@@ -79,6 +79,14 @@ def test_recommend_gemini_uses_suggested_without_key(monkeypatch):
     assert res["picks"]["video"]
     mods = _by_modality(res["models"])
     assert any(m["repo_id"] == res["picks"]["text"] for m in mods["text"])
+
+
+def test_recommend_gemini_economical_avoids_retired_flash_lite():
+    cfg = {"backend": {"provider": "gemini"}, "gemini": {}}
+    res = recommend_models_for_config(cfg, "economical", provider="gemini")
+    assert res["ok"] is True
+    assert res["picks"]["text"] == "gemini-3.1-flash-lite"
+    assert "2.5-flash-lite" not in res["picks"]["text"]
 
 
 def test_recommend_hf_quality_pref(monkeypatch):

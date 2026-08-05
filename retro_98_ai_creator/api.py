@@ -13,7 +13,11 @@ from . import __version__
 from .config import SUGGESTED_MODELS, load_config, save_config
 from .gemini_provider import (
     SUGGESTED_GEMINI_MODELS,
+    extract_model_from_gemini_error,
+    is_retired_gemini_error,
+    learn_retired_gemini_model,
     list_available_gemini_models,
+    merged_retired_aliases,
     resolve_api_key as resolve_gemini_key,
 )
 from .creation_utils import AmbiguousGameError
@@ -83,6 +87,38 @@ class Api:
                 return {"id": job_id, "status": "missing", "error": "Unknown job id"}
             # Return a shallow copy so callers can mutate safely
             return dict(job)
+
+    def _maybe_learn_retired_gemini(
+        self, exc: BaseException, *, fallback_model: str = ""
+    ) -> dict[str, Any] | None:
+        """
+        If Gemini returned a retired/missing-model error, persist an alias,
+        switch the active slot when needed, and return UI details.
+        """
+        backend = (
+            (self.config.get("backend") or {}).get("provider") or "gemini"
+        ).lower().strip()
+        if backend not in {"gemini", "google", "google-gemini"}:
+            return None
+        if not is_retired_gemini_error(exc):
+            return None
+        mid = extract_model_from_gemini_error(exc) or (fallback_model or "").strip()
+        if not mid:
+            return None
+        try:
+            info = learn_retired_gemini_model(self.config, mid)
+        except Exception:  # noqa: BLE001
+            logger.exception("Failed to learn retired Gemini model %s", mid)
+            return None
+        self.config = info["config"]
+        return {
+            "retired": info["retired"],
+            "replacement": info["replacement"],
+            "modality": info["modality"],
+            "switched": info["switched"],
+            "message": info["message"],
+            "gemini": (self.config.get("gemini") or {}),
+        }
 
     def ping(self) -> dict[str, Any]:
         """Health check used by the UI to verify the Python bridge."""
@@ -159,16 +195,23 @@ class Api:
 
     def list_gemini_models(self) -> dict[str, Any]:
         """Fetch generateContent models available to the saved Gemini API key."""
-        key = resolve_gemini_key(self.config.get("gemini") or {})
+        gemini_cfg = self.config.get("gemini") or {}
+        key = resolve_gemini_key(gemini_cfg)
+        aliases = merged_retired_aliases(gemini_cfg)
         if not key:
             return {
                 "ok": False,
                 "error": "Paste a Gemini API key and Save before refreshing the model list.",
-                "models": SUGGESTED_GEMINI_MODELS,
+                "models": [
+                    m
+                    for m in SUGGESTED_GEMINI_MODELS
+                    if (m.get("repo_id") or "").lower()
+                    not in {k.lower() for k in aliases}
+                ],
                 "source": "fallback",
             }
         try:
-            models = list_available_gemini_models(key)
+            models = list_available_gemini_models(key, retired_aliases=aliases)
             return {
                 "ok": True,
                 "models": models,
@@ -180,7 +223,12 @@ class Api:
             return {
                 "ok": False,
                 "error": str(exc),
-                "models": SUGGESTED_GEMINI_MODELS,
+                "models": [
+                    m
+                    for m in SUGGESTED_GEMINI_MODELS
+                    if (m.get("repo_id") or "").lower()
+                    not in {k.lower() for k in aliases}
+                ],
                 "source": "fallback",
             }
 
@@ -544,16 +592,38 @@ class Api:
             except Exception as exc:  # noqa: BLE001
                 logger.exception("Generation failed")
                 err = str(exc)
-                if "torch" in err.lower() or isinstance(exc, ModuleNotFoundError):
-                    err = (
-                        f"{exc}\n\nFor local HF backend install:\n"
-                        "  pip install -r requirements-local.txt\n"
-                        "Or switch backend to Gemini in Control Panel."
+                retired = self._maybe_learn_retired_gemini(exc)
+                if retired:
+                    err = retired["message"]
+                    self._set_job(
+                        job_id,
+                        status="error",
+                        error=err,
+                        retired_model=retired,
                     )
-                self._set_job(job_id, status="error", error=err)
-                self._push_best_effort(
-                    f"window.__onGenerateError && window.__onGenerateError({json.dumps(err)})"
-                )
+                    try:
+                        payload = json.dumps(retired, ensure_ascii=False)
+                        self._push_best_effort(
+                            "window.__onRetiredGeminiModel && "
+                            f"window.__onRetiredGeminiModel({payload})"
+                        )
+                    except (TypeError, ValueError):
+                        self._push_best_effort(
+                            "window.__onRetiredGeminiModel && "
+                            "window.__onRetiredGeminiModel("
+                            f"JSON.parse({json.dumps(json.dumps(retired))}))"
+                        )
+                else:
+                    if "torch" in err.lower() or isinstance(exc, ModuleNotFoundError):
+                        err = (
+                            f"{exc}\n\nFor local HF backend install:\n"
+                            "  pip install -r requirements-local.txt\n"
+                            "Or switch backend to Gemini in Control Panel."
+                        )
+                    self._set_job(job_id, status="error", error=err)
+                    self._push_best_effort(
+                        f"window.__onGenerateError && window.__onGenerateError({json.dumps(err)})"
+                    )
             finally:
                 with self._jobs_lock:
                     self._cancel_events.pop(job_id, None)
@@ -735,7 +805,18 @@ class Api:
                 )
             except Exception as exc:  # noqa: BLE001
                 logger.exception("Extract text failed")
-                self._set_job(job_id, status="error", error=str(exc))
+                err = str(exc)
+                retired = self._maybe_learn_retired_gemini(exc)
+                if retired:
+                    err = retired["message"]
+                    self._set_job(
+                        job_id,
+                        status="error",
+                        error=err,
+                        retired_model=retired,
+                    )
+                else:
+                    self._set_job(job_id, status="error", error=err)
             finally:
                 with self._jobs_lock:
                     self._cancel_events.pop(job_id, None)
