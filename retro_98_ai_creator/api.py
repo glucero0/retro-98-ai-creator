@@ -13,7 +13,11 @@ from . import __version__
 from .config import SUGGESTED_MODELS, load_config, save_config
 from .gemini_provider import (
     SUGGESTED_GEMINI_MODELS,
+    extract_model_from_gemini_error,
+    is_retired_gemini_error,
+    learn_retired_gemini_model,
     list_available_gemini_models,
+    merged_retired_aliases,
     resolve_api_key as resolve_gemini_key,
 )
 from .creation_utils import AmbiguousGameError
@@ -27,6 +31,27 @@ from .storage import ArchiveStore
 
 logger = logging.getLogger(__name__)
 
+
+def _file_dialog(kind: str) -> Any:
+    """pywebview file-dialog kind. Prefer FileDialog enum over deprecated constants."""
+    import webview
+
+    fd = getattr(webview, "FileDialog", None)
+    if fd is not None:
+        try:
+            return getattr(fd, kind.upper())
+        except AttributeError as exc:
+            raise ValueError(f"Unknown FileDialog kind: {kind!r}") from exc
+    # Older pywebview (<6) fallback
+    legacy = {
+        "open": "OPEN_DIALOG",
+        "save": "SAVE_DIALOG",
+        "folder": "FOLDER_DIALOG",
+    }
+    name = legacy.get(kind.lower())
+    if not name or not hasattr(webview, name):
+        raise ValueError(f"Unknown file dialog kind: {kind!r}")
+    return getattr(webview, name)
 
 class Api:
     """Methods on this class are callable from window.pywebview.api in the UI."""
@@ -63,6 +88,38 @@ class Api:
             # Return a shallow copy so callers can mutate safely
             return dict(job)
 
+    def _maybe_learn_retired_gemini(
+        self, exc: BaseException, *, fallback_model: str = ""
+    ) -> dict[str, Any] | None:
+        """
+        If Gemini returned a retired/missing-model error, persist an alias,
+        switch the active slot when needed, and return UI details.
+        """
+        backend = (
+            (self.config.get("backend") or {}).get("provider") or "gemini"
+        ).lower().strip()
+        if backend not in {"gemini", "google", "google-gemini"}:
+            return None
+        if not is_retired_gemini_error(exc):
+            return None
+        mid = extract_model_from_gemini_error(exc) or (fallback_model or "").strip()
+        if not mid:
+            return None
+        try:
+            info = learn_retired_gemini_model(self.config, mid)
+        except Exception:  # noqa: BLE001
+            logger.exception("Failed to learn retired Gemini model %s", mid)
+            return None
+        self.config = info["config"]
+        return {
+            "retired": info["retired"],
+            "replacement": info["replacement"],
+            "modality": info["modality"],
+            "switched": info["switched"],
+            "message": info["message"],
+            "gemini": (self.config.get("gemini") or {}),
+        }
+
     def ping(self) -> dict[str, Any]:
         """Health check used by the UI to verify the Python bridge."""
         return {"ok": True, "version": __version__}
@@ -80,6 +137,9 @@ class Api:
             gemini_cfg=self.config.get("gemini") if provider == "gemini" else None,
             openrouter_cfg=(
                 self.config.get("openrouter") if provider == "openrouter" else None
+            ),
+            huggingface_cfg=(
+                self.config.get("huggingface") if provider == "huggingface" else None
             ),
         )
         return result
@@ -135,16 +195,23 @@ class Api:
 
     def list_gemini_models(self) -> dict[str, Any]:
         """Fetch generateContent models available to the saved Gemini API key."""
-        key = resolve_gemini_key(self.config.get("gemini") or {})
+        gemini_cfg = self.config.get("gemini") or {}
+        key = resolve_gemini_key(gemini_cfg)
+        aliases = merged_retired_aliases(gemini_cfg)
         if not key:
             return {
                 "ok": False,
                 "error": "Paste a Gemini API key and Save before refreshing the model list.",
-                "models": SUGGESTED_GEMINI_MODELS,
+                "models": [
+                    m
+                    for m in SUGGESTED_GEMINI_MODELS
+                    if (m.get("repo_id") or "").lower()
+                    not in {k.lower() for k in aliases}
+                ],
                 "source": "fallback",
             }
         try:
-            models = list_available_gemini_models(key)
+            models = list_available_gemini_models(key, retired_aliases=aliases)
             return {
                 "ok": True,
                 "models": models,
@@ -156,9 +223,79 @@ class Api:
             return {
                 "ok": False,
                 "error": str(exc),
-                "models": SUGGESTED_GEMINI_MODELS,
+                "models": [
+                    m
+                    for m in SUGGESTED_GEMINI_MODELS
+                    if (m.get("repo_id") or "").lower()
+                    not in {k.lower() for k in aliases}
+                ],
                 "source": "fallback",
             }
+
+    def list_hf_models(self) -> dict[str, Any]:
+        """Fetch top Hub models (by downloads) for text / image / video slots."""
+        from .hf_provider import list_available_hf_models, merge_hf_model_suggestions
+
+        try:
+            live = list_available_hf_models(self.config.get("huggingface") or {})
+            models = merge_hf_model_suggestions(live, SUGGESTED_MODELS)
+            return {
+                "ok": True,
+                "models": models,
+                "source": "live",
+                "count": len(live),
+                "liveCount": len(live),
+            }
+        except Exception as exc:  # noqa: BLE001
+            logger.warning("list_hf_models failed: %s", exc)
+            return {
+                "ok": False,
+                "error": str(exc),
+                "models": SUGGESTED_MODELS,
+                "source": "fallback",
+            }
+
+    def list_openrouter_models(self) -> dict[str, Any]:
+        """Fetch popular OpenRouter models for text / image / video slots."""
+        from .openrouter_provider import (
+            list_available_openrouter_models,
+            merge_openrouter_model_suggestions,
+        )
+
+        try:
+            live = list_available_openrouter_models(self.config.get("openrouter") or {})
+            models = merge_openrouter_model_suggestions(live, SUGGESTED_OPENROUTER_MODELS)
+            return {
+                "ok": True,
+                "models": models,
+                "source": "live",
+                "count": len(live),
+                "liveCount": len(live),
+            }
+        except Exception as exc:  # noqa: BLE001
+            logger.warning("list_openrouter_models failed: %s", exc)
+            return {
+                "ok": False,
+                "error": str(exc),
+                "models": SUGGESTED_OPENROUTER_MODELS,
+                "source": "fallback",
+            }
+
+    def recommend_models(self, criteria: str = "balanced", provider: str = "") -> dict[str, Any]:
+        """Pick Text / Image / Video models from live catalogs for a provider."""
+        from .recommend_models import recommend_models_for_config
+
+        try:
+            return recommend_models_for_config(
+                self.config,
+                criteria,
+                provider=(provider or "").strip() or None,
+            )
+        except ValueError as exc:
+            return {"ok": False, "error": str(exc)}
+        except Exception as exc:  # noqa: BLE001
+            logger.warning("recommend_models failed: %s", exc)
+            return {"ok": False, "error": str(exc)}
 
     def save_settings(self, updates: dict[str, Any]) -> dict[str, Any]:
         """Persist Control Panel changes."""
@@ -179,18 +316,23 @@ class Api:
         provider = ((self.config.get("backend") or {}).get("provider") or "gemini").lower()
         if reload_model and provider in ("huggingface", "hf", "local", "phi"):
             try:
+                from .hf_media import local_media_manager
                 from .llm import model_manager
 
                 model_manager.unload()
+                local_media_manager.unload()
                 result["modelStatus"] = provider_status(self.config)
-                result["message"] = "Settings saved. Local model will reload on next generation."
+                result["message"] = (
+                    "Settings saved. Local models will reload on next generation "
+                    "(or use Download to preload text, image, and video)."
+                )
             except Exception:  # noqa: BLE001
                 pass
 
         return result
 
     def preload_model(self) -> dict[str, Any]:
-        """Download / load local HF model (API backends need no download)."""
+        """Download / load local HF text, image, and video models (API backends: no-op)."""
         provider = ((self.config.get("backend") or {}).get("provider") or "gemini").lower()
         if provider in ("gemini", "google", "google-gemini"):
             status = provider_status(self.config)
@@ -213,22 +355,29 @@ class Api:
             job_id,
             status="running",
             kind="preload",
-            progress={"message": "Starting model download / load…", "phase": "download"},
+            progress={
+                "message": "Starting download of text, image, and video models…",
+                "phase": "download",
+            },
         )
 
         def _run() -> None:
             try:
-                from .llm import model_manager
+                from .hf_media import preload_local_models
 
-                model_manager.set_progress_callback(
-                    lambda payload: self._on_job_progress(job_id, payload)
+                info = preload_local_models(
+                    self.config.get("huggingface") or {},
+                    progress=lambda payload: self._on_job_progress(job_id, payload),
                 )
-                model_manager.ensure_loaded(self.config.get("huggingface") or {})
                 self._set_job(
                     job_id,
                     status="done",
-                    progress={"message": "Model ready", "percent": 100, "phase": "ready"},
-                    result={"modelStatus": model_manager.status},
+                    progress={
+                        "message": "Text, image, and video models ready",
+                        "percent": 100,
+                        "phase": "ready",
+                    },
+                    result={"modelStatus": provider_status(self.config), "preloaded": info},
                 )
             except Exception as exc:  # noqa: BLE001
                 logger.exception("Model preload failed")
@@ -239,7 +388,11 @@ class Api:
                 )
 
         threading.Thread(target=_run, daemon=True, name="rgc-preload").start()
-        return {"ok": True, "job_id": job_id, "message": "Model download / load started."}
+        return {
+            "ok": True,
+            "job_id": job_id,
+            "message": "Downloading text, image, and video models…",
+        }
 
     # ── Archives ──────────────────────────────────────────────────────
 
@@ -267,14 +420,16 @@ class Api:
         creation_type: str,
         exact_title: bool = False,
         creation_description: str = "",
+        basis_creation_id: str = "",
     ) -> dict[str, Any]:
         """Start generation in a background thread; UI must poll get_job(job_id)."""
         logger.info(
-            "create_creation requested: %s / %s / %s (exact=%s)",
+            "create_creation requested: %s / %s / %s (exact=%s, basis=%s)",
             game,
             platform,
             creation_type,
             exact_title,
+            (basis_creation_id or "")[:24] or "-",
         )
 
         if not game or not platform or not creation_type:
@@ -287,6 +442,19 @@ class Api:
         from .modality import check_prompt_model_compatibility
 
         desc_preview = (creation_description or "").strip() or game
+        basis_id = (basis_creation_id or "").strip()
+        basis_media: dict[str, Any] | None = None
+        if basis_id:
+            try:
+                basis_media = self._resolve_basis_media(basis_id)
+            except Exception as exc:  # noqa: BLE001
+                return {"ok": False, "error": str(exc)}
+            bmod = (basis_media or {}).get("modality")
+            if bmod == "image":
+                desc_preview = f"Create an image: {desc_preview}"
+            elif bmod == "video":
+                desc_preview = f"Generate a video: {desc_preview}"
+
         model_id, provider = _active_model_and_provider(self.config)
         compat = check_prompt_model_compatibility(
             desc_preview,
@@ -295,6 +463,9 @@ class Api:
             gemini_cfg=self.config.get("gemini") if provider == "gemini" else None,
             openrouter_cfg=(
                 self.config.get("openrouter") if provider == "openrouter" else None
+            ),
+            huggingface_cfg=(
+                self.config.get("huggingface") if provider == "huggingface" else None
             ),
         )
         if not compat.get("ok"):
@@ -321,8 +492,9 @@ class Api:
             kind="generate",
             progress={
                 "message": f"Starting generation for {game}…",
+                "percent": 0,
                 "phase": "generate",
-                "title": "Generating document",
+                "title": "Creating…",
             },
         )
 
@@ -346,15 +518,22 @@ class Api:
                     exact_title=bool(exact_title),
                     creation_description=desc_override or None,
                     cancel_event=cancel_evt,
+                    basis_media=basis_media,
                 )
                 if cancel_evt.is_set():
                     raise GenerationCancelled("Cancelled by user")
                 saved = self.store.upsert(result)
+                logger.info(
+                    "Generation complete: %s modality=%s model=%s",
+                    saved.get("id"),
+                    saved.get("modality"),
+                    (saved.get("_model") or {}).get("repo_id") or "-",
+                )
                 self._set_job(
                     job_id,
                     status="done",
                     result=saved,
-                    progress={"message": "Document ready", "percent": 100, "phase": "ready"},
+                    progress={"message": "Ready", "percent": 100, "phase": "ready"},
                 )
                 try:
                     payload = json.dumps(saved, ensure_ascii=False)
@@ -413,16 +592,38 @@ class Api:
             except Exception as exc:  # noqa: BLE001
                 logger.exception("Generation failed")
                 err = str(exc)
-                if "torch" in err.lower() or isinstance(exc, ModuleNotFoundError):
-                    err = (
-                        f"{exc}\n\nFor local HF backend install:\n"
-                        "  pip install -r requirements-local.txt\n"
-                        "Or switch backend to Gemini in Control Panel."
+                retired = self._maybe_learn_retired_gemini(exc)
+                if retired:
+                    err = retired["message"]
+                    self._set_job(
+                        job_id,
+                        status="error",
+                        error=err,
+                        retired_model=retired,
                     )
-                self._set_job(job_id, status="error", error=err)
-                self._push_best_effort(
-                    f"window.__onGenerateError && window.__onGenerateError({json.dumps(err)})"
-                )
+                    try:
+                        payload = json.dumps(retired, ensure_ascii=False)
+                        self._push_best_effort(
+                            "window.__onRetiredGeminiModel && "
+                            f"window.__onRetiredGeminiModel({payload})"
+                        )
+                    except (TypeError, ValueError):
+                        self._push_best_effort(
+                            "window.__onRetiredGeminiModel && "
+                            "window.__onRetiredGeminiModel("
+                            f"JSON.parse({json.dumps(json.dumps(retired))}))"
+                        )
+                else:
+                    if "torch" in err.lower() or isinstance(exc, ModuleNotFoundError):
+                        err = (
+                            f"{exc}\n\nFor local HF backend install:\n"
+                            "  pip install -r requirements-local.txt\n"
+                            "Or switch backend to Gemini in Control Panel."
+                        )
+                    self._set_job(job_id, status="error", error=err)
+                    self._push_best_effort(
+                        f"window.__onGenerateError && window.__onGenerateError({json.dumps(err)})"
+                    )
             finally:
                 with self._jobs_lock:
                     self._cancel_events.pop(job_id, None)
@@ -479,9 +680,16 @@ class Api:
 
     def export_creation_txt(self, creation: dict[str, Any]) -> str:
         """Export only the generated text body (no prompt or metadata)."""
+        from .extract_text import get_extracted_text
+
         modality = str((creation or {}).get("modality") or "text").lower()
         if modality in {"image", "video"}:
-            raise RuntimeError(f"TXT export is not available for {modality} creations.")
+            extracted = get_extracted_text(creation)
+            if extracted:
+                return extracted + ("\n" if not extracted.endswith("\n") else "")
+            raise RuntimeError(
+                f"TXT export is not available for {modality} creations until you run Extract Text…"
+            )
 
         lines: list[str] = []
         overview = str(creation.get("overview") or "").strip()
@@ -511,8 +719,171 @@ class Api:
             lines.append("")
         return "\n".join(lines).strip() + ("\n" if lines else "")
 
+    def extract_creation_text(self, creation_id: str) -> dict[str, Any]:
+        """Start OCR (image) or transcription (video) in a background job."""
+        from .cancellation import GenerationCancelled
+        from .extract_text import extract_text_from_creation
+        from .media_store import resolve_media_path
+
+        creation_id = (creation_id or "").strip()
+        if not creation_id:
+            return {"ok": False, "error": "Missing creation id"}
+
+        target = next((c for c in self.store.load() if c.get("id") == creation_id), None)
+        if not target:
+            return {"ok": False, "error": "Creation not found"}
+        modality = str(target.get("modality") or "").lower()
+        if modality not in {"image", "video"}:
+            return {"ok": False, "error": "Extract Text is only for image or video creations."}
+
+        path = resolve_media_path(target.get("mediaPath"), config=self.config)
+        if path is None:
+            return {"ok": False, "error": "Media file is missing on disk."}
+
+        if not self._gen_lock.acquire(blocking=False):
+            return {"ok": False, "error": "Another AI job is already in progress."}
+
+        job_id = f"extract_{uuid.uuid4().hex[:10]}"
+        cancel_evt = threading.Event()
+        with self._jobs_lock:
+            self._cancel_events[job_id] = cancel_evt
+        title = "Extracting text" if modality == "image" else "Transcribing"
+        self._set_job(
+            job_id,
+            status="running",
+            kind="extract",
+            progress={
+                "message": f"Starting {title.lower()}…",
+                "percent": 0,
+                "phase": "extract",
+                "title": title,
+            },
+        )
+
+        def _progress(payload: Any) -> None:
+            from .cancellation import GenerationCancelled as _GC
+
+            if cancel_evt.is_set():
+                raise _GC("Cancelled by user")
+            self._on_job_progress(job_id, payload)
+
+        def _run() -> None:
+            try:
+                updated = extract_text_from_creation(
+                    target,
+                    config=self.config,
+                    media_path=path,
+                    progress=_progress,
+                    cancel_event=cancel_evt,
+                )
+                if cancel_evt.is_set():
+                    raise GenerationCancelled("Cancelled by user")
+                saved = self.store.upsert(updated)
+                self._set_job(
+                    job_id,
+                    status="done",
+                    result=saved,
+                    progress={
+                        "message": "Ready",
+                        "percent": 100,
+                        "phase": "ready",
+                        "title": title,
+                    },
+                )
+            except GenerationCancelled:
+                logger.info("Extract text cancelled: %s", job_id)
+                self._set_job(
+                    job_id,
+                    status="cancelled",
+                    error="Cancelled",
+                    progress={
+                        "message": "Cancelled",
+                        "percent": 100,
+                        "phase": "cancelled",
+                        "title": "Cancelled",
+                    },
+                )
+            except Exception as exc:  # noqa: BLE001
+                logger.exception("Extract text failed")
+                err = str(exc)
+                retired = self._maybe_learn_retired_gemini(exc)
+                if retired:
+                    err = retired["message"]
+                    self._set_job(
+                        job_id,
+                        status="error",
+                        error=err,
+                        retired_model=retired,
+                    )
+                else:
+                    self._set_job(job_id, status="error", error=err)
+            finally:
+                with self._jobs_lock:
+                    self._cancel_events.pop(job_id, None)
+                self._gen_lock.release()
+
+        threading.Thread(target=_run, daemon=True, name=job_id).start()
+        return {"ok": True, "job_id": job_id}
+
+    def _resolve_basis_media(self, creation_id: str) -> dict[str, Any]:
+        """Load Archive media for Studio image/video → new media generation."""
+        from .media_store import mime_for_path, read_media_bytes, resolve_media_path
+        from .modality import normalize_modality
+
+        cid = (creation_id or "").strip()
+        if not cid:
+            raise RuntimeError("Media basis id missing.")
+        source = None
+        for item in self.store.load():
+            if str(item.get("id") or "") == cid:
+                source = item
+                break
+        if not source:
+            raise RuntimeError("Media basis creation was not found in Archives.")
+        mod = normalize_modality(source.get("modality"), default="")
+        mime = str(source.get("mimeType") or "").lower()
+        if not mod:
+            if mime.startswith("video/"):
+                mod = "video"
+            elif mime.startswith("image/"):
+                mod = "image"
+        if mod not in {"image", "video"}:
+            raise RuntimeError("Studio media basis must be an image or video creation.")
+        path = resolve_media_path(source.get("mediaPath"), config=self.config)
+        if path is None:
+            raise RuntimeError("Media basis file is missing on disk.")
+        mime = mime or mime_for_path(path)
+
+        if mod == "image":
+            raw = read_media_bytes(source.get("mediaPath"), config=self.config)
+            if not raw:
+                raise RuntimeError("Could not read basis image bytes.")
+            return {
+                "modality": "image",
+                "bytes": raw,
+                "mime_type": mime or "image/png",
+                "creation_id": cid,
+            }
+
+        # Video basis: use a still frame as image reference for I2V / edit flows
+        from .video_edit import extract_video_frame_png
+
+        try:
+            frame = extract_video_frame_png(path, at_seconds=0.0)
+        except Exception as exc:
+            raise RuntimeError(
+                f"Could not prepare video basis (need ffmpeg for a reference frame): {exc}"
+            ) from exc
+        return {
+            "modality": "video",
+            "bytes": frame,
+            "mime_type": "image/png",
+            "creation_id": cid,
+            "source_modality": "video",
+        }
+
     def get_media_payload(self, creation: dict[str, Any] | None = None) -> dict[str, Any]:
-        """Return media for Viewer: data URL (image) or http URL (video)."""
+        """Return media for Viewer/Studio: data URL and/or same-origin HTTP URL."""
         from .media_store import media_data_url, media_file_uri, mime_for_path, resolve_media_path
 
         creation = creation or {}
@@ -523,29 +894,38 @@ class Api:
             return {"ok": False, "error": "Media file not found"}
         mime = mime or mime_for_path(path)
         modality = str(creation.get("modality") or "").lower()
-        if modality == "video" or (mime or "").startswith("video/"):
-            # Prefer same-origin HTTP URL — WebView blocks file:// from localhost pages.
-            http_url = None
-            if self._ui_origin:
-                http_url = f"{self._ui_origin}/media/{path.name}"
-            uri = http_url or media_file_uri(media_path)
+        is_video = modality == "video" or (mime or "").startswith("video/")
+
+        # Prefer same-origin HTTP — WebView blocks file:// from localhost pages,
+        # and large image data URLs can choke the pywebview bridge.
+        http_url = None
+        if self._ui_origin:
+            http_url = f"{self._ui_origin}/media/{path.name}"
+        file_uri = http_url or media_file_uri(media_path)
+
+        if is_video:
             return {
                 "ok": True,
                 "modality": "video",
                 "mimeType": mime,
-                "fileUrl": uri,
+                "fileUrl": file_uri,
                 "mediaPath": media_path,
             }
+
         data_url = media_data_url(media_path, mime)
-        if not data_url:
+        if not data_url and not file_uri:
             return {"ok": False, "error": "Could not read media"}
-        return {
+        out: dict[str, Any] = {
             "ok": True,
             "modality": "image",
             "mimeType": mime,
-            "dataUrl": data_url,
             "mediaPath": media_path,
         }
+        if file_uri:
+            out["fileUrl"] = file_uri
+        if data_url:
+            out["dataUrl"] = data_url
+        return out
 
     def replace_creation_media(
         self, creation_id: str, base64_data: str, mime_type: str = "image/png"
@@ -588,6 +968,9 @@ class Api:
         target["mediaPath"] = stored["mediaPath"]
         target["mimeType"] = stored["mimeType"]
         target["modality"] = "image"
+        from .extract_text import clear_extraction_fields
+
+        target = clear_extraction_fields(target)
         saved = self.store.upsert(target)
         return {"ok": True, "creation": saved}
 
@@ -697,6 +1080,9 @@ class Api:
             target["mediaPath"] = stored["mediaPath"]
             target["mimeType"] = stored["mimeType"]
             target["modality"] = "video"
+            from .extract_text import clear_extraction_fields
+
+            target = clear_extraction_fields(target)
             saved = self.store.upsert(target)
             return {"ok": True, "creation": saved}
         except Exception as exc:  # noqa: BLE001
@@ -728,7 +1114,7 @@ class Api:
                 or "video"
             )
             result = self._window.create_file_dialog(
-                webview.SAVE_DIALOG,
+                _file_dialog("save"),
                 save_filename=f"{safe}.mp4",
             )
             if not result:
@@ -876,7 +1262,7 @@ class Api:
         safe = "".join(c if c.isalnum() or c in "-_ " else "_" for c in title)[:40].strip() or "creation"
         default_name = f"{safe}{ext}"
         result = self._window.create_file_dialog(
-            webview.SAVE_DIALOG,
+            _file_dialog("save"),
             save_filename=default_name,
         )
         if not result:
@@ -892,7 +1278,7 @@ class Api:
         if self._window is None:
             return {"ok": False, "error": "No window"}
         result = self._window.create_file_dialog(
-            webview.SAVE_DIALOG,
+            _file_dialog("save"),
             save_filename=default_name,
         )
         if not result:
@@ -922,7 +1308,7 @@ class Api:
             return {"ok": False, "error": f"Invalid base64: {exc}"}
 
         result = self._window.create_file_dialog(
-            webview.SAVE_DIALOG,
+            _file_dialog("save"),
             save_filename=default_name,
         )
         if not result:
@@ -940,7 +1326,7 @@ class Api:
         if self._window is None:
             return {"ok": False, "error": "No window"}
         result = self._window.create_file_dialog(
-            webview.OPEN_DIALOG,
+            _file_dialog("open"),
             allow_multiple=False,
             file_types=("Text Files (*.txt;*.md;*.markdown;*.csv)", "All Files (*.*)"),
         )
@@ -999,7 +1385,7 @@ class Api:
             )
 
         result = self._window.create_file_dialog(
-            webview.OPEN_DIALOG,
+            _file_dialog("open"),
             allow_multiple=False,
             file_types=file_types,
         )
@@ -1120,7 +1506,7 @@ class Api:
         if self._window is None:
             return {"ok": False, "error": "No window"}
         result = self._window.create_file_dialog(
-            webview.OPEN_DIALOG,
+            _file_dialog("open"),
             allow_multiple=True,
             file_types=("JSON Files (*.json)",),
         )

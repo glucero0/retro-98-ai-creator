@@ -262,7 +262,12 @@ class ModelManager:
                 pass
 
     def ensure_loaded(self, model_cfg: dict[str, Any]) -> None:
-        repo_id = model_cfg.get("repo_id") or "microsoft/Phi-3.5-mini-instruct"
+        # Prefer text_model slot; repo_id remains a back-compat alias
+        repo_id = (
+            model_cfg.get("text_model")
+            or model_cfg.get("repo_id")
+            or "microsoft/Phi-3.5-mini-instruct"
+        )
         revision = model_cfg.get("revision") or "main"
 
         with self._lock:

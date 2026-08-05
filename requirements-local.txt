@@ -1,9 +1,16 @@
-# Optional local Hugging Face / Phi backend (slow on CPU, large download)
+# Optional local Hugging Face backend (text + image + video)
+# Text: transformers causal LMs · Image/video: Diffusers pipelines
+# Slow on CPU, large downloads, significant VRAM for image/video
 -r requirements.txt
 torch>=2.2
 transformers>=4.43
+diffusers>=0.30
 accelerate>=0.33
+safetensors>=0.4
 sentencepiece>=0.2
 protobuf>=4.25
 huggingface-hub>=0.24
 tqdm>=4.66
+Pillow>=10.0
+imageio>=2.34
+imageio-ffmpeg>=0.5

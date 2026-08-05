@@ -9,6 +9,7 @@ from retro_98_ai_creator.config import (
     archives_path,
     expand_path,
     load_config,
+    normalize_huggingface_cfg,
 )
 from retro_98_ai_creator.creation_utils import extract_json_object
 from retro_98_ai_creator.gemini_provider import normalize_gemini_model
@@ -22,7 +23,18 @@ def test_default_backend_is_gemini():
 
 def test_hf_default_still_phi35():
     assert DEFAULT_HF_MODEL == "microsoft/Phi-3.5-mini-instruct"
+    assert DEFAULTS["huggingface"]["text_model"] == DEFAULT_HF_MODEL
     assert DEFAULTS["huggingface"]["repo_id"] == DEFAULT_HF_MODEL
+    assert DEFAULTS["huggingface"]["image_model"]
+    assert DEFAULTS["huggingface"]["video_model"]
+
+
+def test_normalize_huggingface_cfg_repo_id_alias():
+    out = normalize_huggingface_cfg({"repo_id": "Qwen/Qwen2.5-1.5B-Instruct"})
+    assert out["text_model"] == "Qwen/Qwen2.5-1.5B-Instruct"
+    assert out["repo_id"] == out["text_model"]
+    assert out["image_model"]
+    assert out["video_model"]
 
 
 def test_load_config_has_sections():
@@ -58,6 +70,7 @@ def test_normalize_gemini_model():
 def test_ui_app_theme_defaults():
     ui = DEFAULTS["ui"]
     assert ui["app_theme"] == "light"
+    assert ui["ui_font"] == "inter"
     custom = ui["custom_theme"]
     assert custom["desktop_color"] == "#008080"
     assert custom["window_color"] == "#c0c0c0"
@@ -70,6 +83,7 @@ def test_load_config_preserves_app_theme_keys():
     cfg = load_config()
     ui = cfg.get("ui") or {}
     assert "app_theme" in ui
+    assert "ui_font" in ui
     assert ui["app_theme"] in {"light", "dark", "custom"} or isinstance(
         ui["app_theme"], str
     )

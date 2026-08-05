@@ -240,3 +240,29 @@ def test_duplicate_image_copies_media(tmp_path, monkeypatch):
     assert copy["id"] != "doc_dup"
     assert "(copy)" in copy["title"]
     assert (tmp_path / copy["mediaPath"]).read_bytes() == b"image-bytes"
+
+
+def test_get_media_payload_image_includes_file_url(tmp_path, monkeypatch):
+    api = _api_with_tmp_store(tmp_path, monkeypatch)
+    api._ui_origin = "http://127.0.0.1:8765"
+    media_dir = tmp_path / "media"
+    media_dir.mkdir(parents=True, exist_ok=True)
+    img_path = media_dir / "doc_basis.png"
+    png = base64.b64decode(
+        "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg=="
+    )
+    img_path.write_bytes(png)
+    creation = build_media_creation(
+        modality="image",
+        prompt="basis",
+        media_path="media/doc_basis.png",
+        mime_type="image/png",
+        title="Basis",
+        creation_id="doc_basis",
+    )
+    api.store.upsert(creation)
+    res = api.get_media_payload(creation)
+    assert res["ok"] is True
+    assert res["modality"] == "image"
+    assert res.get("fileUrl") == "http://127.0.0.1:8765/media/doc_basis.png"
+    assert str(res.get("dataUrl") or "").startswith("data:image/")

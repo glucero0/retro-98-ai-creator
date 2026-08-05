@@ -48,8 +48,11 @@ def generate_image_with_gemini(
     resolve_api_key: Callable[[dict[str, Any] | None], str | None] | None = None,
     normalize_model: Callable[[str | None], str] | None = None,
     progress: ProgressCallback | None = None,
+    basis_media: dict[str, Any] | None = None,
+    cancel_event: Any = None,
 ) -> dict[str, Any]:
     """Generate an image via Gemini image models and store under media/."""
+    from .cancellation import run_cancellable
     from .gemini_provider import normalize_gemini_model as _ngm
     from .gemini_provider import resolve_api_key as _rak
 
@@ -84,16 +87,38 @@ def generate_image_with_gemini(
 
     image_bytes: bytes | None = None
     mime_type = "image/png"
+    basis_bytes = (basis_media or {}).get("bytes") if basis_media else None
+    basis_mime = str((basis_media or {}).get("mime_type") or "image/png")
 
     try:
         if "imagen" not in model_name.lower():
-            _emit(progress, "Generating image…", percent=40, title="Generating image")
-            response = client.models.generate_content(
-                model=model_name,
-                contents=[prompt],
-                config=types.GenerateContentConfig(
-                    response_modalities=["TEXT", "IMAGE"],
+            _emit(
+                progress,
+                "Generating image from basis…" if basis_bytes else "Generating image…",
+                percent=40,
+                title="Generating image",
+            )
+            contents: list[Any]
+            if basis_bytes:
+                edit_prompt = (
+                    "Using the provided reference image as the basis, create a new image. "
+                    "Follow this instruction:\n" + prompt
+                )
+                contents = [
+                    types.Part.from_bytes(data=bytes(basis_bytes), mime_type=basis_mime),
+                    edit_prompt,
+                ]
+            else:
+                contents = [prompt]
+            response = run_cancellable(
+                lambda: client.models.generate_content(
+                    model=model_name,
+                    contents=contents,
+                    config=types.GenerateContentConfig(
+                        response_modalities=["TEXT", "IMAGE"],
+                    ),
                 ),
+                cancel_event,
             )
             for cand in getattr(response, "candidates", None) or []:
                 content = getattr(cand, "content", None)
@@ -112,11 +137,19 @@ def generate_image_with_gemini(
                 if image_bytes:
                     break
         else:
+            if basis_bytes:
+                raise RuntimeError(
+                    "Imagen models in this app do not accept a Studio media basis. "
+                    "Switch the Gemini Image model to a Flash Image model, or Clear basis."
+                )
             _emit(progress, "Generating image (Imagen)…", percent=40, title="Generating image")
-            response = client.models.generate_images(
-                model=model_name,
-                prompt=prompt,
-                config=types.GenerateImagesConfig(number_of_images=1),
+            response = run_cancellable(
+                lambda: client.models.generate_images(
+                    model=model_name,
+                    prompt=prompt,
+                    config=types.GenerateImagesConfig(number_of_images=1),
+                ),
+                cancel_event,
             )
             for generated in getattr(response, "generated_images", None) or []:
                 img = getattr(generated, "image", None)
@@ -150,6 +183,7 @@ def generate_image_with_gemini(
             "provider": "gemini",
             "repo_id": model_name,
             "modality": "image",
+            "basis": bool(basis_bytes),
         },
         creation_id=creation_id,
     )
@@ -162,8 +196,11 @@ def generate_video_with_gemini(
     resolve_api_key: Callable[[dict[str, Any] | None], str | None] | None = None,
     normalize_model: Callable[[str | None], str] | None = None,
     progress: ProgressCallback | None = None,
+    basis_media: dict[str, Any] | None = None,
+    cancel_event: Any = None,
 ) -> dict[str, Any]:
     """Generate a video via Veo and store under media/ as MP4 when possible."""
+    from .cancellation import run_cancellable
     from .gemini_provider import normalize_gemini_model as _ngm
     from .gemini_provider import resolve_api_key as _rak
 
@@ -198,18 +235,45 @@ def generate_video_with_gemini(
     _emit(progress, f"Contacting Veo ({model_name})…", percent=10, title="Generating video")
     client = genai.Client(api_key=api_key)
 
+    basis_bytes = (basis_media or {}).get("bytes") if basis_media else None
+    basis_mime = str((basis_media or {}).get("mime_type") or "image/png")
+
     try:
         _emit(
             progress,
-            "Starting video generation (this can take a few minutes)…",
+            "Starting video generation from basis…"
+            if basis_bytes
+            else "Starting video generation (this can take a few minutes)…",
             percent=25,
             title="Generating video",
         )
-        operation = client.models.generate_videos(
-            model=model_name,
-            prompt=prompt,
-            config=types.GenerateVideosConfig(number_of_videos=1),
-        )
+        gen_kwargs: dict[str, Any] = {
+            "model": model_name,
+            "prompt": prompt,
+            "config": types.GenerateVideosConfig(number_of_videos=1),
+        }
+        if basis_bytes:
+            # Image-to-video (video basis is reduced to a reference frame upstream)
+            gen_kwargs["image"] = types.Image(
+                image_bytes=bytes(basis_bytes),
+                mime_type=basis_mime,
+            )
+
+        def _start_videos() -> Any:
+            try:
+                return client.models.generate_videos(**gen_kwargs)
+            except TypeError:
+                if not basis_bytes:
+                    raise
+                # Older SDKs: retry without typed Image kwargs
+                return client.models.generate_videos(
+                    model=model_name,
+                    prompt=prompt,
+                    image=bytes(basis_bytes),
+                    config=types.GenerateVideosConfig(number_of_videos=1),
+                )
+
+        operation = run_cancellable(_start_videos, cancel_event)
         waited = 0
         while not getattr(operation, "done", False):
             # 1s ticks so Cancel is noticed quickly (progress raises GenerationCancelled).

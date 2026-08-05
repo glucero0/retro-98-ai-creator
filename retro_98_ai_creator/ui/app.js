@@ -13,8 +13,10 @@
     modelLoading: false,
     preloadJobId: null,
     soundEnabled: true,
+    soundVolume: 100,
     crtEnabled: false,
     uiScale: 1,
+    uiFont: "inter",
     config: null,
     viewerTab: "doc",
     speechPlaying: false,
@@ -22,6 +24,9 @@
     archiveSort: { key: "created", dir: "desc" },
     presets: [],
     creationTypes: [],
+    suggestedHfModels: null,
+    suggestedOpenRouterModels: null,
+    studioBasis: null, // { creationId, modality, fileUrl, mimeType, title }
     appTheme: "light",
     customTheme: {
       desktopColor: "#008080",
@@ -32,8 +37,122 @@
     },
   };
 
+  /**
+   * App chrome fonts. "retro-pixel" is local (98.css). Others are open-source
+   * faces loaded from Bunny Fonts (Google Fonts mirror) on demand.
+   */
+  const UI_FONTS = {
+    "retro-pixel": {
+      label: "Retro Pixel (Win98)",
+      stack: '"Pixelated MS Sans Serif", "MS Sans Serif", Tahoma, sans-serif',
+      google: null,
+      pixel: true,
+    },
+    inter: {
+      label: "Inter",
+      stack: 'Inter, "Segoe UI", Tahoma, sans-serif',
+      google: "Inter:400,700",
+    },
+    roboto: {
+      label: "Roboto",
+      stack: 'Roboto, "Segoe UI", Tahoma, sans-serif',
+      google: "Roboto:400,700",
+    },
+    "open-sans": {
+      label: "Open Sans",
+      stack: '"Open Sans", "Segoe UI", Tahoma, sans-serif',
+      google: "Open+Sans:400,700",
+    },
+    lato: {
+      label: "Lato",
+      stack: 'Lato, "Segoe UI", Tahoma, sans-serif',
+      google: "Lato:400,700",
+    },
+    montserrat: {
+      label: "Montserrat",
+      stack: 'Montserrat, "Segoe UI", Tahoma, sans-serif',
+      google: "Montserrat:400,700",
+    },
+    "source-sans-3": {
+      label: "Source Sans 3",
+      stack: '"Source Sans 3", "Segoe UI", Tahoma, sans-serif',
+      google: "Source+Sans+3:400,700",
+    },
+    nunito: {
+      label: "Nunito",
+      stack: 'Nunito, "Segoe UI", Tahoma, sans-serif',
+      google: "Nunito:400,700",
+    },
+    poppins: {
+      label: "Poppins",
+      stack: 'Poppins, "Segoe UI", Tahoma, sans-serif',
+      google: "Poppins:400,700",
+    },
+    raleway: {
+      label: "Raleway",
+      stack: 'Raleway, "Segoe UI", Tahoma, sans-serif',
+      google: "Raleway:400,700",
+    },
+    ubuntu: {
+      label: "Ubuntu",
+      stack: 'Ubuntu, "Segoe UI", Tahoma, sans-serif',
+      google: "Ubuntu:400,700",
+    },
+    "noto-sans": {
+      label: "Noto Sans",
+      stack: '"Noto Sans", "Segoe UI", Tahoma, sans-serif',
+      google: "Noto+Sans:400,700",
+    },
+    "work-sans": {
+      label: "Work Sans",
+      stack: '"Work Sans", "Segoe UI", Tahoma, sans-serif',
+      google: "Work+Sans:400,700",
+    },
+    "ibm-plex-sans": {
+      label: "IBM Plex Sans",
+      stack: '"IBM Plex Sans", "Segoe UI", Tahoma, sans-serif',
+      google: "IBM+Plex+Sans:400,700",
+    },
+    "pt-sans": {
+      label: "PT Sans",
+      stack: '"PT Sans", "Segoe UI", Tahoma, sans-serif',
+      google: "PT+Sans:400,700",
+    },
+    "fira-sans": {
+      label: "Fira Sans",
+      stack: '"Fira Sans", "Segoe UI", Tahoma, sans-serif',
+      google: "Fira+Sans:400,700",
+    },
+    rubik: {
+      label: "Rubik",
+      stack: 'Rubik, "Segoe UI", Tahoma, sans-serif',
+      google: "Rubik:400,700",
+    },
+    "dm-sans": {
+      label: "DM Sans",
+      stack: '"DM Sans", "Segoe UI", Tahoma, sans-serif',
+      google: "DM+Sans:400,700",
+    },
+    "libre-franklin": {
+      label: "Libre Franklin",
+      stack: '"Libre Franklin", "Segoe UI", Tahoma, sans-serif',
+      google: "Libre+Franklin:400,700",
+    },
+    merriweather: {
+      label: "Merriweather",
+      stack: 'Merriweather, Georgia, "Times New Roman", serif',
+      google: "Merriweather:400,700",
+    },
+    "source-serif-4": {
+      label: "Source Serif 4",
+      stack: '"Source Serif 4", Georgia, "Times New Roman", serif',
+      google: "Source+Serif+4:400,700",
+    },
+  };
+
+  // Legacy stacks for Viewer document themes (not app chrome)
   const UI_FONT_STACKS = {
-    sans: '"Pixelated MS Sans Serif", "MS Sans Serif", Tahoma, sans-serif',
+    sans: UI_FONTS["retro-pixel"].stack,
     serif: 'Georgia, "Times New Roman", Times, serif',
     mono: '"Courier New", Courier, monospace',
   };
@@ -41,16 +160,73 @@
   const FONT_STACKS = {
     mono: '"Courier New", Courier, monospace',
     serif: 'Georgia, "Times New Roman", serif',
-    sans: '"Pixelated MS Sans Serif", "MS Sans Serif", Tahoma, sans-serif',
+    sans: UI_FONTS["retro-pixel"].stack,
   };
 
+  const _loadedUiFontLinks = Object.create(null);
+
+  function resolveUiFontKey(font) {
+    const raw = String(font || "").trim().toLowerCase();
+    if (UI_FONTS[raw]) return raw;
+    // Legacy custom_theme.font values
+    if (raw === "serif") return "merriweather";
+    if (raw === "mono") return "ibm-plex-sans";
+    if (raw === "sans") return "retro-pixel";
+    return "inter";
+  }
+
+  function ensureUiFontLoaded(fontKey) {
+    const key = resolveUiFontKey(fontKey);
+    const meta = UI_FONTS[key];
+    if (!meta || !meta.google || _loadedUiFontLinks[key]) return;
+    const link = document.createElement("link");
+    link.rel = "stylesheet";
+    link.href =
+      "https://fonts.bunny.net/css?family=" + meta.google + "&display=swap";
+    link.dataset.uiFont = key;
+    document.head.appendChild(link);
+    _loadedUiFontLinks[key] = link;
+  }
+
+  function applyUiFont(fontKey) {
+    const key = resolveUiFontKey(fontKey);
+    const meta = UI_FONTS[key] || UI_FONTS.inter;
+    state.uiFont = key;
+    ensureUiFontLoaded(key);
+    document.documentElement.style.setProperty("--ui-font", meta.stack);
+    document.documentElement.setAttribute("data-ui-font", key);
+    if ($("#ui-font")) $("#ui-font").value = key;
+  }
+
+  function fillUiFontSelect() {
+    const sel = $("#ui-font");
+    if (!sel) return;
+    const prev = resolveUiFontKey(sel.value || state.uiFont || "inter");
+    sel.innerHTML = "";
+    Object.keys(UI_FONTS).forEach((key) => {
+      const opt = document.createElement("option");
+      opt.value = key;
+      opt.textContent = UI_FONTS[key].label;
+      opt.style.fontFamily = UI_FONTS[key].stack;
+      sel.appendChild(opt);
+    });
+    sel.value = prev;
+  }
+
   function fontStackFromStyle(fontStyle) {
+    // Legacy theme font styles (kept for older exports / callers).
+    // Viewer display uses currentUiFontStack() / var(--ui-font) instead.
     const s = (fontStyle || "").toLowerCase();
     if (s === "dos-vga" || s === "workbench" || s === "pixel" || s === "mono") {
       return FONT_STACKS.mono;
     }
     if (s === "serif-parchment" || s === "serif") return FONT_STACKS.serif;
     return FONT_STACKS.sans;
+  }
+
+  function currentUiFontStack() {
+    const key = resolveUiFontKey(state.uiFont || "inter");
+    return (UI_FONTS[key] || UI_FONTS.inter).stack;
   }
 
   /** Palette overrides ported from retro_web_app CreationViewerWindow */
@@ -386,9 +562,8 @@
         $("#custom-text-color") && $("#custom-text-color").value,
         state.customTheme.textColor
       ),
-      font: resolveCustomFontKey(
-        $("#custom-ui-font") && $("#custom-ui-font").value
-      ),
+      // Legacy field; app chrome font is state.uiFont / #ui-font
+      font: state.customTheme.font || "sans",
     };
   }
 
@@ -398,7 +573,6 @@
     if ($("#custom-window-color")) $("#custom-window-color").value = c.windowColor;
     if ($("#custom-title-color")) $("#custom-title-color").value = c.titleColor;
     if ($("#custom-text-color")) $("#custom-text-color").value = c.textColor;
-    if ($("#custom-ui-font")) $("#custom-ui-font").value = resolveCustomFontKey(c.font);
   }
 
   function syncCustomThemeControlsVisibility() {
@@ -508,8 +682,6 @@
     const borderMid = lightWin ? "#dfdfdf" : _mixHex(windowBg, "#ffffff", 0.2);
     const borderDark = lightWin ? "#808080" : _mixHex(windowBg, "#000000", 0.35);
     const borderDarker = lightWin ? "#0a0a0a" : _mixHex(windowBg, "#000000", 0.7);
-    const fontKey = resolveCustomFontKey(t.fontStyle);
-    const uiFont = UI_FONT_STACKS[fontKey] || UI_FONT_STACKS.sans;
 
     root.style.setProperty("--desktop-bg", t.bgColor);
     root.style.setProperty("--desktop-bg-mid", mid);
@@ -547,7 +719,8 @@
     root.style.setProperty("--ui-border-mid", borderMid);
     root.style.setProperty("--ui-border-dark", borderDark);
     root.style.setProperty("--ui-border-darker", borderDarker);
-    root.style.setProperty("--ui-font", uiFont);
+
+    applyUiFont(state.uiFont || "inter");
 
     const desktop = $("#desktop");
     if (desktop) desktop.setAttribute("data-app-theme", key);
@@ -571,22 +744,179 @@
   }
 
   let audioCtx = null;
-  function beep(freq, dur, type) {
-    if (!state.soundEnabled) return;
+
+  function ensureAudioCtx() {
+    audioCtx = audioCtx || new (window.AudioContext || window.webkitAudioContext)();
+    if (audioCtx.state === "suspended") {
+      try {
+        audioCtx.resume();
+      } catch (_) {
+        /* ignore */
+      }
+    }
+    return audioCtx;
+  }
+
+  function _tone(ctx, { freq, type, start, dur, peak, attack, release }) {
+    const o = ctx.createOscillator();
+    const g = ctx.createGain();
+    o.type = type || "sine";
+    o.frequency.setValueAtTime(freq, start);
+    const a = attack != null ? attack : 0.01;
+    const vol = Math.max(0, Math.min(1, (Number(state.soundVolume) || 0) / 100));
+    const p = Math.max(0.0001, (peak != null ? peak : 0.35) * vol);
+    if (vol <= 0) return;
+    const end = start + Math.max(a + 0.03, dur);
+    g.gain.setValueAtTime(0.0001, start);
+    g.gain.exponentialRampToValueAtTime(p, start + a);
+    g.gain.exponentialRampToValueAtTime(0.0001, end);
+    o.connect(g);
+    g.connect(ctx.destination);
+    o.start(start);
+    o.stop(end + 0.02);
+  }
+
+  /** Bright metallic ding (Win95-style notify), not a soft sine beep. */
+  function _playDing(ctx, t0) {
+    const vol = Math.max(0, Math.min(1, (Number(state.soundVolume) || 0) / 100));
+    if (vol <= 0) return;
+
+    // Brief noise strike for the "hit"
     try {
-      audioCtx = audioCtx || new (window.AudioContext || window.webkitAudioContext)();
-      const o = audioCtx.createOscillator();
-      const g = audioCtx.createGain();
-      o.type = type || "square";
-      o.frequency.value = freq;
-      g.gain.value = 0.04;
-      o.connect(g);
-      g.connect(audioCtx.destination);
-      o.start();
-      o.stop(audioCtx.currentTime + (dur || 0.06));
+      const dur = 0.035;
+      const frames = Math.max(1, Math.floor(ctx.sampleRate * dur));
+      const buf = ctx.createBuffer(1, frames, ctx.sampleRate);
+      const data = buf.getChannelData(0);
+      for (let i = 0; i < frames; i++) {
+        data[i] = (Math.random() * 2 - 1) * (1 - i / frames);
+      }
+      const src = ctx.createBufferSource();
+      src.buffer = buf;
+      const bp = ctx.createBiquadFilter();
+      bp.type = "bandpass";
+      bp.frequency.setValueAtTime(3200, t0);
+      bp.Q.setValueAtTime(2.2, t0);
+      const ng = ctx.createGain();
+      const strikePeak = 0.55 * vol;
+      ng.gain.setValueAtTime(0.0001, t0);
+      ng.gain.exponentialRampToValueAtTime(Math.max(0.0001, strikePeak), t0 + 0.002);
+      ng.gain.exponentialRampToValueAtTime(0.0001, t0 + dur);
+      src.connect(bp);
+      bp.connect(ng);
+      ng.connect(ctx.destination);
+      src.start(t0);
+      src.stop(t0 + dur + 0.01);
     } catch (_) {
       /* ignore */
     }
+
+    // Inharmonic partials — reads as a small metal chime, not a beep
+    const partials = [
+      { freq: 2093.0, peak: 0.52, dur: 0.85, type: "sine" }, // bright fundamental
+      { freq: 3135.96, peak: 0.28, dur: 0.55, type: "sine" },
+      { freq: 4186.01, peak: 0.16, dur: 0.4, type: "sine" },
+      { freq: 1480.0, peak: 0.22, dur: 1.05, type: "triangle" }, // body / ring
+      { freq: 5274.0, peak: 0.08, dur: 0.28, type: "sine" },
+    ];
+    partials.forEach((p) => {
+      _tone(ctx, {
+        freq: p.freq,
+        type: p.type,
+        start: t0,
+        dur: p.dur,
+        peak: p.peak,
+        attack: 0.002,
+      });
+    });
+  }
+
+  /**
+   * Sparse Win95/98-inspired UI cues (synthesized — no Microsoft WAV assets).
+   * Kinds: success (chord), error (stop), notify (ding), cancel (soft drop).
+   * Peak levels are audible at 100% volume; Control Panel scales them.
+   */
+  function playUiSound(kind) {
+    if (!state.soundEnabled) return;
+    if ((Number(state.soundVolume) || 0) <= 0) return;
+    try {
+      const ctx = ensureAudioCtx();
+      const t0 = ctx.currentTime + 0.01;
+      if (kind === "success") {
+        // Soft major chord — reminiscent of the classic "Chord" event cue
+        const freqs = [523.25, 659.25, 783.99]; // C5 E5 G5
+        freqs.forEach((freq, i) => {
+          _tone(ctx, {
+            freq,
+            type: "triangle",
+            start: t0 + i * 0.02,
+            dur: 0.5 - i * 0.04,
+            peak: 0.38,
+            attack: 0.015,
+          });
+        });
+        return;
+      }
+      if (kind === "error") {
+        // Low dissonant buzz — critical-stop spirit, not a click chirp
+        _tone(ctx, {
+          freq: 185,
+          type: "sawtooth",
+          start: t0,
+          dur: 0.24,
+          peak: 0.42,
+          attack: 0.004,
+        });
+        _tone(ctx, {
+          freq: 155,
+          type: "square",
+          start: t0 + 0.12,
+          dur: 0.3,
+          peak: 0.32,
+          attack: 0.004,
+        });
+        return;
+      }
+      if (kind === "cancel") {
+        _tone(ctx, {
+          freq: 392,
+          type: "triangle",
+          start: t0,
+          dur: 0.14,
+          peak: 0.32,
+        });
+        _tone(ctx, {
+          freq: 311,
+          type: "triangle",
+          start: t0 + 0.09,
+          dur: 0.18,
+          peak: 0.26,
+        });
+        return;
+      }
+      // notify — metallic ding (also used as volume-slider preview)
+      _playDing(ctx, t0);
+    } catch (_) {
+      /* ignore */
+    }
+  }
+
+  function clampSoundVolume(raw) {
+    const n = Number(raw);
+    if (!Number.isFinite(n)) return 100;
+    return Math.max(0, Math.min(100, Math.round(n)));
+  }
+
+  function syncSoundVolumeLabel(vol) {
+    const label = $("#opt-sound-volume-label");
+    if (label) label.textContent = clampSoundVolume(vol) + "%";
+  }
+
+  function applySoundVolume(raw, { preview } = {}) {
+    const vol = clampSoundVolume(raw);
+    state.soundVolume = vol;
+    if ($("#opt-sound-volume")) $("#opt-sound-volume").value = String(vol);
+    syncSoundVolumeLabel(vol);
+    if (preview) playUiSound("notify");
   }
 
   function api() {
@@ -632,16 +962,40 @@
   }
 
   // ── Busy / progress dialog ─────────────────────────────────────────
+  const BUSY_HINTS = {
+    generate:
+      "Creating text, an image, or video from your prompt. You can cancel anytime.",
+    preload:
+      "Downloading / loading local text, image, and video models. Create is blocked until this finishes.",
+    default:
+      "Gemini usually finishes in seconds. Local models can take minutes.",
+  };
+
   const busy = {
     visible: false,
     showTimer: null,
     elapsedTimer: null,
     startedAt: 0,
     title: "Please wait…",
+    activity: null, // "generate" | "preload" | "other"
     cancellable: false,
     cancelling: false,
     jobId: null,
   };
+
+  function setBusyHint(text) {
+    const hintEl = $("#busy-hint");
+    if (hintEl) hintEl.textContent = text || BUSY_HINTS.default;
+  }
+
+  function setBusyTitle(title) {
+    if (!title) return;
+    busy.title = title;
+    const titleEl = $("#busy-title");
+    if (titleEl && (busy.visible || busy.showTimer)) {
+      titleEl.textContent = title;
+    }
+  }
 
   function showConfirm(title, message, opts) {
     opts = opts || {};
@@ -676,6 +1030,172 @@
       yesBtn.addEventListener("click", onYes);
       noBtn.addEventListener("click", onNo);
       (opts.focusNo ? noBtn : yesBtn).focus();
+    });
+  }
+
+  /**
+   * Recommend Models dialog — returns "economical" | "balanced" | "quality", or null if cancelled.
+   */
+  function showRecommendModelsDialog() {
+    return new Promise((resolve) => {
+      const overlay = $("#recommend-models-overlay");
+      const okBtn = $("#recommend-models-ok");
+      const cancelBtn = $("#recommend-models-cancel");
+      if (!overlay || !okBtn || !cancelBtn) {
+        resolve(null);
+        return;
+      }
+      const balanced = $("#recommend-balanced");
+      if (balanced) balanced.checked = true;
+      overlay.hidden = false;
+
+      const finish = (value) => {
+        overlay.hidden = true;
+        okBtn.removeEventListener("click", onOk);
+        cancelBtn.removeEventListener("click", onCancel);
+        resolve(value);
+      };
+      const onCancel = () => finish(null);
+      const onOk = () => {
+        const chosen = document.querySelector(
+          'input[name="recommend-criteria"]:checked'
+        );
+        finish((chosen && chosen.value) || "balanced");
+      };
+      okBtn.addEventListener("click", onOk);
+      cancelBtn.addEventListener("click", onCancel);
+      okBtn.focus();
+    });
+  }
+
+  async function runRecommendModels(provider) {
+    const criteria = await showRecommendModelsDialog();
+    if (!criteria) return;
+
+    const a = api();
+    if (!a) {
+      showToast("Python bridge not ready.");
+      return;
+    }
+
+    const pretty =
+      criteria === "economical"
+        ? "Economical"
+        : criteria === "quality"
+          ? "Maximum quality"
+          : "Balanced";
+    beginBusy(
+      "Recommend Models",
+      "Finding " + pretty + " models from the live catalog…",
+      {
+        delayMs: 0,
+        percent: 20,
+        hint:
+          "Queries Google, OpenRouter, or Hugging Face for the provider you chose — not only the current picker lists.",
+      }
+    );
+
+    try {
+      const res = await a.recommend_models(criteria, provider || "");
+      if (!res || !res.ok) {
+        showToast((res && res.error) || "Could not recommend models.");
+        return;
+      }
+      applyRecommendedModels(res);
+      showToast(res.message || "Models recommended.");
+      playUiSound("notify");
+    } catch (err) {
+      showToast("Recommend Models failed: " + err);
+      playUiSound("error");
+    } finally {
+      endBusy("Ready");
+      requestAnimationFrame(() => syncDesktopScrollExtent());
+    }
+  }
+
+  function applyRecommendedModels(res) {
+    const picks = (res && res.picks) || {};
+    const models = (res && res.models) || [];
+    const provider = (res && res.provider) || "gemini";
+
+    if (provider === "gemini") {
+      fillGeminiModalitySelect(
+        $("#gemini-text-model"),
+        picks.text,
+        models,
+        "text"
+      );
+      fillGeminiModalitySelect(
+        $("#gemini-image-model"),
+        picks.image,
+        models,
+        "image"
+      );
+      fillGeminiModalitySelect(
+        $("#gemini-video-model"),
+        picks.video,
+        models,
+        "video"
+      );
+      updateStudioBackendLabel({
+        config: {
+          backend: { provider: "gemini" },
+          gemini: {
+            text_model: picks.text,
+            image_model: picks.image,
+            video_model: picks.video,
+          },
+        },
+      });
+      return;
+    }
+
+    if (provider === "openrouter") {
+      state.suggestedOpenRouterModels = models;
+      fillOpenRouterModalitySelect(
+        $("#openrouter-text-model"),
+        picks.text,
+        models,
+        "text"
+      );
+      fillOpenRouterModalitySelect(
+        $("#openrouter-image-model"),
+        picks.image,
+        models,
+        "image"
+      );
+      fillOpenRouterModalitySelect(
+        $("#openrouter-video-model"),
+        picks.video,
+        models,
+        "video"
+      );
+      updateStudioBackendLabel({
+        config: {
+          backend: { provider: "openrouter" },
+          openrouter: {
+            text_model: picks.text,
+            image_model: picks.image,
+            video_model: picks.video,
+          },
+        },
+      });
+      return;
+    }
+
+    state.suggestedModels = models;
+    fillHfModalitySelect($("#hf-text-model"), picks.text, models, "text");
+    fillHfModalitySelect($("#hf-image-model"), picks.image, models, "image");
+    fillHfModalitySelect($("#hf-video-model"), picks.video, models, "video");
+    updateStudioBackendLabel({
+      config: {
+        backend: { provider: "huggingface" },
+        huggingface: {
+          text_model: picks.text,
+          image_model: picks.image,
+          video_model: picks.video,
+        },
+      },
     });
   }
 
@@ -766,18 +1286,13 @@
     state.preloadJobId = null;
     endBusy("Ready");
     setCreateBlocked(false);
-    const hint = $("#busy-hint");
-    if (hint) {
-      hint.textContent =
-        "Gemini usually finishes in seconds. Local models can take minutes.";
-    }
     if (ok) {
       showToast("Local model ready");
       closeWindow("control");
-      beep(880, 0.08, "triangle");
+      playUiSound("success");
     } else {
       showToast(errMsg || "Model download / load failed");
-      beep(200, 0.2, "sawtooth");
+      playUiSound("error");
     }
   }
 
@@ -793,13 +1308,10 @@
     }
     state.modelLoading = true;
     setCreateBlocked(true);
-    const hint = $("#busy-hint");
-    if (hint) {
-      hint.textContent =
-        "Downloading / loading the local model. Create is blocked until this finishes.";
-    }
-    beginBusy("Downloading model", "Starting Hugging Face download / load…", {
+    beginBusy("Downloading models", "Starting Hugging Face downloads…", {
       delayMs: 0,
+      activity: "preload",
+      hint: BUSY_HINTS.preload,
     });
 
     let res;
@@ -862,19 +1374,17 @@
     // Always close Control Panel after a successful Save.
     closeWindow("control");
     showToast(res.message || "Saved");
-    beep(750, 0.05);
-
     if (!offerDownload) return;
 
     const go = await showConfirm(
-      "Download local model?",
+      "Download local models?",
       "Settings were saved.\n\n" +
-        "Download and load the Hugging Face model now?\n\n" +
-        "Yes — start the download (Create stays blocked until it finishes).\n" +
-        "No — skip download for now."
+        "Download and cache the Hugging Face text, image, and video models now?\n\n" +
+        "Yes — start the downloads (Create stays blocked until they finish).\n" +
+        "No — skip download for now (models load on first use)."
     );
     if (!go) {
-      showToast("Saved — local model not downloaded yet.");
+      showToast("Saved — local models not downloaded yet.");
       return;
     }
 
@@ -909,8 +1419,7 @@
     if (!overlay) return;
     $("#busy-title").textContent = title || "Please wait…";
     $("#busy-message").textContent = message || "Working…";
-    const hintEl = $("#busy-hint");
-    if (hintEl && hint) hintEl.textContent = hint;
+    if (hint) setBusyHint(hint);
     overlay.hidden = false;
     busy.visible = true;
     if (!busy.startedAt) busy.startedAt = Date.now();
@@ -946,19 +1455,30 @@
    * Otherwise the dialog appears only if work is still going after delayMs
    * (default 1500ms) so short actions don't flash a modal.
    * opts.cancellable — show Cancel (generation jobs).
+   * opts.activity — "generate" | "preload" | "other" (drives title/hint framing).
+   * opts.hint — footer description for this activity.
    */
   function beginBusy(title, message, opts) {
     opts = opts || {};
     const delayMs = opts.delayMs != null ? opts.delayMs : 1500;
     busy.title = title || "Please wait…";
+    busy.activity = opts.activity || "other";
     if ("cancellable" in opts) busy.cancellable = !!opts.cancellable;
     if ("jobId" in opts) busy.jobId = opts.jobId || null;
     if (!opts.cancellable) busy.cancelling = false;
+    const hint =
+      opts.hint != null
+        ? opts.hint
+        : busy.activity === "generate"
+          ? BUSY_HINTS.generate
+          : busy.activity === "preload"
+            ? BUSY_HINTS.preload
+            : null;
     clearTimeout(busy.showTimer);
     setProgress(message || title || "Working…");
 
     if (delayMs <= 0) {
-      _showBusyNow(busy.title, message, opts.percent, opts.hint);
+      _showBusyNow(busy.title, message, opts.percent, hint);
       return;
     }
 
@@ -966,7 +1486,7 @@
     if (busy.visible) {
       $("#busy-title").textContent = busy.title;
       $("#busy-message").textContent = message || "Working…";
-      if (opts.hint && $("#busy-hint")) $("#busy-hint").textContent = opts.hint;
+      if (hint) setBusyHint(hint);
       if ("percent" in opts) setBusyPercent(opts.percent);
       setBusyCancelVisible(!!busy.cancellable);
       return;
@@ -974,11 +1494,12 @@
 
     busy.startedAt = Date.now();
     busy.showTimer = setTimeout(() => {
-      _showBusyNow(busy.title, message, opts.percent, opts.hint);
+      _showBusyNow(busy.title, message, opts.percent, hint);
     }, delayMs);
   }
 
-  function updateBusy(message, percent) {
+  function updateBusy(message, percent, title) {
+    if (title) setBusyTitle(title);
     if (message) {
       setProgress(message);
       const msgEl = $("#busy-message");
@@ -987,7 +1508,7 @@
     if (percent !== undefined) setBusyPercent(percent);
 
     // If a deferred show is pending and we got real progress, show immediately
-    if (!busy.visible && busy.showTimer && (message || percent != null)) {
+    if (!busy.visible && busy.showTimer && (message || percent != null || title)) {
       clearTimeout(busy.showTimer);
       busy.showTimer = null;
       _showBusyNow(busy.title, message || "Working…", percent);
@@ -1003,10 +1524,12 @@
     }
     busy.startedAt = 0;
     busy.visible = false;
+    busy.activity = null;
     busy.cancellable = false;
     busy.cancelling = false;
     busy.jobId = null;
     setBusyCancelVisible(false);
+    setBusyHint(BUSY_HINTS.default);
     const overlay = $("#busy-overlay");
     if (overlay) overlay.hidden = true;
     setProgress(finalMessage || "Ready");
@@ -1058,7 +1581,7 @@
 
   /**
    * Use an existing creation as the basis for new work of the same modality.
-   * Text → Studio prompt. Image/video → duplicate into Archives, then open editor.
+   * Text → Studio prompt. Image/video → Studio media-basis panel (not the editors).
    */
   async function useCreationAsBasis(creation) {
     if (!creation) {
@@ -1084,10 +1607,10 @@
       } else {
         seeded = prompt || body || creationTitle(creation);
       }
+      clearStudioBasis();
       setStudioPrompt(seeded);
       openWindow("form");
       showToast("Text loaded into Studio as basis — edit the prompt, then CREATE.");
-      beep(700, 0.04);
       return;
     }
 
@@ -1096,33 +1619,101 @@
       return;
     }
 
-    beginBusy("Preparing basis", "Copying into Archives as a new item…", {
-      delayMs: 0,
-    });
-    try {
-      const res = await a.duplicate_creation(creation.id);
-      if (!res || !res.ok) {
-        showToast((res && res.error) || "Could not duplicate creation");
-        return;
+    const ok = await setStudioBasisFromCreation(creation);
+    if (!ok) return;
+    openWindow("form");
+    showToast(
+      (mod === "image" ? "Image" : "Video") +
+        " loaded as Studio basis — describe the change, then CREATE."
+    );
+  }
+
+  function clearStudioBasis() {
+    state.studioBasis = null;
+    renderStudioBasisPanel();
+  }
+
+  function renderStudioBasisPanel() {
+    const win = $("#win-form");
+    const panel = $("#studio-basis-panel");
+    const preview = $("#studio-basis-preview");
+    const label = $("#studio-basis-label");
+    const layout = $("#studio-layout");
+    const basis = state.studioBasis;
+    if (!panel || !preview) return;
+
+    if (!basis) {
+      panel.hidden = true;
+      if (win) {
+        win.classList.remove("has-studio-basis");
+        if (!win.style.width || parseInt(win.style.width, 10) >= 700) {
+          win.style.width = "440px";
+        }
       }
-      rememberImportedCreation(res.creation);
-      // Keep Archives in sync, but open the editor — do not bounce through Viewer.
-      state.active = res.creation;
-      renderArchives();
-      const opened =
-        mod === "image"
-          ? await openImageEditor(res.creation, { standalone: true })
-          : await openVideoEditor(res.creation, { standalone: true });
-      if (opened) {
-        showToast(
-          "Opened a copy as basis — Save updates the copy, original stays intact."
-        );
-      }
-    } catch (err) {
-      showToast("Basis failed: " + err);
-    } finally {
-      endBusy("Ready");
+      if (layout) layout.classList.remove("has-basis");
+      preview.innerHTML = '<p class="muted">No media loaded</p>';
+      if (label) label.textContent = "";
+      requestAnimationFrame(() => syncDesktopScrollExtent());
+      return;
     }
+
+    panel.hidden = false;
+    if (layout) layout.classList.add("has-basis");
+    if (win) {
+      win.classList.add("has-studio-basis");
+      const w = parseInt(win.style.width, 10);
+      if (!Number.isFinite(w) || w < 720) win.style.width = "780px";
+    }
+
+    preview.innerHTML = "";
+    if (basis.modality === "video") {
+      const vid = document.createElement("video");
+      vid.src = basis.fileUrl;
+      vid.controls = true;
+      vid.playsInline = true;
+      preview.appendChild(vid);
+    } else {
+      const img = document.createElement("img");
+      img.src = basis.fileUrl;
+      img.alt = basis.title || "Basis image";
+      preview.appendChild(img);
+    }
+    if (label) {
+      label.textContent =
+        (basis.modality === "video" ? "Video basis: " : "Image basis: ") +
+        (basis.title || basis.creationId || "media");
+    }
+    requestAnimationFrame(() => syncDesktopScrollExtent());
+  }
+
+  async function setStudioBasisFromCreation(creation) {
+    const a = api();
+    if (!a || !creation) return false;
+    const mod = creationModality(creation);
+    if (mod !== "image" && mod !== "video") {
+      showToast("Only image or video can be a media basis.");
+      return false;
+    }
+    const payload = await a.get_media_payload(creation);
+    const previewUrl =
+      (payload && (payload.fileUrl || payload.dataUrl)) || "";
+    if (!payload || !payload.ok || !previewUrl) {
+      showToast((payload && payload.error) || "Could not load media for basis.");
+      return false;
+    }
+    state.studioBasis = {
+      creationId: creation.id,
+      modality: mod,
+      fileUrl: previewUrl,
+      mimeType: payload.mimeType || creation.mimeType || "",
+      title: creationTitle(creation),
+      mediaPath: creation.mediaPath || "",
+    };
+    if (!(getStudioPrompt() || "").trim() && (creation.prompt || "").trim()) {
+      setStudioPrompt(creation.prompt.trim());
+    }
+    renderStudioBasisPanel();
+    return true;
   }
 
   async function studioLoadTextFile() {
@@ -1135,10 +1726,10 @@
         showToast(res.error || "Import failed");
         return;
       }
+      clearStudioBasis();
       setStudioPrompt(res.text || "");
       openWindow("form");
       showToast("Text loaded into Studio prompt — edit and CREATE when ready.");
-      beep(700, 0.04);
     } catch (err) {
       showToast("Load failed: " + err);
     }
@@ -1147,7 +1738,9 @@
   async function studioLoadMediaFile(modality) {
     const a = api();
     if (!a) return;
-    beginBusy("Importing " + modality, "Reading file into Archives…", { delayMs: 0 });
+    beginBusy("Loading " + modality, "Reading file for Studio basis…", {
+      delayMs: 0,
+    });
     try {
       const res = await a.import_media_file(modality);
       if (!res || res.cancelled) return;
@@ -1156,17 +1749,15 @@
         return;
       }
       rememberImportedCreation(res.creation);
-      renderDocument(res.creation);
-      openWindow("viewer");
-      if (modality === "image") await openImageEditor(res.creation, { standalone: true });
-      else await openVideoEditor(res.creation, { standalone: true });
+      const ok = await setStudioBasisFromCreation(res.creation);
+      if (!ok) return;
+      openWindow("form");
       showToast(
         (modality === "image" ? "Image" : "Video") +
-          " imported — edit as a new Archive item."
+          " loaded as Studio basis — describe the change, then CREATE."
       );
-      beep(900, 0.05);
     } catch (err) {
-      showToast("Import failed: " + err);
+      showToast("Load failed: " + err);
     } finally {
       endBusy("Ready");
     }
@@ -1185,11 +1776,40 @@
       if (res.creation) {
         rememberImportedCreation(res.creation);
         renderDocument(res.creation);
+        openWindow("viewer");
       }
+      openWindow("library");
       showToast("Text imported into Archives");
-      beep(900, 0.05);
     } catch (err) {
       showToast("Import failed: " + err);
+    }
+  }
+
+  async function archivesImportMedia(modality) {
+    const a = api();
+    if (!a) return;
+    const kind = modality === "video" ? "video" : "image";
+    beginBusy("Importing " + kind, "Copying into Archives…", { delayMs: 0 });
+    try {
+      const res = await a.import_media_file(kind);
+      if (!res || res.cancelled) return;
+      if (!res.ok) {
+        showToast(res.error || "Import failed");
+        return;
+      }
+      if (res.creation) {
+        rememberImportedCreation(res.creation);
+        renderDocument(res.creation);
+        openWindow("viewer");
+      }
+      openWindow("library");
+      showToast(
+        (kind === "image" ? "Image" : "Video") + " imported into Archives"
+      );
+    } catch (err) {
+      showToast("Import failed: " + err);
+    } finally {
+      endBusy("Ready");
     }
   }
 
@@ -1218,10 +1838,10 @@
       el.classList.remove("minimized");
     }
     focusWindow(id);
-    beep(660, 0.04);
     // Let layout settle (esp. Control Panel height:auto) then extend scroll area
     requestAnimationFrame(() => syncDesktopScrollExtent());
     if (id === "control") {
+      syncControlPanelWidth();
       refreshGeminiModelsForControlPanel();
     }
     if (id === "image-edit" && !imageEdit.creationId) {
@@ -1233,6 +1853,8 @@
   }
 
   let _geminiModelsRefreshSeq = 0;
+  let _hfModelsRefreshSeq = 0;
+  let _openrouterModelsRefreshSeq = 0;
 
   async function refreshGeminiModelsForControlPanel() {
     const a = api();
@@ -1297,6 +1919,166 @@
       showToast("Model list refresh failed: " + err);
     } finally {
       if (seq === _geminiModelsRefreshSeq) {
+        endBusy("Ready");
+        requestAnimationFrame(() => syncDesktopScrollExtent());
+      }
+    }
+  }
+
+  async function refreshHfModelsForControlPanel() {
+    const a = api();
+    const textSel = $("#hf-text-model");
+    const imageSel = $("#hf-image-model");
+    const videoSel = $("#hf-video-model");
+    if (!a || !textSel || !imageSel || !videoSel) return;
+
+    const go = await showConfirm(
+      "Refresh Hub models?",
+      "This contacts Hugging Face and loads up to 20 popular models for each of Text, Image, and Video (ranked by downloads).\n\n" +
+        "This usually takes about 5–15 seconds, depending on your connection.\n\n" +
+        "OK — fetch the model lists now.\n" +
+        "Cancel — keep the current lists.",
+      { yesLabel: "OK", noLabel: "Cancel" }
+    );
+    if (!go) return;
+
+    const seq = ++_hfModelsRefreshSeq;
+    const prev = {
+      text: textSel.value,
+      image: imageSel.value,
+      video: videoSel.value,
+    };
+    beginBusy(
+      "Refreshing Hub models",
+      "Asking Hugging Face for top text, image, and video models…",
+      {
+        delayMs: 0,
+        percent: 15,
+        hint: "Up to 20 models per modality, ranked by downloads. Usually 5–15 seconds.",
+      }
+    );
+
+    try {
+      const res = await a.list_hf_models();
+      if (seq !== _hfModelsRefreshSeq) return;
+      const models = (res && res.models) || [];
+      state.suggestedHfModels = models;
+      fillHfModalitySelect(textSel, prev.text, models, "text");
+      fillHfModalitySelect(imageSel, prev.image, models, "image");
+      fillHfModalitySelect(videoSel, prev.video, models, "video");
+      if (res && res.ok) {
+        const live = res.liveCount != null ? res.liveCount : models.length;
+        updateBusy(
+          "Loaded " +
+            live +
+            " Hub model" +
+            (live === 1 ? "" : "s") +
+            " (up to 20 per modality).",
+          100
+        );
+        showToast("Hub model lists refreshed");
+      } else {
+        updateBusy(
+          (res && res.error) ||
+            "Could not refresh Hub models — showing the curated fallback list.",
+          100
+        );
+        if (res && res.error) showToast(res.error);
+      }
+      updateStudioBackendLabel({
+        config: {
+          backend: { provider: "huggingface" },
+          gemini: currentGeminiUiConfig(),
+          openrouter: currentOpenRouterUiConfig(),
+          huggingface: currentHfUiConfig(),
+        },
+      });
+    } catch (err) {
+      if (seq !== _hfModelsRefreshSeq) return;
+      showToast("Hub model list refresh failed: " + err);
+    } finally {
+      if (seq === _hfModelsRefreshSeq) {
+        endBusy("Ready");
+        requestAnimationFrame(() => syncDesktopScrollExtent());
+      }
+    }
+  }
+
+  async function refreshOpenRouterModelsForControlPanel() {
+    const a = api();
+    const textSel = $("#openrouter-text-model");
+    const imageSel = $("#openrouter-image-model");
+    const videoSel = $("#openrouter-video-model");
+    if (!a || !textSel || !imageSel || !videoSel) return;
+
+    const go = await showConfirm(
+      "Refresh OpenRouter models?",
+      "This contacts OpenRouter and loads up to 20 popular models for each of Text, Image, and Video (ranked by popularity).\n\n" +
+        "This usually takes about 5–15 seconds, depending on your connection.\n\n" +
+        "OK — fetch the model lists now.\n" +
+        "Cancel — keep the current lists.",
+      { yesLabel: "OK", noLabel: "Cancel" }
+    );
+    if (!go) return;
+
+    const seq = ++_openrouterModelsRefreshSeq;
+    const prev = {
+      text: textSel.value,
+      image: imageSel.value,
+      video: videoSel.value,
+    };
+    beginBusy(
+      "Refreshing OpenRouter models",
+      "Asking OpenRouter for top text, image, and video models…",
+      {
+        delayMs: 0,
+        percent: 15,
+        hint: "Up to 20 models per modality, ranked by popularity. Usually 5–15 seconds.",
+      }
+    );
+
+    try {
+      const res = await a.list_openrouter_models();
+      if (seq !== _openrouterModelsRefreshSeq) return;
+      const models = (res && res.models) || [];
+      state.suggestedOpenRouterModels = models;
+      fillOpenRouterModalitySelect(textSel, prev.text, models, "text");
+      fillOpenRouterModalitySelect(imageSel, prev.image, models, "image");
+      fillOpenRouterModalitySelect(videoSel, prev.video, models, "video");
+      syncControlPanelWidth();
+      requestAnimationFrame(() => syncDesktopScrollExtent());
+      if (res && res.ok) {
+        const live = res.liveCount != null ? res.liveCount : models.length;
+        updateBusy(
+          "Loaded " +
+            live +
+            " OpenRouter model" +
+            (live === 1 ? "" : "s") +
+            " (up to 20 per modality).",
+          100
+        );
+        showToast("OpenRouter model lists refreshed");
+      } else {
+        updateBusy(
+          (res && res.error) ||
+            "Could not refresh OpenRouter models — showing the curated fallback list.",
+          100
+        );
+        if (res && res.error) showToast(res.error);
+      }
+      updateStudioBackendLabel({
+        config: {
+          backend: { provider: "openrouter" },
+          gemini: currentGeminiUiConfig(),
+          openrouter: currentOpenRouterUiConfig(),
+          huggingface: currentHfUiConfig(),
+        },
+      });
+    } catch (err) {
+      if (seq !== _openrouterModelsRefreshSeq) return;
+      showToast("OpenRouter model list refresh failed: " + err);
+    } finally {
+      if (seq === _openrouterModelsRefreshSeq) {
         endBusy("Ready");
         requestAnimationFrame(() => syncDesktopScrollExtent());
       }
@@ -1429,7 +2211,6 @@
       else state.focused = null;
     }
     renderTaskbar();
-    beep(440, 0.04);
     syncDesktopScrollExtent();
   }
 
@@ -1438,7 +2219,6 @@
     const el = document.getElementById("win-" + id);
     if (el) el.classList.add("minimized");
     renderTaskbar();
-    beep(520, 0.03);
     syncDesktopScrollExtent();
   }
 
@@ -1547,6 +2327,11 @@
 
   function enableWindowResizing() {
     document.querySelectorAll(".app-window").forEach((win) => {
+      // Control Panel uses fixed tab widths + vertical scroll — no resize grip.
+      if (win.id === "win-control") {
+        win.querySelectorAll(".window-resize-handle").forEach((h) => h.remove());
+        return;
+      }
       if (win.querySelector(".window-resize-handle")) return;
       const handle = document.createElement("div");
       handle.className = "window-resize-handle";
@@ -1559,7 +2344,7 @@
       const handle = e.target.closest(".window-resize-handle");
       if (!handle) return;
       const win = handle.closest(".app-window");
-      if (!win) return;
+      if (!win || win.id === "win-control") return;
       const id = win.dataset.window;
       if (id) focusWindow(id);
 
@@ -1677,7 +2462,7 @@
   function resolveTheme(creation) {
     const t = (creation && creation.theme) || {};
     return {
-      themeName: t.themeName || "Authentic Era Box Art Palette",
+      themeName: t.themeName || "Default",
       bgColor: t.bgColor || "#0055aa",
       cardBg: t.cardBg || "#ffffff",
       textColor: t.textColor || "#000000",
@@ -1735,7 +2520,6 @@
     }
     if (state.speechPlaying) {
       stopSpeech();
-      beep(400, 0.05);
       return;
     }
     const c = state.active;
@@ -1759,7 +2543,6 @@
       btn.textContent = "Stop Reading";
       btn.classList.add("speaking");
     }
-    beep(700, 0.04);
   }
 
   function setViewerTab(tab) {
@@ -1948,7 +2731,12 @@
           });
         }
       } else {
-        const src = res.dataUrl || res.fileUrl || "";
+        const src = res.fileUrl || res.dataUrl || "";
+        if (!src) {
+          canvas.innerHTML =
+            '<p class="muted">Image URL missing — restart the app and try again.</p>';
+          return;
+        }
         canvas.innerHTML =
           '<div class="media-pane">' +
           '<img class="media-image" alt="' +
@@ -1997,6 +2785,51 @@
       html += "</li>";
     });
     html += "</ul>";
+    return html;
+  }
+
+  function getExtractedText(creation) {
+    if (!creation || !creation.meta) return "";
+    return String(creation.meta.extractedText || "").trim();
+  }
+
+  function renderExtractedTab(creation) {
+    const text = getExtractedText(creation);
+    const meta = (creation && creation.meta) || {};
+    const kind = String(meta.extractionKind || "").toLowerCase();
+    const label = kind === "transcript" ? "Transcript" : "Extracted text";
+    const modality = creationModality(creation);
+    let html = '<div class="extracted-pane">';
+    html += '<div class="extracted-intro"><strong>' + escapeHtml(label) + "</strong>";
+    if (meta.extractedAt || meta.extractionModel) {
+      html +=
+        '<span class="extracted-meta">' +
+        escapeHtml(
+          [meta.extractionProvider, meta.extractionModel, meta.extractedAt]
+            .filter(Boolean)
+            .join(" · ")
+        ) +
+        "</span>";
+    }
+    html += "</div>";
+    if (!text) {
+      html +=
+        '<p class="muted">' +
+        (modality === "video"
+          ? "No transcript yet. Click <strong>Transcribe…</strong> to pull speech (or on-screen text) from this video."
+          : "No text extracted yet. Click <strong>Extract Text…</strong> to OCR this image.") +
+        "</p>";
+    } else {
+      html +=
+        '<textarea class="extracted-text" readonly>' +
+        escapeHtml(text) +
+        "</textarea>";
+      html +=
+        '<div class="extracted-actions">' +
+        '<button type="button" id="btn-copy-extracted">Copy</button>' +
+        "</div>";
+    }
+    html += "</div>";
     return html;
   }
 
@@ -2087,11 +2920,16 @@
     if (modality === "image" || modality === "video") {
       canvas.style.background = "#111";
       canvas.style.color = "#eee";
-      canvas.style.fontFamily = FONT_STACKS.sans;
-      if (tab === "grounding") {
+      canvas.style.fontFamily = "var(--ui-font)";
+      if (tab === "extracted") {
         canvas.style.background = "#ffffff";
         canvas.style.color = "#000000";
-        canvas.style.fontFamily = FONT_STACKS.mono;
+        canvas.style.fontFamily = "var(--ui-font)";
+        canvas.innerHTML = renderExtractedTab(creation);
+      } else if (tab === "grounding") {
+        canvas.style.background = "#ffffff";
+        canvas.style.color = "#000000";
+        canvas.style.fontFamily = "var(--ui-font)";
         canvas.innerHTML = renderGroundingTab(creation);
       } else {
         canvas.innerHTML = renderMediaPlaceholder(creation, modality);
@@ -2108,17 +2946,17 @@
     } else if (tab === "grounding") {
       canvas.style.background = "#ffffff";
       canvas.style.color = "#000000";
-      canvas.style.fontFamily = FONT_STACKS.mono;
+      canvas.style.fontFamily = "var(--ui-font)";
       canvas.innerHTML = renderGroundingTab(creation);
     } else if (tab === "print") {
       canvas.style.background = "#ffffff";
       canvas.style.color = "#000000";
-      canvas.style.fontFamily = FONT_STACKS.mono;
+      canvas.style.fontFamily = "var(--ui-font)";
       canvas.innerHTML = renderPrintTab(creation);
     } else {
       canvas.style.background = theme.cardBg || "#fff";
       canvas.style.color = theme.textColor || "#000";
-      canvas.style.fontFamily = fontStackFromStyle(theme.fontStyle);
+      canvas.style.fontFamily = "var(--ui-font)";
       canvas.innerHTML = renderDocTab(creation, theme);
     }
 
@@ -2248,7 +3086,7 @@
       "z-index:2147483646",
       "background:" + (theme.cardBg || "#ffffff"),
       "color:" + (theme.textColor || "#000000"),
-      "font-family:" + fontStackFromStyle(theme.fontStyle),
+      "font-family:" + currentUiFontStack(),
       "font-size:14px",
       "line-height:1.35",
     ].join(";");
@@ -2321,7 +3159,6 @@
           const res = await a.save_binary_file_dialog(base + ".png", payload.dataUrl);
           if (res.ok) {
             showToast("Saved PNG");
-            beep(900, 0.05);
           } else if (!res.cancelled) {
             showToast(res.error || "PNG export failed");
           }
@@ -2348,7 +3185,6 @@
         const res = await a.save_binary_file_dialog(base + ".pdf", dataUri);
         if (res.ok) {
           showToast("Saved PDF");
-          beep(900, 0.05);
         } else if (!res.cancelled) {
           showToast(res.error || "PDF export failed");
         }
@@ -2370,7 +3206,6 @@
         const res = await a.save_binary_file_dialog(base + ".png", pngDataUrl);
         if (res.ok) {
           showToast("Saved PNG");
-          beep(900, 0.05);
         } else if (!res.cancelled) {
           showToast(res.error || "PNG export failed");
         }
@@ -2395,7 +3230,6 @@
       const res = await a.save_binary_file_dialog(base + ".pdf", dataUri);
       if (res.ok) {
         showToast("Saved PDF");
-        beep(900, 0.05);
       } else if (!res.cancelled) {
         showToast(res.error || "PDF export failed");
       }
@@ -2476,7 +3310,6 @@
       };
     }
     renderArchives();
-    beep(650, 0.02);
   }
 
   function renderArchives() {
@@ -2516,7 +3349,6 @@
         openBtn.title = "Open in Viewer";
         openBtn.addEventListener("click", () => {
           renderDocument(c);
-          beep(700, 0.04);
         });
         tdName.appendChild(openBtn);
 
@@ -2550,7 +3382,6 @@
             renderDocument(null);
           }
           renderArchives();
-          beep(300, 0.08);
         });
         tdActions.appendChild(basis);
         tdActions.appendChild(del);
@@ -2586,6 +3417,40 @@
     }
   }
 
+  function modelOptionLabel(m, maxLen) {
+    // Short labels only — OpenRouter "name" fields can be paragraph-length and
+    // native <select> in WebView2 sizes to the longest option text.
+    maxLen = maxLen == null ? 44 : maxLen;
+    const label = String((m && m.label) || (m && m.repo_id) || "").trim();
+    let text = label || "model";
+    // If the API stuffed a description after an em dash / hyphen, keep the title part
+    const cut = text.search(/\s[—–-]\s/);
+    if (cut > 12 && cut < maxLen) text = text.slice(0, cut);
+    if (text.length > maxLen) text = text.slice(0, maxLen - 1) + "…";
+    return text;
+  }
+
+  function modelOptionTitle(m) {
+    const parts = [
+      (m && m.label) || "",
+      (m && m.notes) || "",
+      (m && m.repo_id) || "",
+    ]
+      .map((s) => String(s || "").trim())
+      .filter(Boolean);
+    return parts.filter((p, i) => p !== parts[i - 1]).join("\n");
+  }
+
+  function appendModelOption(sel, m, modality) {
+    const opt = document.createElement("option");
+    opt.value = m.repo_id;
+    opt.textContent = modelOptionLabel(m);
+    opt.title = modelOptionTitle(m);
+    if (modality) opt.dataset.modality = modality;
+    sel.appendChild(opt);
+    return opt;
+  }
+
   function fillModelSelect(sel, selected, suggestions) {
     if (!sel) return;
     const list = suggestions || [];
@@ -2610,7 +3475,8 @@
       items.forEach((m) => {
         const opt = document.createElement("option");
         opt.value = m.repo_id;
-        opt.textContent = m.label + (m.notes ? " — " + m.notes : "");
+        opt.textContent = modelOptionLabel(m);
+        opt.title = modelOptionTitle(m);
         opt.dataset.modality = m.modality || key;
         og.appendChild(opt);
       });
@@ -2619,7 +3485,8 @@
     if (selected && ![...sel.options].some((o) => o.value === selected)) {
       const opt = document.createElement("option");
       opt.value = selected;
-      opt.textContent = selected;
+      opt.textContent = modelOptionLabel({ label: selected, repo_id: selected });
+      opt.title = selected;
       sel.appendChild(opt);
     }
     if (list.length || sel.options.length) {
@@ -2640,20 +3507,11 @@
       (m) => (m.modality || "text").toLowerCase() === want
     );
     sel.innerHTML = "";
-    filtered.forEach((m) => {
-      const opt = document.createElement("option");
-      opt.value = m.repo_id;
-      opt.textContent = m.label + (m.notes ? " — " + m.notes : "");
-      opt.dataset.modality = want;
-      sel.appendChild(opt);
-    });
+    filtered.forEach((m) => appendModelOption(sel, m, want));
     let pick = selected || defaults[want] || "";
+    // Do not re-inject ids missing from the catalog (retired models disappear here).
     if (pick && ![...sel.options].some((o) => o.value === pick)) {
-      const opt = document.createElement("option");
-      opt.value = pick;
-      opt.textContent = pick + " (saved)";
-      opt.dataset.modality = want;
-      sel.appendChild(opt);
+      pick = defaults[want] || (sel.options[0] && sel.options[0].value) || "";
     }
     if (!pick && sel.options.length) pick = sel.options[0].value;
     if (pick) sel.value = pick;
@@ -2672,20 +3530,40 @@
       (m) => (m.modality || "text").toLowerCase() === want
     );
     sel.innerHTML = "";
-    filtered.forEach((m) => {
-      const opt = document.createElement("option");
-      opt.value = m.repo_id;
-      opt.textContent = m.label + (m.notes ? " — " + m.notes : "");
-      opt.dataset.modality = want;
-      sel.appendChild(opt);
-    });
+    filtered.forEach((m) => appendModelOption(sel, m, want));
     let pick = selected || defaults[want] || "";
     if (pick && ![...sel.options].some((o) => o.value === pick)) {
-      const opt = document.createElement("option");
-      opt.value = pick;
-      opt.textContent = pick + " (saved)";
-      opt.dataset.modality = want;
-      sel.appendChild(opt);
+      appendModelOption(
+        sel,
+        { repo_id: pick, label: pick, notes: "saved" },
+        want
+      );
+    }
+    if (!pick && sel.options.length) pick = sel.options[0].value;
+    if (pick) sel.value = pick;
+  }
+
+  /** Fill a Hugging Face modality picker with only compatible models. */
+  function fillHfModalitySelect(sel, selected, suggestions, modality) {
+    if (!sel) return;
+    const want = (modality || "text").toLowerCase();
+    const defaults = {
+      text: "microsoft/Phi-3.5-mini-instruct",
+      image: "stable-diffusion-v1-5/stable-diffusion-v1-5",
+      video: "ali-vilab/text-to-video-ms-1.7b",
+    };
+    const filtered = (suggestions || []).filter(
+      (m) => (m.modality || "text").toLowerCase() === want
+    );
+    sel.innerHTML = "";
+    filtered.forEach((m) => appendModelOption(sel, m, want));
+    let pick = selected || defaults[want] || "";
+    if (pick && ![...sel.options].some((o) => o.value === pick)) {
+      appendModelOption(
+        sel,
+        { repo_id: pick, label: pick, notes: "saved" },
+        want
+      );
     }
     if (!pick && sel.options.length) pick = sel.options[0].value;
     if (pick) sel.value = pick;
@@ -2716,9 +3594,11 @@
   function syncViewerChrome(creation) {
     const modality = creation ? creationModality(creation) : "";
     const isMedia = modality === "image" || modality === "video";
+    const extracted = getExtractedText(creation);
 
     const tabDoc = $("#tab-doc");
     const tabMedia = $("#tab-media");
+    const tabExtracted = $("#tab-extracted");
     const tabGrounding = $("#tab-grounding");
     const tabPrint = $("#tab-print");
     const tabAscii = $("#tab-ascii");
@@ -2727,6 +3607,15 @@
       tabMedia.hidden = !isMedia;
       tabMedia.textContent = modality === "video" ? "Video" : "Image";
     }
+    if (tabExtracted) {
+      tabExtracted.hidden = !isMedia;
+      const kind =
+        creation &&
+        creation.meta &&
+        String(creation.meta.extractionKind || "").toLowerCase();
+      tabExtracted.textContent =
+        kind === "transcript" ? "Transcript" : "Extracted";
+    }
     if (tabPrint) tabPrint.hidden = isMedia || !creation;
     if (tabAscii) tabAscii.hidden = isMedia || !creation;
     if (tabGrounding) {
@@ -2734,7 +3623,7 @@
       tabGrounding.hidden = !creation || (isMedia && !sources.length);
     }
 
-    const showTxt = modality === "text";
+    const showTxt = modality === "text" || (isMedia && !!extracted);
     const showPng = modality === "text" || modality === "image";
     const showPdf = modality === "text" || modality === "image";
     const showMp4 = modality === "video";
@@ -2742,9 +3631,14 @@
     const showVoice = modality === "text";
     const showEditImage = modality === "image";
     const showEditVideo = modality === "video";
+    const showExtract = isMedia;
     const showMetadata = !!creation;
 
-    if ($("#btn-export-txt")) $("#btn-export-txt").hidden = !showTxt;
+    if ($("#btn-export-txt")) {
+      $("#btn-export-txt").hidden = !showTxt;
+      $("#btn-export-txt").textContent =
+        isMedia && extracted ? "Export Extracted TXT" : "Export TXT";
+    }
     if ($("#btn-export-png")) {
       $("#btn-export-png").hidden = !showPng;
       $("#btn-export-png").textContent =
@@ -2760,6 +3654,14 @@
       $("#btn-export-media").hidden = !showMp4;
       $("#btn-export-media").textContent = "Save MP4…";
     }
+    if ($("#btn-extract-text")) {
+      $("#btn-extract-text").hidden = !showExtract;
+      $("#btn-extract-text").textContent = extracted
+        ? "Re-extract Text…"
+        : modality === "video"
+          ? "Transcribe…"
+          : "Extract Text…";
+    }
     if ($("#btn-edit-image")) $("#btn-edit-image").hidden = !showEditImage;
     if ($("#btn-edit-video")) $("#btn-edit-video").hidden = !showEditVideo;
     if ($("#btn-copy-ascii")) $("#btn-copy-ascii").hidden = !showAscii;
@@ -2772,7 +3674,7 @@
     if (isMedia && (state.viewerTab === "doc" || state.viewerTab === "print" || state.viewerTab === "ascii")) {
       state.viewerTab = "media";
     }
-    if (!isMedia && state.viewerTab === "media") {
+    if (!isMedia && (state.viewerTab === "media" || state.viewerTab === "extracted")) {
       state.viewerTab = "doc";
     }
   }
@@ -2824,7 +3726,8 @@
     if ($("#openrouter-temp")) {
       $("#openrouter-temp").value = openrouter.temperature ?? 0;
     }
-    const orSuggested = boot.suggestedOpenRouterModels || [];
+    const orSuggested =
+      state.suggestedOpenRouterModels || boot.suggestedOpenRouterModels || [];
     fillOpenRouterModalitySelect(
       $("#openrouter-text-model"),
       openrouter.text_model || "google/gemini-2.5-flash",
@@ -2846,10 +3749,25 @@
 
     updateApiKeyIndicators();
 
-    fillModelSelect(
-      $("#model-repo"),
-      model.repo_id || "microsoft/Phi-3.5-mini-instruct",
-      boot.suggestedModels || []
+    const hfSuggested =
+      state.suggestedHfModels || boot.suggestedModels || [];
+    fillHfModalitySelect(
+      $("#hf-text-model"),
+      model.text_model || model.repo_id || "microsoft/Phi-3.5-mini-instruct",
+      hfSuggested,
+      "text"
+    );
+    fillHfModalitySelect(
+      $("#hf-image-model"),
+      model.image_model || "stable-diffusion-v1-5/stable-diffusion-v1-5",
+      hfSuggested,
+      "image"
+    );
+    fillHfModalitySelect(
+      $("#hf-video-model"),
+      model.video_model || "ali-vilab/text-to-video-ms-1.7b",
+      hfSuggested,
+      "video"
     );
     if ($("#model-device")) $("#model-device").value = model.device || "auto";
     if ($("#model-dtype")) $("#model-dtype").value = model.torch_dtype || "auto";
@@ -2860,6 +3778,10 @@
     $("#opt-sound").checked = ui.sound_enabled !== false;
     $("#opt-crt").checked = !!ui.crt_enabled;
     state.soundEnabled = $("#opt-sound").checked;
+    applySoundVolume(ui.sound_volume != null ? ui.sound_volume : 100);
+    if ($("#opt-sound-volume")) {
+      $("#opt-sound-volume").disabled = !state.soundEnabled;
+    }
     state.crtEnabled = $("#opt-crt").checked;
     $("#crt-overlay").hidden = !state.crtEnabled;
     applyUiScale(ui.ui_scale != null ? ui.ui_scale : 1);
@@ -2876,6 +3798,7 @@
     }
 
     fillAppThemeSelect();
+    fillUiFontSelect();
     const custom = ui.custom_theme || {};
     state.customTheme = {
       desktopColor: normalizeHexColor(custom.desktop_color, "#008080"),
@@ -2885,13 +3808,15 @@
       font: resolveCustomFontKey(custom.font || "sans"),
     };
     writeCustomThemeToControls(state.customTheme);
+    state.uiFont = resolveUiFontKey(
+      ui.ui_font || (custom.font === "serif" || custom.font === "mono" ? custom.font : null) || "inter"
+    );
+    applyUiFont(state.uiFont);
     state.appTheme = resolveAppThemeKey(ui.app_theme || "light");
     if ($("#app-theme")) {
       $("#app-theme").value = state.appTheme;
     }
     applyAppTheme(state.appTheme);
-    // Sync theme/status only — don't overwrite studio fields mid-session
-    applyGameDefaults({ applyPlatform: false, applyTheme: true });
 
     syncBackendPanels();
     updateStudioBackendLabel(boot);
@@ -2904,20 +3829,31 @@
       (boot && boot.config && boot.config.backend && boot.config.backend.provider) ||
       ($("#backend-provider") && $("#backend-provider").value) ||
       "gemini";
-    const statusMod =
-      (boot && boot.modelStatus && boot.modelStatus.modality) ||
-      (state.config && state.config._modality) ||
-      "";
-    const modLabel = statusMod
-      ? String(statusMod).charAt(0).toUpperCase() + String(statusMod).slice(1)
-      : "";
     if (provider === "huggingface") {
-      const repo =
-        (boot && boot.config && boot.config.huggingface && boot.config.huggingface.repo_id) ||
-        ($("#model-repo") && $("#model-repo").value) ||
+      const h =
+        (boot && boot.config && boot.config.huggingface) ||
+        (state.config && state.config.huggingface) ||
+        {};
+      const textM =
+        h.text_model ||
+        h.repo_id ||
+        ($("#hf-text-model") && $("#hf-text-model").value) ||
         "local HF";
+      const imageM =
+        h.image_model ||
+        ($("#hf-image-model") && $("#hf-image-model").value) ||
+        "";
+      const videoM =
+        h.video_model ||
+        ($("#hf-video-model") && $("#hf-video-model").value) ||
+        "";
       modelField.textContent =
-        "Backend: Hugging Face · " + repo + (modLabel ? " · " + modLabel : "");
+        "Backend: Hugging Face · text " +
+        textM +
+        " · image " +
+        imageM +
+        " · video " +
+        videoM;
     } else if (provider === "openrouter") {
       const o =
         (boot && boot.config && boot.config.openrouter) ||
@@ -3015,12 +3951,14 @@
         : "Paste Gemini API key";
     }
     if (geminiStatus) {
-      if (selected === "gemini" && providerChanged) {
+      if (geminiSet) {
+        geminiStatus.textContent =
+          selected === "gemini" && providerChanged
+            ? "A Gemini API key is already saved — Save to switch providers (leave blank to keep it)."
+            : "A Gemini API key is already saved. Leave the field blank to keep it.";
+      } else if (selected === "gemini" && providerChanged) {
         geminiStatus.textContent =
           "Provider changed — paste a Gemini API key before saving.";
-      } else if (geminiSet) {
-        geminiStatus.textContent =
-          "A Gemini API key is already saved. Leave the field blank to keep it.";
       } else {
         geminiStatus.textContent = "No Gemini API key saved yet.";
       }
@@ -3040,12 +3978,14 @@
         : "Paste OpenRouter API key";
     }
     if (orStatus) {
-      if (selected === "openrouter" && providerChanged) {
+      if (openrouterSet) {
+        orStatus.textContent =
+          selected === "openrouter" && providerChanged
+            ? "An OpenRouter API key is already saved — Save to switch providers (leave blank to keep it)."
+            : "An OpenRouter API key is already saved. Leave the field blank to keep it.";
+      } else if (selected === "openrouter" && providerChanged) {
         orStatus.textContent =
           "Provider changed — paste an OpenRouter API key before saving.";
-      } else if (openrouterSet) {
-        orStatus.textContent =
-          "An OpenRouter API key is already saved. Leave the field blank to keep it.";
       } else {
         orStatus.textContent = "No OpenRouter API key saved yet.";
       }
@@ -3059,11 +3999,6 @@
       provider === "openrouter"
         ? (($("#openrouter-key") && $("#openrouter-key").value.trim()) || "")
         : (($("#gemini-key") && $("#gemini-key").value.trim()) || "");
-
-    // Switching providers always requires pasting a key for the new provider.
-    if (provider !== savedBackendProvider()) {
-      return !!typed;
-    }
 
     if (typed) return true;
     if (provider === "openrouter") {
@@ -3126,8 +4061,27 @@
     };
   }
 
+  function currentHfUiConfig() {
+    const text =
+      ($("#hf-text-model") && $("#hf-text-model").value) ||
+      "microsoft/Phi-3.5-mini-instruct";
+    return {
+      text_model: text,
+      repo_id: text,
+      image_model:
+        ($("#hf-image-model") && $("#hf-image-model").value) ||
+        "stable-diffusion-v1-5/stable-diffusion-v1-5",
+      video_model:
+        ($("#hf-video-model") && $("#hf-video-model").value) ||
+        "ali-vilab/text-to-video-ms-1.7b",
+    };
+  }
+
   function collectSettings(reload) {
     const provider = ($("#backend-provider") && $("#backend-provider").value) || "gemini";
+    const hfText =
+      ($("#hf-text-model") && $("#hf-text-model").value.trim()) ||
+      "microsoft/Phi-3.5-mini-instruct";
     return {
       reload_model: !!reload,
       backend: { provider: provider },
@@ -3162,7 +4116,14 @@
           : 0,
       },
       huggingface: {
-        repo_id: ($("#model-repo") && $("#model-repo").value.trim()) || "microsoft/Phi-3.5-mini-instruct",
+        text_model: hfText,
+        repo_id: hfText,
+        image_model:
+          ($("#hf-image-model") && $("#hf-image-model").value.trim()) ||
+          "stable-diffusion-v1-5/stable-diffusion-v1-5",
+        video_model:
+          ($("#hf-video-model") && $("#hf-video-model").value.trim()) ||
+          "ali-vilab/text-to-video-ms-1.7b",
         device: ($("#model-device") && $("#model-device").value) || "auto",
         torch_dtype: ($("#model-dtype") && $("#model-dtype").value) || "auto",
         max_new_tokens: ($("#model-tokens") && Number($("#model-tokens").value)) || 2048,
@@ -3175,8 +4136,13 @@
       },
       ui: {
         sound_enabled: $("#opt-sound").checked,
+        sound_volume: clampSoundVolume(
+          $("#opt-sound-volume") ? $("#opt-sound-volume").value : state.soundVolume
+        ),
         crt_enabled: $("#opt-crt").checked,
         ui_scale: readUiScaleFromControl(),
+        ui_font:
+          ($("#ui-font") && $("#ui-font").value) || state.uiFont || "inter",
         app_theme: ($("#app-theme") && $("#app-theme").value) || state.appTheme || "light",
         custom_theme: (function () {
           const c =
@@ -3188,7 +4154,7 @@
             window_color: c.windowColor,
             title_color: c.titleColor,
             text_color: c.textColor,
-            font: c.font,
+            font: c.font || "sans",
           };
         })(),
       },
@@ -3224,14 +4190,38 @@
       const id = pane.getAttribute("data-control-pane");
       pane.hidden = id !== state.controlTab;
     });
+    syncControlPanelWidth();
     requestAnimationFrame(() => syncDesktopScrollExtent());
+  }
+
+  function syncControlPanelWidth() {
+    const win = $("#win-control");
+    if (!win) return;
+    const ai = state.controlTab !== "display";
+    win.classList.toggle("control-tab-ai", ai);
+    win.classList.toggle("control-tab-display", !ai);
+    // Keep inline style in sync so open/drag layout matches CSS
+    win.style.width = ai ? "820px" : "600px";
+    // Drop any leftover resize height so the panel sizes to content / max-height
+    win.style.height = "";
+    win.style.maxHeight = "";
+    win.style.maxWidth = "";
   }
 
   function applyDisplaySettingsFromControls() {
     state.soundEnabled = $("#opt-sound").checked;
+    applySoundVolume(
+      $("#opt-sound-volume") ? $("#opt-sound-volume").value : state.soundVolume
+    );
+    if ($("#opt-sound-volume")) {
+      $("#opt-sound-volume").disabled = !state.soundEnabled;
+    }
     state.crtEnabled = $("#opt-crt").checked;
     $("#crt-overlay").hidden = !state.crtEnabled;
     applyUiScale(readUiScaleFromControl());
+    applyUiFont(
+      ($("#ui-font") && $("#ui-font").value) || state.uiFont || "inter"
+    );
     const themeKey =
       ($("#app-theme") && $("#app-theme").value) || state.appTheme || "light";
     applyAppTheme(themeKey);
@@ -3255,22 +4245,6 @@
     dst.value = prev;
     writeCustomThemeToControls(state.customTheme);
     syncCustomThemeControlsVisibility();
-  }
-
-  function themeDisplayName(themeKey) {
-    if (!themeKey || themeKey === "auto") return "Auto Box Art Palette";
-    if (THEMES[themeKey] && THEMES[themeKey].themeName) return THEMES[themeKey].themeName;
-    return themeKey;
-  }
-
-  function updateStudioThemeField() {
-    const el = $("#studio-theme-field");
-    if (!el) return;
-    el.textContent = "Theme Engine: " + themeDisplayName("auto");
-  }
-
-  function applyGameDefaults(_opts) {
-    updateStudioThemeField();
   }
 
   function applyCreationPlaceholders(template, game, platform) {
@@ -3307,29 +4281,60 @@
     let message = "";
     let percent = undefined;
     let title = null;
+    let phase = "";
     if (payload && typeof payload === "object") {
       message = payload.message || payload.detail || "";
       if (payload.percent != null) percent = payload.percent;
       if (payload.title) title = payload.title;
-      if (payload.phase === "download") title = title || "Downloading model";
-      if (payload.phase === "load") title = title || "Loading model";
-      if (payload.phase === "generate") title = title || "Generating document";
+      phase = String(payload.phase || "");
     } else {
       message = String(payload || "");
     }
-    if (title) busy.title = title;
-    updateBusy(message, percent);
+
+    // Keep create vs model-download framing distinct even when generation
+    // briefly downloads/loads a local model first.
+    if (busy.activity === "generate") {
+      if (phase === "download") {
+        title = "Creating…";
+        if (message && !/^preparing model/i.test(message)) {
+          message = "Preparing model — " + message;
+        }
+      } else if (phase === "load") {
+        title = "Creating…";
+        if (message && !/^loading model/i.test(message)) {
+          message = "Loading model — " + message;
+        }
+      } else if (title) {
+        // Keep provider titles like "Generating image"
+      } else if (phase === "generate") {
+        title = "Creating…";
+      } else {
+        title = title || busy.title || "Creating…";
+      }
+    } else if (busy.activity === "preload") {
+      if (phase === "download") title = title || "Downloading models";
+      else if (phase === "load") title = title || "Loading models";
+      else if (phase === "ready") title = title || "Models ready";
+      else title = title || busy.title || "Downloading models";
+    } else {
+      if (phase === "download") title = title || "Downloading model";
+      if (phase === "load") title = title || "Loading model";
+      if (phase === "generate") title = title || "Creating…";
+    }
+
+    updateBusy(message, percent, title);
   };
 
   function applyGenerationResult(creation) {
     if (!creation) return;
-    // Idempotent — poll and evaluate_js may both fire
-    if (state._lastHandledId === creation.id) return;
-    state._lastHandledId = creation.id;
+    // Idempotent — poll and evaluate_js may both fire (require a real id)
+    if (creation.id && state._lastHandledId === creation.id) return;
+    if (creation.id) state._lastHandledId = creation.id;
 
     state.generating = false;
     setCreateBlocked(false);
     endBusy("Ready");
+    if (state.studioBasis) clearStudioBasis();
     state.creations = [creation].concat(
       state.creations.filter((c) => c.id !== creation.id)
     );
@@ -3337,8 +4342,7 @@
     renderDocument(creation);
     openWindow("viewer");
     focusWindow("viewer");
-    beep(880, 0.08, "triangle");
-    beep(1175, 0.1, "triangle");
+    playUiSound("success");
   }
 
   function applyGenerationError(err) {
@@ -3346,15 +4350,117 @@
     setCreateBlocked(false);
     endBusy("Ready");
     showToast(String(err));
-    beep(200, 0.2, "sawtooth");
+    playUiSound("error");
+  }
+
+  async function applyRetiredGeminiModel(info) {
+    if (!info) return;
+    state.generating = false;
+    setCreateBlocked(false);
+    endBusy("Ready");
+    const msg =
+      (info && info.message) ||
+      "A Gemini model was retired. Open Control Panel → AI Model to pick another.";
+    showToast(msg, 16000);
+    playUiSound("error");
+    openWindow("control");
+    focusWindow("control");
+    setControlTab("ai");
+    const gemini = (info && info.gemini) || {};
+    if ($("#backend-provider")) $("#backend-provider").value = "gemini";
+    // Prefill slots with replacements before refresh so pickers land on them.
+    if ($("#gemini-text-model") && gemini.text_model) {
+      $("#gemini-text-model").value = gemini.text_model;
+    }
+    if ($("#gemini-image-model") && gemini.image_model) {
+      $("#gemini-image-model").value = gemini.image_model;
+    }
+    if ($("#gemini-video-model") && gemini.video_model) {
+      $("#gemini-video-model").value = gemini.video_model;
+    }
+    try {
+      await refreshGeminiModelsForControlPanel();
+    } catch (_) {
+      /* refresh shows its own toast */
+    }
+    updateStudioBackendLabel({
+      config: {
+        backend: { provider: "gemini" },
+        gemini: gemini,
+      },
+    });
   }
 
   function applyGenerationCancelled() {
+    if (!state.generating && !busy.visible) return;
     state.generating = false;
     setCreateBlocked(false);
     endBusy("Ready");
     showToast("Generation cancelled");
-    beep(320, 0.08, "triangle");
+    playUiSound("cancel");
+  }
+
+  function applyExtractResult(creation) {
+    if (!creation) {
+      endBusy();
+      return;
+    }
+    endBusy("Ready");
+    state.creations = [creation].concat(
+      state.creations.filter((c) => c.id !== creation.id)
+    );
+    renderArchives();
+    state.viewerTab = "extracted";
+    renderDocument(creation);
+    openWindow("viewer");
+    focusWindow("viewer");
+    const kind =
+      creation.meta && String(creation.meta.extractionKind || "").toLowerCase();
+    showToast(
+      kind === "transcript" ? "Transcript ready." : "Extracted text ready."
+    );
+    playUiSound("success");
+  }
+
+  async function extractCreationText() {
+    if (!state.active) return;
+    const modality = creationModality(state.active);
+    if (modality !== "image" && modality !== "video") {
+      showToast("Extract Text is for images and videos.");
+      return;
+    }
+    if (state.generating || state.modelLoading) {
+      showToast("Wait for the current AI job to finish.");
+      return;
+    }
+    const a = api();
+    if (!a) {
+      showToast("Python bridge not ready.");
+      return;
+    }
+    const title = modality === "video" ? "Transcribing…" : "Extracting text…";
+    beginBusy(title, "Starting…", {
+      delayMs: 0,
+      cancellable: true,
+      activity: "other",
+      hint:
+        modality === "video"
+          ? "Pulling speech from the video via your text model. This can take a minute."
+          : "Reading text from the image via your text model.",
+    });
+    try {
+      const res = await a.extract_creation_text(state.active.id);
+      if (!res || !res.ok) {
+        endBusy();
+        showToast((res && res.error) || "Could not start Extract Text.");
+        return;
+      }
+      busy.jobId = res.job_id;
+      await pollJob(res.job_id, "extract");
+    } catch (err) {
+      endBusy();
+      showToast(String(err));
+    }
   }
 
   async function requestCancelBusyJob() {
@@ -3380,7 +4486,16 @@
         showToast((res && res.error) || "Could not cancel");
         return;
       }
-      updateBusy("Cancelling — waiting for the current step to stop…");
+      // Dismiss overlay immediately; pollJob still waits for cancelled status.
+      const kind = busy.activity;
+      endBusy("Cancelling…");
+      setProgress("Cancelling…");
+      if (kind === "generate") {
+        // Keep CREATE blocked until pollJob sees cancelled/error/done.
+        setCreateBlocked(true);
+        state.generating = true;
+      }
+      showToast("Cancelling…");
     } catch (err) {
       busy.cancelling = false;
       setBusyCancelVisible(true);
@@ -3406,11 +4521,9 @@
 
     if (candidates.length < 2) {
       showToast('Game Not Found — could not disambiguate "' + (payload.query || "") + '".');
-      beep(200, 0.2, "sawtooth");
       return;
     }
 
-    beep(660, 0.06, "triangle");
     const picked = await showSearchResults(payload.query, candidates);
     if (!picked || !picked.game) {
       showToast("Cancelled — pick a game from Search Results when ready.");
@@ -3446,6 +4559,9 @@
       } catch (err) {
         if (kind === "preload") {
           finishModelDownload(false, "Lost connection to Python bridge: " + err);
+        } else if (kind === "extract") {
+          endBusy();
+          showToast("Lost connection to Python bridge: " + err);
         } else {
           applyGenerationError("Lost connection to Python bridge: " + err);
         }
@@ -3466,6 +4582,8 @@
           applyGenerationResult(job.result);
         } else if (kind === "preload") {
           finishModelDownload(true);
+        } else if (kind === "extract") {
+          applyExtractResult(job.result);
         }
         return;
       }
@@ -3480,6 +4598,10 @@
       if (job.status === "cancelled") {
         if (kind === "generate") {
           applyGenerationCancelled();
+        } else if (kind === "extract") {
+          endBusy();
+          showToast("Extract Text cancelled.");
+          playUiSound("cancel");
         } else {
           finishModelDownload(false, "Cancelled");
         }
@@ -3487,12 +4609,21 @@
       }
 
       if (job.status === "cancelling") {
-        updateBusy("Cancelling…");
+        // Overlay already dismissed after cancel_job; keep status line only.
+        setProgress("Cancelling…");
       }
 
       if (job.status === "error" || job.status === "missing") {
+        if (job.retired_model) {
+          await applyRetiredGeminiModel(job.retired_model);
+          return;
+        }
         if (kind === "generate") {
           applyGenerationError(job.error || "Generation failed");
+        } else if (kind === "extract") {
+          endBusy();
+          showToast(job.error || "Extract Text failed");
+          playUiSound("error");
         } else {
           finishModelDownload(false, job.error || "Model load failed");
         }
@@ -3504,6 +4635,10 @@
 
     if (kind === "generate") {
       applyGenerationError("Timed out waiting for generation.");
+    } else if (kind === "extract") {
+      endBusy();
+      showToast("Timed out waiting for Extract Text.");
+      playUiSound("error");
     } else {
       finishModelDownload(false, "Timed out waiting for model load.");
     }
@@ -3521,7 +4656,7 @@
       "This prompt needs Google Gemini (image/video). Switch provider in Control Panel.";
     showToast(msg, 14000);
     setProgress("Stopped — switch provider");
-    beep(200, 0.2, "sawtooth");
+    playUiSound("error");
     openWindow("control");
     if ($("#backend-provider") && $("#backend-provider").value !== "gemini") {
       // Leave provider panel visible — user should switch to Gemini
@@ -3555,10 +4690,41 @@
         return;
       }
 
+      const basisId =
+        (state.studioBasis && state.studioBasis.creationId) || "";
+      // Prefer prompt intent (video/image keywords); else keep basis modality.
+      // "Generate a video…" + image basis → image-to-video, not img2img.
+      let compatPrompt = prompt;
+      if (basisId && state.studioBasis) {
+        const lower = prompt.toLowerCase();
+        const wantsVideo =
+          /\b(create|generate|make|render|produce|shoot|film)\b[\s\S]{0,48}\b(video|clip|animation|footage|movie|cinematic)\b/.test(
+            lower
+          ) ||
+          /\b(turn|convert|transform|morph|change)\b[\s\S]{0,48}\b(into|to)\b[\s\S]{0,24}\b(video|clip|animation|footage|movie)\b/.test(
+            lower
+          ) ||
+          /\b(video|clip|animation|footage)\s+of\b/.test(lower) ||
+          /\banimate\b/.test(lower);
+        const wantsImage =
+          /\b(create|generate|make|render|draw|paint|illustrate)\b[\s\S]{0,40}\b(image|picture|photo|illustration|drawing)\b/.test(
+            lower
+          ) || /\b(image|picture|photo)\s+of\b/.test(lower);
+        if (wantsVideo) {
+          compatPrompt = "Generate a video: " + prompt;
+        } else if (wantsImage) {
+          compatPrompt = "Create an image: " + prompt;
+        } else if (state.studioBasis.modality === "video") {
+          compatPrompt = "Generate a video: " + prompt;
+        } else {
+          compatPrompt = "Create an image: " + prompt;
+        }
+      }
+
       // Preflight: image/video prompts on text models (and reverse) stop here
       try {
         if (typeof a.check_modality_match === "function") {
-          const compat = await a.check_modality_match(prompt);
+          const compat = await a.check_modality_match(compatPrompt);
           if (compat && compat.ok === false) {
             applyModalityMismatch(compat);
             return;
@@ -3576,12 +4742,12 @@
 
       state.generating = true;
       $("#btn-generate").disabled = true;
-      beginBusy("Generating", "Calling Gemini / backend…", {
+      beginBusy("Creating…", "Starting generation…", {
         delayMs: 0,
         cancellable: true,
+        activity: "generate",
+        hint: BUSY_HINTS.generate,
       });
-      beep(400, 0.05);
-
       try {
         await a.ping();
       } catch (err) {
@@ -3596,7 +4762,8 @@
           platform,
           creationType,
           true,
-          creationDescription
+          creationDescription,
+          basisId
         );
       } catch (err) {
         applyGenerationError(err);
@@ -3623,8 +4790,10 @@
       setBusyCancelVisible(true);
       updateBusy(
         exactTitle
-          ? "Generating for selected title…"
-          : "Job started — loading model / generating…"
+          ? "Creating for selected title…"
+          : "Generation started…",
+        undefined,
+        "Creating…"
       );
       pollJob(res.job_id, "generate");
     } finally {
@@ -3645,6 +4814,11 @@
   window.__onGenerateError = function (err) {
     if (!state.generating && !busy.visible) return;
     applyGenerationError(err);
+  };
+
+  window.__onRetiredGeminiModel = function (info) {
+    if (!info) return;
+    applyRetiredGeminiModel(info);
   };
 
   window.__onGenerateCancelled = function () {
@@ -3717,12 +4891,13 @@
     if (toolbar) toolbar.hidden = !imageEdit.standalone;
     if ($("#btn-edit-apply")) $("#btn-edit-apply").hidden = !!imageEdit.standalone;
     if ($("#btn-edit-save")) $("#btn-edit-save").hidden = !imageEdit.standalone;
-    if ($("#btn-edit-save-as")) $("#btn-edit-save-as").hidden = !imageEdit.standalone;
+    // Save As is always available once an image is loaded (Archives Apply or desktop editor)
+    if ($("#btn-edit-save-as")) $("#btn-edit-save-as").hidden = false;
     const hint = $("#image-edit-hint");
     if (hint) {
       hint.textContent = imageEdit.standalone
         ? "Load an image to begin. At 0° rotation, drag to set a crop, then drag the box or handles to adjust. Save writes Archives; Save As… exports a file."
-        : "At 0° rotation, drag on the image to set a crop. Drag the yellow box to move, or use the handles to resize. Clear Crop to reset. Apply saves to this creation.";
+        : "At 0° rotation, drag on the image to set a crop. Drag the yellow box to move, or use the handles to resize. Clear Crop to reset. Apply saves to Archives; Save As… exports a file.";
     }
   }
 
@@ -4035,7 +5210,6 @@
     openWindow("image-edit");
     // Preview after the window is shown/laid out
     requestAnimationFrame(() => scheduleImageEditPreview());
-    beep(700, 0.04);
     return true;
   }
 
@@ -4150,7 +5324,6 @@
       renderDocument(saved);
       closeImageEditor();
       showToast("Image edit applied");
-      beep(900, 0.05);
     } catch (err) {
       showToast("Edit failed: " + err);
     } finally {
@@ -4169,7 +5342,6 @@
       if (!saved) return;
       await reloadImageEditorFromCreation(saved);
       showToast("Image saved");
-      beep(900, 0.05);
     } catch (err) {
       showToast("Save failed: " + err);
     } finally {
@@ -4216,7 +5388,6 @@
         return;
       }
       showToast("Saved to " + (res.path || "file"));
-      beep(900, 0.05);
     } catch (err) {
       showToast("Save As failed: " + err);
     } finally {
@@ -4440,13 +5611,11 @@
         if (imageEdit.crop) markImageEditDirty();
         imageEdit.crop = null;
         scheduleImageEditPreview();
-        beep(650, 0.03);
       });
     }
     if ($("#btn-edit-reset")) {
       $("#btn-edit-reset").addEventListener("click", () => {
         resetImageEditor();
-        beep(650, 0.03);
       });
     }
     if ($("#btn-edit-cancel")) {
@@ -4508,12 +5677,13 @@
     if (toolbar) toolbar.hidden = !videoEdit.standalone;
     if ($("#btn-vedit-apply")) $("#btn-vedit-apply").hidden = !!videoEdit.standalone;
     if ($("#btn-vedit-save")) $("#btn-vedit-save").hidden = !videoEdit.standalone;
-    if ($("#btn-vedit-save-as")) $("#btn-vedit-save-as").hidden = !videoEdit.standalone;
+    // Save As is always available once a video is loaded
+    if ($("#btn-vedit-save-as")) $("#btn-vedit-save-as").hidden = false;
     const hint = $("#video-edit-hint");
     if (hint) {
       hint.textContent = videoEdit.standalone
-        ? "Load a video to begin. Filters preview on the current frame. Save writes Archives; Save As… exports MP4 (ffmpeg required)."
-        : "Filters preview on the current frame. Apply rebuilds the video with your segment order and filters (requires ffmpeg on PATH). Drag a paused frame (0°) to crop. Timeline starts at 0.00s.";
+        ? "Load a video to begin. Sliders preview live on the player (play, scrub, and timeline keep working). Save writes Archives; Save As… exports MP4 (ffmpeg required)."
+        : "Sliders preview live on the player while you play and edit the timeline. Apply rebuilds the video in Archives; Save As… exports MP4 (requires ffmpeg on PATH). Drag a paused frame (0°) to crop. Timeline starts at 0.00s.";
     }
   }
 
@@ -4662,7 +5832,6 @@
           updateVideoEditTimeLabel();
         }
         renderVideoSegments();
-        beep(650, 0.02);
       });
       track.appendChild(btn);
     });
@@ -4718,7 +5887,6 @@
     markVideoEditDirty();
     renderVideoSegments();
     updateVideoEditTimeLabel();
-    beep(700, 0.04);
   }
 
   function deleteSelectedVideoSegment() {
@@ -4743,7 +5911,6 @@
     snapPlayerToEditedTimeline(keepEdited);
     renderVideoSegments();
     updateVideoEditTimeLabel();
-    beep(300, 0.06);
   }
 
   function moveSelectedVideoSegment(dir) {
@@ -4766,7 +5933,6 @@
     snapPlayerToEditedTimeline(newEditStart + within);
     renderVideoSegments();
     updateVideoEditTimeLabel();
-    beep(650, 0.03);
   }
 
   function clearVideoFilterPreview() {
@@ -4777,6 +5943,11 @@
     videoEdit.showFilterPreview = false;
     const stage = $("#video-edit-stage");
     if (stage) stage.classList.remove("previewing-filters");
+    const player = $("#video-edit-player");
+    if (player) {
+      player.style.filter = "";
+      player.style.transform = "";
+    }
     const canvas = $("#video-edit-preview-canvas");
     if (canvas) {
       canvas.hidden = true;
@@ -4787,6 +5958,73 @@
     }
     const box = $("#video-edit-crop-box");
     if (box) box.hidden = true;
+    syncVideoEditPlayButton();
+  }
+
+  function cssFilterFromVideoEdit(filters) {
+    const apiEdit = window.R98ImageEdit;
+    const f =
+      (apiEdit && apiEdit.normalizeFilters(filters)) ||
+      filters ||
+      {};
+    const parts = [];
+    // Match image_edit / ffmpeg approximate mapping for live preview
+    const brightness = 1 + (Number(f.brightness) || 0) / 100 + ((Number(f.exposure) || 0) / 100) * 0.5;
+    const contrast = 1 + (Number(f.contrast) || 0) / 100;
+    parts.push("brightness(" + Math.max(0, brightness) + ")");
+    parts.push("contrast(" + Math.max(0, contrast) + ")");
+    if (f.grayscale) parts.push("grayscale(1)");
+    const sat = Number(f.saturation);
+    parts.push(
+      "saturate(" +
+        (Number.isFinite(sat) ? Math.max(0, sat) / 100 : 1) +
+        ")"
+    );
+    const hue = Number(f.hueRotate) || 0;
+    if (hue) parts.push("hue-rotate(" + hue + "deg)");
+    const inv = Number(f.invert) || 0;
+    if (inv) parts.push("invert(" + Math.max(0, Math.min(100, inv)) / 100 + ")");
+    const sepia = Number(f.sepia) || 0;
+    if (sepia) parts.push("sepia(" + Math.max(0, Math.min(100, sepia)) / 100 + ")");
+    const blur = Number(f.blur) || 0;
+    if (blur) parts.push("blur(" + Math.max(0, blur) + "px)");
+    // gamma / vignette / tint / sharpen still apply on Save via ffmpeg; no clean CSS equivalent
+    return parts.join(" ");
+  }
+
+  function syncVideoEditPlayButton() {
+    const btn = $("#btn-vedit-play");
+    const player = $("#video-edit-player");
+    if (!btn) return;
+    const playing = !!(player && !player.paused && !player.ended && player.readyState > 0);
+    btn.textContent = playing ? "Pause" : "Play";
+  }
+
+  function toggleVideoEditPlayback() {
+    const player = $("#video-edit-player");
+    if (!player || !videoEdit.creationId) {
+      showToast("Load a video first.");
+      return;
+    }
+    if (player.paused || player.ended) {
+      if (!videoEdit.segments.length) {
+        showToast("Keep at least one segment.");
+        return;
+      }
+      // If outside kept ranges, snap to timeline start before playing
+      if (editedTimeFromSource(player.currentTime || 0) == null) {
+        snapPlayerToEditedTimeline(0);
+      }
+      videoEdit.playSegIdx = sourceFromEditedTime(
+        editedTimeFromSource(player.currentTime || 0) || 0
+      ).segIdx;
+      player.play().catch(() => {
+        /* autoplay / decode errors surface via UI */
+      });
+    } else {
+      player.pause();
+    }
+    syncVideoEditPlayButton();
   }
 
   function resetVideoEditRuntime() {
@@ -4796,6 +6034,7 @@
       player.pause();
       player.onloadedmetadata = null;
       player.ontimeupdate = null;
+      player.onplay = null;
       player.onpause = null;
       player.onseeked = null;
       player.onended = null;
@@ -4820,6 +6059,7 @@
     if (track) track.innerHTML = "";
     const summary = $("#vedit-segments-summary");
     if (summary) summary.textContent = "No segments";
+    syncVideoEditPlayButton();
   }
 
   function closeVideoEditor() {
@@ -5040,86 +6280,38 @@
   }
 
   function renderVideoFilterPreview() {
-    const apiEdit = window.R98ImageEdit;
     const player = $("#video-edit-player");
     const canvas = $("#video-edit-preview-canvas");
     const stage = $("#video-edit-stage");
-    if (!apiEdit || !player || !canvas || !stage || !videoEdit.creationId) return;
+    if (!player || !stage || !videoEdit.creationId) return;
+
+    // Always keep the native player visible (size + play controls). Preview via CSS.
+    if (canvas) canvas.hidden = true;
+    if (stage) stage.classList.remove("previewing-filters");
 
     const filters = readVideoEditFiltersFromUi();
     videoEdit.rotation = Number($("#vedit-rotation") && $("#vedit-rotation").value) || 0;
-    const active =
-      apiEdit.hasActiveFilters(filters) ||
-      !!videoEdit.crop ||
-      !!videoEdit.rotation;
-
-    if (!active || player.readyState < 2) {
-      videoEdit.showFilterPreview = false;
-      stage.classList.remove("previewing-filters");
-      canvas.hidden = true;
-      updateVideoCropOverlay();
-      return;
-    }
-
-    // Grab current frame → apply image pipeline for approximate preview
-    const vw = player.videoWidth || 0;
-    const vh = player.videoHeight || 0;
-    if (vw < 2 || vh < 2) return;
-
-    const frame = document.createElement("canvas");
-    frame.width = vw;
-    frame.height = vh;
-    const fctx = frame.getContext("2d");
-    try {
-      fctx.drawImage(player, 0, 0, vw, vh);
-    } catch (_) {
-      return;
-    }
-
-    const img = new Image();
-    img.onload = () => {
-      const cropPx = videoEdit.crop
-        ? {
-            x: videoEdit.crop.x * vw,
-            y: videoEdit.crop.y * vh,
-            w: videoEdit.crop.w * vw,
-            h: videoEdit.crop.h * vh,
-          }
-        : null;
-      // Preview at 0° uses overlay for crop; bake crop only when rotated
-      const previewCrop = videoEdit.rotation ? cropPx : null;
-      const out = apiEdit.renderEditedCanvas(
-        img,
-        filters,
-        previewCrop,
-        videoEdit.rotation
-      );
-      canvas.width = out.width;
-      canvas.height = out.height;
-      const ctx = canvas.getContext("2d");
-      ctx.clearRect(0, 0, canvas.width, canvas.height);
-      ctx.drawImage(out, 0, 0);
-      canvas.hidden = false;
-      videoEdit.showFilterPreview = true;
-      stage.classList.add("previewing-filters");
-      updateVideoCropOverlay();
-    };
-    img.src = frame.toDataURL("image/jpeg", 0.85);
+    const cssFilter = cssFilterFromVideoEdit(filters);
+    player.style.filter = cssFilter || "";
+    player.style.transform = videoEdit.rotation
+      ? "rotate(" + videoEdit.rotation + "deg)"
+      : "";
+    videoEdit.showFilterPreview = !!(cssFilter || videoEdit.rotation || videoEdit.crop);
+    updateVideoCropOverlay();
+    syncVideoEditPlayButton();
   }
 
   function updateVideoCropOverlay() {
     const box = $("#video-edit-crop-box");
     const stage = $("#video-edit-stage");
     const player = $("#video-edit-player");
-    const canvas = $("#video-edit-preview-canvas");
     if (!box || !stage) return;
     const crop = videoEdit.crop;
     if (!crop || videoEdit.rotation) {
       box.hidden = true;
       return;
     }
-    const target =
-      videoEdit.showFilterPreview && canvas && !canvas.hidden ? canvas : player;
+    const target = player;
     if (!target) {
       box.hidden = true;
       return;
@@ -5197,11 +6389,20 @@
           renderVideoSegments();
         }
         updateVideoEditTimeLabel();
+        scheduleVideoFilterPreview();
+        syncVideoEditPlayButton();
       };
       player.ontimeupdate = () => updateVideoEditTimeLabel();
-      player.onpause = () => scheduleVideoFilterPreview();
+      player.onplay = () => syncVideoEditPlayButton();
+      player.onpause = () => {
+        syncVideoEditPlayButton();
+        scheduleVideoFilterPreview();
+      };
       player.onseeked = () => scheduleVideoFilterPreview();
-      player.onended = () => onVideoEditEnded();
+      player.onended = () => {
+        syncVideoEditPlayButton();
+        onVideoEditEnded();
+      };
     }
 
     renderVideoSegments();
@@ -5209,7 +6410,6 @@
     syncVideoEditChrome();
     openWindow("video-edit");
     scheduleVideoFilterPreview();
-    beep(700, 0.04);
     return true;
   }
 
@@ -5280,7 +6480,6 @@
       renderDocument(saved);
       closeVideoEditor();
       showToast("Video edit applied");
-      beep(900, 0.05);
     } catch (err) {
       showToast("Video edit failed: " + err);
     } finally {
@@ -5317,7 +6516,6 @@
       renderArchives();
       await openVideoEditor(saved, { standalone: keepStandalone });
       showToast("Video saved");
-      beep(900, 0.05);
     } catch (err) {
       showToast("Save failed: " + err);
     } finally {
@@ -5348,7 +6546,6 @@
         return;
       }
       showToast("Saved to " + (res.path || "file"));
-      beep(900, 0.05);
     } catch (err) {
       showToast("Save As failed: " + err);
     } finally {
@@ -5368,10 +6565,7 @@
       }
       const player = $("#video-edit-player");
       if (player && !player.paused) player.pause();
-      const target =
-        videoEdit.showFilterPreview && $("#video-edit-preview-canvas")
-          ? $("#video-edit-preview-canvas")
-          : player;
+      const target = player;
       if (!target) return;
       const rect = target.getBoundingClientRect();
       if (rect.width < 1 || rect.height < 1) return;
@@ -5386,10 +6580,7 @@
     stage.addEventListener("pointermove", (e) => {
       if (!videoEdit.cropDrag || e.pointerId !== videoEdit.cropDrag.pointerId) return;
       const player = $("#video-edit-player");
-      const target =
-        videoEdit.showFilterPreview && $("#video-edit-preview-canvas")
-          ? $("#video-edit-preview-canvas")
-          : player;
+      const target = player;
       if (!target) return;
       const rect = target.getBoundingClientRect();
       const x = Math.min(1, Math.max(0, (e.clientX - rect.left) / rect.width));
@@ -5479,6 +6670,11 @@
         updateVideoEditTimeLabel();
       });
     }
+    if ($("#btn-vedit-play")) {
+      $("#btn-vedit-play").addEventListener("click", () => {
+        toggleVideoEditPlayback();
+      });
+    }
     if ($("#btn-vedit-rewind")) {
       $("#btn-vedit-rewind").addEventListener("click", () => {
         const player = $("#video-edit-player");
@@ -5487,7 +6683,7 @@
         snapPlayerToEditedTimeline(0);
         updateVideoEditTimeLabel();
         scheduleVideoFilterPreview();
-        beep(650, 0.03);
+        syncVideoEditPlayButton();
       });
     }
     if ($("#btn-vedit-split")) {
@@ -5538,7 +6734,6 @@
     if ($("#btn-vedit-reset")) {
       $("#btn-vedit-reset").addEventListener("click", () => {
         resetVideoEditor();
-        beep(650, 0.03);
       });
     }
     if ($("#btn-vedit-cancel")) {
@@ -5591,7 +6786,6 @@
         e.preventDefault();
         e.stopPropagation();
         toggleStartMenu();
-        beep(600, 0.03);
         return;
       }
 
@@ -5630,10 +6824,11 @@
         studioLoadMediaFile("video")
       );
     }
-    if ($("#btn-studio-use-active")) {
-      $("#btn-studio-use-active").addEventListener("click", () =>
-        useCreationAsBasis(state.active)
-      );
+    if ($("#btn-studio-clear-basis")) {
+      $("#btn-studio-clear-basis").addEventListener("click", () => {
+        clearStudioBasis();
+        showToast("Media basis cleared");
+      });
     }
     if ($("#btn-use-basis")) {
       $("#btn-use-basis").addEventListener("click", () =>
@@ -5670,7 +6865,6 @@
       const json = await a.export_creations_json();
       const date = new Date().toISOString().slice(0, 10);
       await a.save_file_dialog("retro_98_ai_creator_archives_" + date + ".json", json);
-      beep(900, 0.05);
     });
 
     $("#btn-import").addEventListener("click", async () => {
@@ -5681,7 +6875,6 @@
         state.creations = res.creations;
         renderArchives();
         showToast("Imported " + res.imported + " item(s)");
-        beep(900, 0.05);
       } else if (!res.cancelled) {
         showToast(res.error || "Import failed");
       }
@@ -5692,31 +6885,64 @@
     }
     if ($("#btn-import-image")) {
       $("#btn-import-image").addEventListener("click", () =>
-        studioLoadMediaFile("image")
+        archivesImportMedia("image")
       );
     }
     if ($("#btn-import-video")) {
       $("#btn-import-video").addEventListener("click", () =>
-        studioLoadMediaFile("video")
+        archivesImportMedia("video")
       );
     }
 
     $("#btn-export-txt").addEventListener("click", async () => {
       if (!state.active) return;
-      if (creationModality(state.active) !== "text") {
-        showToast("TXT export is for text creations only.");
+      const modality = creationModality(state.active);
+      const extracted = getExtractedText(state.active);
+      if (modality !== "text" && !extracted) {
+        showToast("Run Extract Text… first, or open a text creation.");
         return;
       }
       const a = api();
       if (!a) return;
       try {
         const txt = await a.export_creation_txt(state.active);
-        const name = exportBaseName(state.active) + ".txt";
+        const suffix =
+          modality === "video"
+            ? "_transcript.txt"
+            : modality === "image"
+              ? "_ocr.txt"
+              : ".txt";
+        const name =
+          modality === "text"
+            ? exportBaseName(state.active) + ".txt"
+            : exportBaseName(state.active) + suffix;
         await a.save_file_dialog(name, txt);
       } catch (err) {
         showToast(String(err));
       }
     });
+
+    if ($("#btn-extract-text")) {
+      $("#btn-extract-text").addEventListener("click", () => {
+        extractCreationText();
+      });
+    }
+
+    const docCanvas = $("#doc-canvas");
+    if (docCanvas) {
+      docCanvas.addEventListener("click", async (e) => {
+        const btn = e.target && e.target.closest && e.target.closest("#btn-copy-extracted");
+        if (!btn) return;
+        const text = getExtractedText(state.active);
+        if (!text) return;
+        try {
+          await navigator.clipboard.writeText(text);
+          showToast("Copied extracted text.");
+        } catch (_) {
+          showToast("Could not copy to clipboard.");
+        }
+      });
+    }
 
     $("#btn-export-json").addEventListener("click", async () => {
       if (!state.active) return;
@@ -5747,7 +6973,6 @@
               ? "Saved MP4"
               : "Saved media file"
           );
-          beep(900, 0.05);
         } else if (!res.cancelled) {
           showToast(res.error || "Media save failed");
         }
@@ -5761,7 +6986,6 @@
     document.querySelectorAll(".viewer-tab").forEach((btn) => {
       btn.addEventListener("click", () => {
         setViewerTab(btn.getAttribute("data-tab"));
-        beep(650, 0.03);
       });
     });
 
@@ -5774,14 +6998,15 @@
       try {
         await navigator.clipboard.writeText(text);
         showToast("ASCII document copied to clipboard");
-        beep(1000, 0.04);
       } catch (_) {
         showToast("Clipboard unavailable");
       }
     });
 
-    if ($("#model-repo")) {
-      $("#model-repo").addEventListener("change", () => {
+    ["hf-text-model", "hf-image-model", "hf-video-model"].forEach((id) => {
+      const el = $("#" + id);
+      if (!el) return;
+      el.addEventListener("change", () => {
         updateStudioBackendLabel({
           config: {
             backend: {
@@ -5791,11 +7016,11 @@
             },
             gemini: currentGeminiUiConfig(),
             openrouter: currentOpenRouterUiConfig(),
-            huggingface: { repo_id: $("#model-repo").value },
+            huggingface: currentHfUiConfig(),
           },
         });
       });
-    }
+    });
 
     ["gemini-text-model", "gemini-image-model", "gemini-video-model"].forEach(
       (id) => {
@@ -5811,9 +7036,7 @@
               },
               gemini: currentGeminiUiConfig(),
               openrouter: currentOpenRouterUiConfig(),
-              huggingface: {
-                repo_id: ($("#model-repo") && $("#model-repo").value) || "",
-              },
+              huggingface: currentHfUiConfig(),
             },
           });
         });
@@ -5837,9 +7060,7 @@
             },
             gemini: currentGeminiUiConfig(),
             openrouter: currentOpenRouterUiConfig(),
-            huggingface: {
-              repo_id: ($("#model-repo") && $("#model-repo").value) || "",
-            },
+            huggingface: currentHfUiConfig(),
           },
         });
       });
@@ -5854,9 +7075,7 @@
             backend: { provider: $("#backend-provider").value },
             gemini: currentGeminiUiConfig(),
             openrouter: currentOpenRouterUiConfig(),
-            huggingface: {
-              repo_id: ($("#model-repo") && $("#model-repo").value) || "",
-            },
+            huggingface: currentHfUiConfig(),
           },
         });
       });
@@ -5872,6 +7091,40 @@
       await saveControlPanelSettings({ offerDownload: true });
     });
 
+    if ($("#btn-hf-refresh-models")) {
+      $("#btn-hf-refresh-models").addEventListener("click", () => {
+        void refreshHfModelsForControlPanel();
+      });
+    }
+
+    if ($("#btn-openrouter-refresh-models")) {
+      $("#btn-openrouter-refresh-models").addEventListener("click", () => {
+        void refreshOpenRouterModelsForControlPanel();
+      });
+    }
+
+    if ($("#btn-gemini-refresh-models")) {
+      $("#btn-gemini-refresh-models").addEventListener("click", () => {
+        void refreshGeminiModelsForControlPanel();
+      });
+    }
+
+    if ($("#btn-gemini-recommend-models")) {
+      $("#btn-gemini-recommend-models").addEventListener("click", () => {
+        void runRecommendModels("gemini");
+      });
+    }
+    if ($("#btn-openrouter-recommend-models")) {
+      $("#btn-openrouter-recommend-models").addEventListener("click", () => {
+        void runRecommendModels("openrouter");
+      });
+    }
+    if ($("#btn-hf-recommend-models")) {
+      $("#btn-hf-recommend-models").addEventListener("click", () => {
+        void runRecommendModels("huggingface");
+      });
+    }
+
     $("#btn-save-settings").addEventListener("click", async () => {
       await saveControlPanelSettings({ applyDisplay: true });
     });
@@ -5886,7 +7139,6 @@
       const activate = (e) => {
         e.preventDefault();
         setControlTab(tabEl.getAttribute("data-control-tab"));
-        beep(650, 0.03);
       };
       const link = tabEl.querySelector("a");
       if (link) link.addEventListener("click", activate);
@@ -5895,7 +7147,28 @@
 
     $("#opt-sound").addEventListener("change", () => {
       state.soundEnabled = $("#opt-sound").checked;
+      if ($("#opt-sound-volume")) {
+        $("#opt-sound-volume").disabled = !state.soundEnabled;
+      }
+      if (state.soundEnabled) playUiSound("notify");
     });
+    let _soundVolPreviewTimer = null;
+    if ($("#opt-sound-volume")) {
+      $("#opt-sound-volume").disabled = !state.soundEnabled;
+      const onVolumeInput = () => {
+        applySoundVolume($("#opt-sound-volume").value);
+        clearTimeout(_soundVolPreviewTimer);
+        _soundVolPreviewTimer = setTimeout(() => {
+          playUiSound("notify");
+        }, 90);
+      };
+      $("#opt-sound-volume").addEventListener("input", onVolumeInput);
+      $("#opt-sound-volume").addEventListener("change", () => {
+        // Final settle after drag; input debounce may already have previewed.
+        clearTimeout(_soundVolPreviewTimer);
+        applySoundVolume($("#opt-sound-volume").value, { preview: true });
+      });
+    }
     $("#opt-crt").addEventListener("change", () => {
       state.crtEnabled = $("#opt-crt").checked;
       $("#crt-overlay").hidden = !state.crtEnabled;
@@ -5903,14 +7176,17 @@
     if ($("#ui-scale")) {
       $("#ui-scale").addEventListener("change", () => {
         applyUiScale(readUiScaleFromControl());
-        beep(700, 0.03);
       });
     }
     if ($("#app-theme")) {
       $("#app-theme").addEventListener("change", () => {
         syncCustomThemeControlsVisibility();
         applyAppTheme($("#app-theme").value);
-        beep(700, 0.03);
+      });
+    }
+    if ($("#ui-font")) {
+      $("#ui-font").addEventListener("change", () => {
+        applyUiFont($("#ui-font").value);
       });
     }
     [
@@ -5918,12 +7194,10 @@
       "custom-window-color",
       "custom-title-color",
       "custom-text-color",
-      "custom-ui-font",
     ].forEach((id) => {
       const el = $("#" + id);
       if (!el) return;
-      const evt = id === "custom-ui-font" ? "change" : "input";
-      el.addEventListener(evt, () => {
+      el.addEventListener("input", () => {
         if ((($("#app-theme") && $("#app-theme").value) || "") !== "custom") return;
         applyAppTheme("custom");
       });
@@ -5937,7 +7211,10 @@
     // Catalogs first — never depend on Python for dropdowns
     fillCatalogs(null);
     fillAppThemeSelect();
+    fillUiFontSelect();
+    applyUiFont(state.uiFont || "inter");
     applyAppTheme(state.appTheme || "light");
+    syncControlPanelWidth();
     wireEvents();
     enableWindowDragging();
     enableWindowResizing();
@@ -5962,7 +7239,6 @@
       state.creations = boot.creations || [];
       fillCatalogs(boot);
       fillControlPanel(boot);
-      applyGameDefaults({ applyPlatform: true, applyTheme: true });
       renderArchives();
       // Do not auto-open Viewer/Archives on launch — user opens them explicitly
       renderTaskbar();

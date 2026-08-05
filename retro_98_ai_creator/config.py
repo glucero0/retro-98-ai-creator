@@ -19,7 +19,11 @@ DEFAULT_GEMINI_VIDEO_MODEL = "veo-2.0-generate-001"
 DEFAULT_OPENROUTER_TEXT_MODEL = "google/gemini-2.5-flash"
 DEFAULT_OPENROUTER_IMAGE_MODEL = "google/gemini-2.5-flash-image"
 DEFAULT_OPENROUTER_VIDEO_MODEL = "google/veo-2.0"
-DEFAULT_HF_MODEL = "microsoft/Phi-3.5-mini-instruct"
+DEFAULT_HF_TEXT_MODEL = "microsoft/Phi-3.5-mini-instruct"
+DEFAULT_HF_IMAGE_MODEL = "stable-diffusion-v1-5/stable-diffusion-v1-5"
+DEFAULT_HF_VIDEO_MODEL = "ali-vilab/text-to-video-ms-1.7b"
+# Back-compat alias (older configs / imports used a single text repo)
+DEFAULT_HF_MODEL = DEFAULT_HF_TEXT_MODEL
 
 DEFAULTS: dict[str, Any] = {
     "backend": {
@@ -35,6 +39,8 @@ DEFAULTS: dict[str, Any] = {
         # When google_search is on: Pass 1 extract + Pass 2 verify at temperature 0
         "two_pass_verify": True,
         "temperature": 0.0,
+        # Runtime-learned: { "old-model-id": "replacement-id" } merged with built-ins
+        "retired_model_aliases": {},
     },
     "openrouter": {
         "text_model": DEFAULT_OPENROUTER_TEXT_MODEL,
@@ -45,7 +51,12 @@ DEFAULTS: dict[str, Any] = {
         "base_url": "https://openrouter.ai/api/v1",
     },
     "huggingface": {
-        "repo_id": DEFAULT_HF_MODEL,
+        # Three modality slots — Studio picks by prompt intent (like Gemini/OpenRouter)
+        "text_model": DEFAULT_HF_TEXT_MODEL,
+        "image_model": DEFAULT_HF_IMAGE_MODEL,
+        "video_model": DEFAULT_HF_VIDEO_MODEL,
+        # Alias of text_model (kept for older configs / UI)
+        "repo_id": DEFAULT_HF_TEXT_MODEL,
         "revision": "main",
         "device": "auto",
         "torch_dtype": "auto",
@@ -61,8 +72,10 @@ DEFAULTS: dict[str, Any] = {
     },
     "ui": {
         "sound_enabled": True,
+        "sound_volume": 100,
         "crt_enabled": False,
         "ui_scale": 1.0,
+        "ui_font": "inter",
         "app_theme": "light",
         "custom_theme": {
             "desktop_color": "#008080",
@@ -111,12 +124,75 @@ def _load_yaml(path: Path) -> dict[str, Any]:
     return data
 
 
+def normalize_huggingface_cfg(hf: dict[str, Any] | None) -> dict[str, Any]:
+    """
+    Normalize Hugging Face settings to three modality slots.
+
+    Older configs only had ``repo_id`` (text). That value becomes ``text_model``
+    when ``text_model`` is missing; ``repo_id`` stays synced as an alias.
+    """
+    out = dict(hf or {})
+    text = (
+        (out.get("text_model") or out.get("repo_id") or DEFAULT_HF_TEXT_MODEL) or ""
+    ).strip() or DEFAULT_HF_TEXT_MODEL
+    image = (
+        (out.get("image_model") or DEFAULT_HF_IMAGE_MODEL) or ""
+    ).strip() or DEFAULT_HF_IMAGE_MODEL
+    video = (
+        (out.get("video_model") or DEFAULT_HF_VIDEO_MODEL) or ""
+    ).strip() or DEFAULT_HF_VIDEO_MODEL
+    out["text_model"] = text
+    out["image_model"] = image
+    out["video_model"] = video
+    out["repo_id"] = text
+    return out
+
+
+def normalize_gemini_cfg(section: dict[str, Any] | None) -> dict[str, Any]:
+    """Normalize Gemini keys and remap shut-down model ids."""
+    from .gemini_provider import (
+        DEFAULT_GEMINI_IMAGE_MODEL,
+        DEFAULT_GEMINI_TEXT_MODEL,
+        DEFAULT_GEMINI_VIDEO_MODEL,
+        _gemini_model_id,
+        learned_retired_aliases,
+        merged_retired_aliases,
+        normalize_gemini_model,
+    )
+
+    out = dict(section or {})
+    raw_key = (out.get("api_key") or "").strip()
+    out["api_key"] = raw_key or None
+    aliases = merged_retired_aliases(out)
+    text = normalize_gemini_model(
+        out.get("text_model") or DEFAULT_GEMINI_TEXT_MODEL,
+        retired_aliases=aliases,
+    )
+    image_raw = _gemini_model_id(out.get("image_model") or DEFAULT_GEMINI_IMAGE_MODEL)
+    image = (
+        aliases.get(image_raw)
+        or aliases.get(image_raw.lower())
+        or image_raw
+        or DEFAULT_GEMINI_IMAGE_MODEL
+    )
+    video = _gemini_model_id(out.get("video_model") or "") or DEFAULT_GEMINI_VIDEO_MODEL
+    video = aliases.get(video) or aliases.get(video.lower()) or video
+    out["text_model"] = text
+    out["image_model"] = image
+    out["video_model"] = video
+    out["retired_model_aliases"] = learned_retired_aliases(out)
+    return out
+
+
 def load_config() -> dict[str, Any]:
     """Merge defaults ← config.yaml ← optional config.local.yaml."""
     cfg = copy.deepcopy(DEFAULTS)
 
     for path in (DEFAULT_CONFIG_PATH, PROJECT_ROOT / "config.local.yaml"):
         cfg = _deep_merge(cfg, _load_yaml(path))
+
+    cfg["huggingface"] = normalize_huggingface_cfg(cfg.get("huggingface"))
+    cfg["gemini"] = normalize_gemini_cfg(cfg.get("gemini"))
 
     paths = cfg.setdefault("paths", {})
     if not paths.get("archives"):
@@ -159,9 +235,9 @@ def save_config(updates: dict[str, Any], existing: dict[str, Any] | None = None)
     paths = merged.setdefault("paths", {})
     ui_out = dict(merged.get("ui") or {})
 
-    gemini_out = _normalize_api_key(merged.get("gemini") or {})
+    gemini_out = normalize_gemini_cfg(merged.get("gemini") or {})
     openrouter_out = _normalize_api_key(merged.get("openrouter") or {})
-    huggingface_out = dict(merged.get("huggingface") or {})
+    huggingface_out = normalize_huggingface_cfg(merged.get("huggingface") or {})
     prompt_out = dict(merged.get("prompt") or {})
     prompt_out.setdefault("extra_instructions", "")
 
@@ -191,26 +267,60 @@ def archives_path(cfg: dict[str, Any] | None = None) -> Path:
     cfg = cfg or load_config()
     return expand_path(cfg["paths"]["archives"])
 
-# Suggested Hugging Face models (local backend)
+# Suggested Hugging Face models (local backend) — curated per modality
 SUGGESTED_MODELS: list[dict[str, str]] = [
     {
         "repo_id": "microsoft/Phi-3.5-mini-instruct",
         "label": "Phi-3.5 Mini Instruct",
-        "notes": "~3.8B — often weak for accurate docs (needs 70B+ / MCP search)",
+        "notes": "~3.8B text — weak for accurate docs without search tools",
+        "modality": "text",
     },
     {
         "repo_id": "Qwen/Qwen2.5-3B-Instruct",
         "label": "Qwen2.5 3B Instruct",
-        "notes": "Small local — not recommended for keybindings without search tools",
+        "notes": "Small local text — demos / light writing",
+        "modality": "text",
     },
     {
         "repo_id": "Qwen/Qwen2.5-1.5B-Instruct",
         "label": "Qwen2.5 1.5B Instruct",
-        "notes": "Fastest / lowest memory — demos only",
+        "notes": "Fastest / lowest VRAM text — demos only",
+        "modality": "text",
     },
     {
         "repo_id": "google/gemma-2-2b-it",
         "label": "Gemma 2 2B IT",
-        "notes": "Compact (may require HF acceptance) — demos only",
+        "notes": "Compact text (may require HF acceptance)",
+        "modality": "text",
+    },
+    {
+        "repo_id": "stable-diffusion-v1-5/stable-diffusion-v1-5",
+        "label": "Stable Diffusion 1.5",
+        "notes": "Classic local text-to-image (~4GB VRAM typical)",
+        "modality": "image",
+    },
+    {
+        "repo_id": "stabilityai/sd-turbo",
+        "label": "SD Turbo",
+        "notes": "Fast image (1–4 steps) — higher VRAM than SD 1.5",
+        "modality": "image",
+    },
+    {
+        "repo_id": "stabilityai/sdxl-turbo",
+        "label": "SDXL Turbo",
+        "notes": "Higher quality turbo image — needs more VRAM",
+        "modality": "image",
+    },
+    {
+        "repo_id": "ali-vilab/text-to-video-ms-1.7b",
+        "label": "ModelScope Text-to-Video 1.7B",
+        "notes": "Classic Diffusers T2V — short clips, heavy on CPU/GPU",
+        "modality": "video",
+    },
+    {
+        "repo_id": "cerspense/zeroscope_v2_576w",
+        "label": "Zeroscope v2 576w",
+        "notes": "Local text-to-video — short 576p-ish clips",
+        "modality": "video",
     },
 ]

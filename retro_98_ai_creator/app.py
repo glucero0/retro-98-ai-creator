@@ -82,6 +82,13 @@ class _AppRequestHandler(SimpleHTTPRequestHandler):
         self.end_headers()
         self.wfile.write(body)
 
+    def copyfile(self, source, outputfile):  # noqa: N802 - stdlib API
+        try:
+            super().copyfile(source, outputfile)
+        except (ConnectionAbortedError, ConnectionResetError, BrokenPipeError):
+            # WebView often aborts media GETs when navigating / swapping preview src
+            logger.debug("ui-http: client closed connection during transfer", exc_info=True)
+
     def do_POST(self) -> None:  # noqa: N802
         path = urlparse(self.path).path
         if path not in ("/api/replace-creation-media", "/api/save-media-file"):
@@ -232,8 +239,19 @@ def main() -> int:
     logger.info("Backend: %s", provider)
     if provider == "gemini":
         logger.info("Gemini text model: %s", (cfg.get("gemini") or {}).get("text_model"))
+    elif provider == "openrouter":
+        logger.info(
+            "OpenRouter text model: %s",
+            (cfg.get("openrouter") or {}).get("text_model"),
+        )
     else:
-        logger.info("HF model: %s", (cfg.get("huggingface") or {}).get("repo_id"))
+        hf = cfg.get("huggingface") or {}
+        logger.info(
+            "HF models: text=%s image=%s video=%s",
+            hf.get("text_model") or hf.get("repo_id"),
+            hf.get("image_model"),
+            hf.get("video_model"),
+        )
     try:
         webview.start(debug=bool(ui_cfg.get("debug")))
     finally:

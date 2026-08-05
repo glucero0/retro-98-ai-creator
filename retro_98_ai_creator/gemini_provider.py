@@ -35,11 +35,159 @@ DEFAULT_GEMINI_TEXT_MODEL = "gemini-2.5-flash"
 DEFAULT_GEMINI_IMAGE_MODEL = "gemini-2.5-flash-image"
 DEFAULT_GEMINI_VIDEO_MODEL = "veo-2.0-generate-001"
 
+# Built-in shut-down / blocked ids. Learned aliases are merged from
+# config.yaml → gemini.retired_model_aliases at runtime (see merged_retired_aliases).
+GEMINI_RETIRED_MODEL_ALIASES: dict[str, str] = {
+    "gemini-2.0-flash": "gemini-2.5-flash",
+    "gemini-2.0-flash-001": "gemini-2.5-flash",
+    # Flash-Lite: 2.0 and 2.5 are retired / blocked for new users → 3.1
+    "gemini-2.0-flash-lite": "gemini-3.1-flash-lite",
+    "gemini-2.0-flash-lite-001": "gemini-3.1-flash-lite",
+    "gemini-2.0-flash-lite-preview": "gemini-3.1-flash-lite",
+    "gemini-2.0-flash-lite-preview-02-05": "gemini-3.1-flash-lite",
+    "gemini-2.5-flash-lite": "gemini-3.1-flash-lite",
+    "gemini-2.5-flash-lite-preview": "gemini-3.1-flash-lite",
+    "gemini-2.5-flash-lite-preview-06-17": "gemini-3.1-flash-lite",
+    "gemini-2.5-flash-lite-preview-09-2025": "gemini-3.1-flash-lite",
+    "gemini-2.0-flash-preview-image-generation": DEFAULT_GEMINI_IMAGE_MODEL,
+}
+
+_MODEL_IN_ERR_RE = re.compile(
+    r"(?i)(?:models/)?((?:gemini|veo|imagen)[-a-z0-9.]+)"
+)
+
+
+def learned_retired_aliases(gemini_cfg: dict[str, Any] | None) -> dict[str, str]:
+    """User/runtime-learned aliases from config.yaml."""
+    raw = (gemini_cfg or {}).get("retired_model_aliases") or {}
+    out: dict[str, str] = {}
+    if not isinstance(raw, dict):
+        return out
+    for src, dst in raw.items():
+        s = _gemini_model_id(str(src or ""))
+        d = _gemini_model_id(str(dst or ""))
+        if s and d and s.lower() != d.lower():
+            out[s] = d
+    return out
+
+
+def merged_retired_aliases(gemini_cfg: dict[str, Any] | None = None) -> dict[str, str]:
+    """Built-in aliases plus learned ones (learned wins on conflict)."""
+    return {**GEMINI_RETIRED_MODEL_ALIASES, **learned_retired_aliases(gemini_cfg)}
+
+
+def is_retired_gemini_error(exc: BaseException | str) -> bool:
+    """True when Google rejects a model as missing / retired / blocked for new users."""
+    text = str(exc or "")
+    if not text:
+        return False
+    low = text.lower()
+    modelish = bool(_MODEL_IN_ERR_RE.search(text))
+    if "no longer available" in low or "not available to new users" in low:
+        return True
+    if modelish and (
+        "not_found" in low
+        or ("404" in low and ("model" in low or "models/" in low))
+        or "is not found" in low
+        or "was not found" in low
+        or "is not supported" in low
+    ):
+        return True
+    return False
+
+
+def extract_model_from_gemini_error(exc: BaseException | str) -> str | None:
+    text = str(exc or "")
+    matches = _MODEL_IN_ERR_RE.findall(text)
+    if not matches:
+        return None
+    # Prefer the last explicit model token (message usually names the bad id)
+    return _gemini_model_id(matches[-1])
+
+
+def suggest_replacement_for_retired(model_id: str) -> tuple[str, str]:
+    """Return (replacement_model_id, modality)."""
+    mid = _gemini_model_id(model_id).lower()
+    modality = classify_model_modality(mid) or "text"
+    if modality == "image":
+        return DEFAULT_GEMINI_IMAGE_MODEL, "image"
+    if modality == "video":
+        return DEFAULT_GEMINI_VIDEO_MODEL, "video"
+    if "lite" in mid:
+        return "gemini-3.1-flash-lite", "text"
+    return DEFAULT_GEMINI_TEXT_MODEL, "text"
+
+
+def learn_retired_gemini_model(
+    config: dict[str, Any],
+    model_id: str,
+    *,
+    replacement: str | None = None,
+) -> dict[str, Any]:
+    """
+    Persist a retired model alias, clear the active Control Panel slot if it
+    matched, and return UI-facing details.
+    """
+    from .config import save_config
+
+    mid = _gemini_model_id(model_id)
+    if not mid:
+        raise ValueError("Missing retired model id")
+    repl, modality = suggest_replacement_for_retired(mid)
+    if replacement:
+        repl = _gemini_model_id(replacement) or repl
+
+    # Don't alias a model to itself
+    if repl.lower() == mid.lower():
+        repl = DEFAULT_GEMINI_TEXT_MODEL if modality == "text" else repl
+
+    gemini = dict(config.get("gemini") or {})
+    learned = learned_retired_aliases(gemini)
+    learned[mid] = repl
+    gemini["retired_model_aliases"] = learned
+
+    slot = {"text": "text_model", "image": "image_model", "video": "video_model"}[modality]
+    current = _gemini_model_id(gemini.get(slot) or "")
+    switched = False
+    if current.lower() == mid.lower():
+        gemini[slot] = repl
+        switched = True
+
+    new_config = save_config({"gemini": gemini}, existing=config)
+    logger.info(
+        "Learned retired Gemini model %s → %s (slot %s switched=%s)",
+        mid,
+        repl,
+        slot,
+        switched,
+    )
+    msg = (
+        f'Gemini model "{mid}" is retired or unavailable for this API key. '
+        f"It was removed from the picker"
+        + (f' and {modality} was switched to "{repl}"' if switched else "")
+        + ". Open Control Panel → AI Model to confirm or choose another model."
+    )
+    return {
+        "retired": mid,
+        "replacement": repl,
+        "modality": modality,
+        "switched": switched,
+        "message": msg,
+        "config": new_config,
+    }
+
+
 SUGGESTED_GEMINI_MODELS: list[dict[str, str]] = [
     {
         "repo_id": "gemini-2.5-flash",
         "label": "Gemini 2.5 Flash (default text)",
         "notes": "Cheapest balanced text — Search + two-pass",
+        "modality": "text",
+    },
+    {
+        "repo_id": "gemini-3.1-flash-lite",
+        "label": "Gemini 3.1 Flash-Lite",
+        "notes": "Fastest / cheapest Flash-Lite (replaces 2.5 Flash-Lite)",
         "modality": "text",
     },
     {
@@ -145,10 +293,15 @@ def _is_studio_gemini_model(
     display_name: str | None = None,
     description: str | None = None,
     supported_actions: list[str] | None = None,
+    retired_aliases: dict[str, str] | None = None,
 ) -> bool:
     """True for Gemini text / image / video models usable in the studio."""
-    mid = (model_id or "").strip().lower().rstrip("/")
+    mid = _gemini_model_id(model_id).lower().rstrip("/")
     if not mid:
+        return False
+    # Drop shut-down / learned-retired ids even if Google still lists them
+    aliases = retired_aliases if retired_aliases is not None else GEMINI_RETIRED_MODEL_ALIASES
+    if mid in {k.lower() for k in aliases}:
         return False
     # Allow imagen / veo even without "gemini" in the id
     modality = classify_model_modality(
@@ -203,7 +356,11 @@ def _is_text_generation_gemini_model(
     )
 
 
-def list_available_gemini_models(api_key: str) -> list[dict[str, str]]:
+def list_available_gemini_models(
+    api_key: str,
+    *,
+    retired_aliases: dict[str, str] | None = None,
+) -> list[dict[str, str]]:
     """Query Google for text/image/video models available to this API key."""
     key = (api_key or "").strip()
     if not key:
@@ -216,6 +373,7 @@ def list_available_gemini_models(api_key: str) -> list[dict[str, str]]:
             "google-genai is not installed. Run:\n  pip install google-genai"
         ) from exc
 
+    aliases = retired_aliases if retired_aliases is not None else GEMINI_RETIRED_MODEL_ALIASES
     client = genai.Client(api_key=key)
     out: list[dict[str, str]] = []
     seen: set[str] = set()
@@ -232,6 +390,7 @@ def list_available_gemini_models(api_key: str) -> list[dict[str, str]]:
             display_name=display,
             description=description,
             supported_actions=actions,
+            retired_aliases=aliases,
         ):
             continue
         modality = classify_model_modality(
@@ -276,9 +435,21 @@ def list_available_gemini_models(api_key: str) -> list[dict[str, str]]:
     return out
 
 
-def normalize_gemini_model(model_name: str | None) -> str:
-    name = (model_name or "").strip()
-    return name or DEFAULT_GEMINI_TEXT_MODEL
+def normalize_gemini_model(
+    model_name: str | None,
+    *,
+    retired_aliases: dict[str, str] | None = None,
+) -> str:
+    """Strip models/ prefix and remap shut-down Gemini ids to current replacements."""
+    name = _gemini_model_id(model_name)
+    if not name:
+        return DEFAULT_GEMINI_TEXT_MODEL
+    aliases = retired_aliases if retired_aliases is not None else GEMINI_RETIRED_MODEL_ALIASES
+    remapped = aliases.get(name) or aliases.get(name.lower())
+    if remapped:
+        logger.info("Remapping retired Gemini model %s → %s", name, remapped)
+        return remapped
+    return name
 
 
 def resolve_gemini_model_for_modality(
@@ -286,12 +457,20 @@ def resolve_gemini_model_for_modality(
 ) -> str:
     """Pick the configured model id for text / image / video."""
     cfg = gemini_cfg or {}
+    aliases = merged_retired_aliases(cfg)
     mod = (modality or "text").lower().strip()
     if mod == "image":
-        return (cfg.get("image_model") or "").strip() or DEFAULT_GEMINI_IMAGE_MODEL
-    if mod == "video":
-        return (cfg.get("video_model") or "").strip() or DEFAULT_GEMINI_VIDEO_MODEL
-    return (cfg.get("text_model") or "").strip() or DEFAULT_GEMINI_TEXT_MODEL
+        raw = (cfg.get("image_model") or "").strip() or DEFAULT_GEMINI_IMAGE_MODEL
+        fallback = DEFAULT_GEMINI_IMAGE_MODEL
+    elif mod == "video":
+        raw = (cfg.get("video_model") or "").strip() or DEFAULT_GEMINI_VIDEO_MODEL
+        fallback = DEFAULT_GEMINI_VIDEO_MODEL
+    else:
+        raw = (cfg.get("text_model") or "").strip() or DEFAULT_GEMINI_TEXT_MODEL
+        fallback = DEFAULT_GEMINI_TEXT_MODEL
+    name = _gemini_model_id(raw)
+    remapped = aliases.get(name) or aliases.get(name.lower())
+    return remapped or name or fallback
 
 
 def resolve_api_key(gemini_cfg: dict[str, Any] | None = None) -> str | None:
@@ -370,26 +549,41 @@ def generate_with_gemini(
     creation_description: str = "",
     progress: ProgressCallback | None = None,
     exact_title: bool = False,
+    basis_media: dict[str, Any] | None = None,
+    forced_modality: str | None = None,
+    cancel_event: Any = None,
 ) -> dict[str, Any]:
-    """Call Gemini; prompt intent selects text / image / video model from config."""
+    """Call Gemini; prompt intent (or forced modality / media basis) selects the slot."""
     from .modality import infer_prompt_modality
 
     cfg = dict(gemini_cfg or {})
     prompt_text = (creation_description or "").strip() or (game or "").strip()
-    modality = infer_prompt_modality(prompt_text) or "text"
+    modality = (forced_modality or "").strip().lower() or infer_prompt_modality(
+        prompt_text
+    ) or "text"
+    if basis_media and modality not in {"image", "video"}:
+        modality = str(basis_media.get("modality") or "image")
     model_name = resolve_gemini_model_for_modality(cfg, modality)
 
     if modality == "image":
         from .gemini_media import generate_image_with_gemini
 
         return generate_image_with_gemini(
-            prompt_text, gemini_cfg=cfg, progress=progress
+            prompt_text,
+            gemini_cfg=cfg,
+            progress=progress,
+            basis_media=basis_media,
+            cancel_event=cancel_event,
         )
     if modality == "video":
         from .gemini_media import generate_video_with_gemini
 
         return generate_video_with_gemini(
-            prompt_text, gemini_cfg=cfg, progress=progress
+            prompt_text,
+            gemini_cfg=cfg,
+            progress=progress,
+            basis_media=basis_media,
+            cancel_event=cancel_event,
         )
 
     return _generate_text_with_gemini(
@@ -403,6 +597,7 @@ def generate_with_gemini(
         exact_title=exact_title,
         prompt_text=prompt_text,
         model_name=model_name,
+        cancel_event=cancel_event,
     )
 
 
@@ -418,6 +613,7 @@ def _generate_text_with_gemini(
     exact_title: bool = False,
     prompt_text: str = "",
     model_name: str = DEFAULT_GEMINI_TEXT_MODEL,
+    cancel_event: Any = None,
 ) -> dict[str, Any]:
     """Text generation path (freeform Prompt or classic structured document)."""
 
@@ -486,10 +682,15 @@ def _generate_text_with_gemini(
         elif json_mime:
             config_kwargs["response_mime_type"] = "application/json"
 
-        response = client.models.generate_content(
-            model=model_name,
-            contents=prompt,
-            config=types.GenerateContentConfig(**config_kwargs),
+        from .cancellation import run_cancellable
+
+        response = run_cancellable(
+            lambda: client.models.generate_content(
+                model=model_name,
+                contents=prompt,
+                config=types.GenerateContentConfig(**config_kwargs),
+            ),
+            cancel_event,
         )
         if with_search:
             grounding_sources = _extract_grounding_sources(response)
@@ -505,6 +706,10 @@ def _generate_text_with_gemini(
                 json_mime=False,
             )
         except Exception as exc:
+            from .cancellation import GenerationCancelled
+
+            if isinstance(exc, GenerationCancelled):
+                raise
             raise RuntimeError(f"Gemini API error: {exc}") from exc
         if not response_text:
             raise RuntimeError("Gemini returned an empty response.")
@@ -561,6 +766,10 @@ def _generate_text_with_gemini(
                 )
                 search_used = True
             except Exception as search_err:
+                from .cancellation import GenerationCancelled
+
+                if isinstance(search_err, GenerationCancelled):
+                    raise
                 logger.warning(
                     "Gemini search-grounded call failed; retrying without search: %s",
                     search_err,
@@ -648,6 +857,10 @@ def _generate_text_with_gemini(
                     json_mime=True,
                 )
             except Exception as verify_err:
+                from .cancellation import GenerationCancelled
+
+                if isinstance(verify_err, GenerationCancelled):
+                    raise
                 logger.warning(
                     "Pass 2 verification failed; using Pass 1 output: %s", verify_err
                 )

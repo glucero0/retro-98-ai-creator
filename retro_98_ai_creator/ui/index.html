@@ -63,36 +63,52 @@
             </p>
           </fieldset>
 
-          <form id="create-form">
-            <div class="field-row-stacked">
-              <label for="studio-prompt">Prompt</label>
-              <textarea
-                id="studio-prompt"
-                class="studio-prompt"
-                rows="14"
-                placeholder="Describe the text, image, or video you want to create…"
-              ></textarea>
+          <div class="studio-layout" id="studio-layout">
+            <div class="studio-main">
+              <form id="create-form">
+                <div class="field-row-stacked">
+                  <label for="studio-prompt">Prompt</label>
+                  <textarea
+                    id="studio-prompt"
+                    class="studio-prompt"
+                    rows="14"
+                    placeholder="Describe the text, image, or video you want to create…"
+                  ></textarea>
+                </div>
+
+                <div class="form-actions">
+                  <button type="button" id="btn-generate" class="default">⚡ CREATE</button>
+                </div>
+                <div class="form-actions studio-load-actions">
+                  <button type="button" id="btn-studio-load-text">Load Text…</button>
+                  <button type="button" id="btn-studio-load-image">Load Image…</button>
+                  <button type="button" id="btn-studio-load-video">Load Video…</button>
+                </div>
+                <p class="hint" id="studio-load-hint">
+                  Load Text into the prompt. Load Image / Video sets a media basis shown on
+                  the right — then describe the change and CREATE. To reuse something already
+                  in Archives, open it in the Viewer and choose Use as Basis.
+                </p>
+              </form>
             </div>
 
-            <div class="form-actions">
-              <button type="button" id="btn-generate" class="default">⚡ CREATE</button>
-            </div>
-            <div class="form-actions studio-load-actions">
-              <button type="button" id="btn-studio-load-text">Load Text…</button>
-              <button type="button" id="btn-studio-load-image">Load Image…</button>
-              <button type="button" id="btn-studio-load-video">Load Video…</button>
-              <button type="button" id="btn-studio-use-active">Use Active as Basis</button>
-            </div>
-            <p class="hint" id="studio-load-hint">
-              Load a file or use the Viewer’s active item as a starting point for a new
-              text / image / video of the same kind (copies into Archives; originals stay intact).
-            </p>
-          </form>
+            <aside class="studio-basis-panel" id="studio-basis-panel" hidden>
+              <fieldset>
+                <legend>Media basis</legend>
+                <div class="studio-basis-preview" id="studio-basis-preview">
+                  <p class="muted">No media loaded</p>
+                </div>
+                <p class="hint" id="studio-basis-label"></p>
+                <div class="form-actions">
+                  <button type="button" id="btn-studio-clear-basis">Clear basis</button>
+                </div>
+              </fieldset>
+            </aside>
+          </div>
 
           <div class="status-bar" id="studio-status-bar">
             <p class="status-bar-field" id="gen-status-text">Ready</p>
             <p class="status-bar-field" id="studio-model-field">Backend: Gemini</p>
-            <p class="status-bar-field" id="studio-theme-field">Theme Engine: Auto Box Art Palette</p>
           </div>
         </div>
       </div>
@@ -111,6 +127,7 @@
           <div class="viewer-tabs" role="tablist">
             <button type="button" class="viewer-tab active" data-tab="doc" role="tab" id="tab-doc">The Document</button>
             <button type="button" class="viewer-tab" data-tab="media" role="tab" id="tab-media" hidden>Media</button>
+            <button type="button" class="viewer-tab" data-tab="extracted" role="tab" id="tab-extracted" hidden>Extracted</button>
             <button type="button" class="viewer-tab" data-tab="grounding" role="tab" id="tab-grounding">Sources (0)</button>
             <button type="button" class="viewer-tab" data-tab="print" role="tab" id="tab-print">Reference Layout</button>
             <button type="button" class="viewer-tab" data-tab="ascii" role="tab" id="tab-ascii">Plain ASCII</button>
@@ -121,6 +138,7 @@
             <button type="button" id="btn-export-png">Export PNG</button>
             <button type="button" id="btn-export-pdf">Export PDF</button>
             <button type="button" id="btn-export-media" hidden>Save MP4…</button>
+            <button type="button" id="btn-extract-text" hidden>Extract Text…</button>
             <button type="button" id="btn-edit-image" hidden>Edit</button>
             <button type="button" id="btn-edit-video" hidden>Edit</button>
             <button type="button" id="btn-use-basis">Use as Basis</button>
@@ -181,7 +199,7 @@
       </div>
 
       <!-- Control Panel -->
-      <div class="window app-window" id="win-control" data-window="control" hidden style="left:120px;top:40px;width:560px;">
+      <div class="window app-window control-tab-ai" id="win-control" data-window="control" hidden style="left:120px;top:40px;width:820px;">
         <div class="title-bar">
           <div class="title-bar-text">Control Panel</div>
         </div>
@@ -200,12 +218,6 @@
               <div id="control-pane-ai" class="control-pane" data-control-pane="ai">
                 <fieldset>
                   <legend>AI Backend</legend>
-                  <p class="hint disclaimer">
-                    Recommended: <strong>Google Gemini 2.5 Flash or Pro</strong> with Google Search
-                    grounding (and two-pass verify) for accurate manuals and keybindings.
-                    OpenRouter works well when routing to the same Gemini models.
-                    Always verify generated data before using it in production or publishing.
-                  </p>
                   <div class="field-row-stacked">
                     <label for="backend-provider">Provider</label>
                     <select id="backend-provider">
@@ -239,8 +251,12 @@
                   </div>
                   <p class="hint" id="gemini-model-hint">
                     Each list shows only models compatible with that modality.
-                    Refreshed from Google when Control Panel opens (requires a saved API key).
+                    Refresh loads models from Google (requires a saved API key).
                   </p>
+                  <div class="form-actions">
+                    <button type="button" id="btn-gemini-refresh-models">Refresh…</button>
+                    <button type="button" id="btn-gemini-recommend-models">Recommend Models…</button>
+                  </div>
                   <div class="field-row-stacked">
                     <label for="gemini-key">
                       <span>API key</span>
@@ -273,9 +289,7 @@
                     Get a key at
                     <a href="https://openrouter.ai/keys" target="_blank" rel="noreferrer">openrouter.ai/keys</a>.
                     Paste it below and save — it is stored in <code>config.yaml</code>.
-                    Google Search grounding is Gemini-only (not available through OpenRouter).
-                    Prefer routing text to <strong>google/gemini-2.5-flash</strong> or
-                    <strong>google/gemini-2.5-pro</strong> for documentation quality.
+                    Studio picks the Text / Image / Video model from your prompt.
                   </p>
                   <div class="field-row-stacked">
                     <label for="openrouter-text-model">Text model</label>
@@ -289,8 +303,13 @@
                     <label for="openrouter-video-model">Video model</label>
                     <select id="openrouter-video-model"></select>
                   </div>
+                  <div class="form-actions">
+                    <button type="button" id="btn-openrouter-refresh-models">Refresh OpenRouter models…</button>
+                    <button type="button" id="btn-openrouter-recommend-models">Recommend Models…</button>
+                  </div>
                   <p class="hint" id="openrouter-model-hint">
-                    Each list shows only models compatible with that modality.
+                    Each list starts with a curated set. Refresh loads up to 20 popular
+                    OpenRouter models per modality (ranked by popularity).
                     Studio picks the slot from your prompt (text / image / video).
                   </p>
                   <div class="field-row-stacked">
@@ -314,22 +333,33 @@
                     <code>pip install -r requirements-local.txt</code> before this backend will work.
                   </p>
                   <p class="hint disclaimer">
-                    <strong>Text-only in this app.</strong> Local Hugging Face loads causal
-                    instruct models for text. Image/video need Gemini or OpenRouter.
-                    Pick a small instruct repo below — Hub has millions of models;
-                    you're on your own beyond this curated list / typing a known text repo id.
-                  </p>
-                  <p class="hint disclaimer">
-                    <strong>Warning:</strong> small local instruct models usually cannot produce
-                    reliable game docs or keybindings. Unless you run a large local setup
-                    (e.g. <strong>70B+</strong> parameter models) with custom
-                    <strong>MCP (Model Context Protocol)</strong> search tools, results are often
-                    unusable compared to Gemini/OpenRouter with web search.
+                    Studio picks the <strong>Text</strong> / <strong>Image</strong> /
+                    <strong>Video</strong> model from your prompt (same slot pattern as Gemini).
+                    Text uses causal instruct models; image/video use Diffusers pipelines.
+                    Defaults are small curated Hub repos — large downloads and high VRAM use
+                    are expected.
                   </p>
                   <div class="field-row-stacked">
-                    <label for="model-repo">Text model</label>
-                    <select id="model-repo"></select>
+                    <label for="hf-text-model">Text model</label>
+                    <select id="hf-text-model"></select>
                   </div>
+                  <div class="field-row-stacked">
+                    <label for="hf-image-model">Image model</label>
+                    <select id="hf-image-model"></select>
+                  </div>
+                  <div class="field-row-stacked">
+                    <label for="hf-video-model">Video model</label>
+                    <select id="hf-video-model"></select>
+                  </div>
+                  <div class="form-actions">
+                    <button type="button" id="btn-hf-refresh-models">Refresh Hub models…</button>
+                    <button type="button" id="btn-hf-recommend-models">Recommend Models…</button>
+                  </div>
+                  <p class="hint" id="hf-model-hint">
+                    Each list starts with a curated set. Refresh loads up to 20 popular
+                    Hub models per modality (ranked by downloads).
+                    Save can offer a download of all three into the Hugging Face cache.
+                  </p>
                   <div class="field-row">
                     <label for="model-device">Device</label>
                     <select id="model-device">
@@ -402,16 +432,21 @@
                       <label for="custom-text-color">Text</label>
                       <input type="color" id="custom-text-color" value="#222222" />
                     </div>
-                    <div class="field-row-stacked">
-                      <label for="custom-ui-font">Font</label>
-                      <select id="custom-ui-font">
-                        <option value="sans">Sans (MS Sans / Tahoma)</option>
-                        <option value="serif">Serif (Georgia / Times)</option>
-                        <option value="mono">Monospace (Courier)</option>
-                      </select>
-                    </div>
                     <p class="hint">
                       Customize is only available when selected above. Light and Dark use fixed palettes.
+                      App font is set under Font below.
+                    </p>
+                  </div>
+                </fieldset>
+
+                <fieldset>
+                  <legend>Font</legend>
+                  <div class="field-row-stacked">
+                    <label for="ui-font">UI font</label>
+                    <select id="ui-font"></select>
+                    <p class="hint" id="ui-font-hint">
+                      Applies to windows, buttons, and labels. Open-source fonts load from the
+                      network the first time you pick them. Retro Pixel is the classic Win98 look.
                     </p>
                   </div>
                 </fieldset>
@@ -422,6 +457,24 @@
                     <input type="checkbox" id="opt-sound" />
                     <label for="opt-sound">Sound effects</label>
                   </div>
+                  <div class="field-row-stacked sound-volume-row">
+                    <label for="opt-sound-volume">Volume</label>
+                    <div class="field-row scale-row">
+                      <input
+                        id="opt-sound-volume"
+                        type="range"
+                        min="0"
+                        max="100"
+                        step="1"
+                        value="100"
+                      />
+                      <span id="opt-sound-volume-label" class="hint">100%</span>
+                    </div>
+                  </div>
+                  <p class="hint">
+                    Sparse Win95/98-style cues for create / extract success, errors, and cancel —
+                    not click chirps. Synthesized in-app (no Microsoft system WAVs).
+                  </p>
                 </fieldset>
 
                 <fieldset>
@@ -500,7 +553,7 @@
             <span id="busy-elapsed">0:00</span>
             <span id="busy-percent-label"></span>
           </div>
-          <p class="busy-hint" id="busy-hint">Gemini usually finishes in seconds. Local models can take minutes.</p>
+          <p class="busy-hint" id="busy-hint">Creating text, an image, or video from your prompt. You can cancel anytime.</p>
           <div class="form-actions busy-actions" id="busy-actions" hidden>
             <button type="button" id="busy-cancel">Cancel</button>
           </div>
@@ -518,6 +571,39 @@
           <div class="form-actions confirm-actions">
             <button type="button" id="confirm-yes" class="default">Yes</button>
             <button type="button" id="confirm-no">No</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div id="recommend-models-overlay" hidden>
+      <div class="window" id="recommend-models-window" role="dialog" aria-modal="true" aria-labelledby="recommend-models-title">
+        <div class="title-bar">
+          <div class="title-bar-text" id="recommend-models-title">Recommend Models</div>
+        </div>
+        <div class="window-body">
+          <p id="recommend-models-message">
+            Choose how to pick Text, Image, and Video models for the active provider.
+            The app will query the live catalog (not only the current picker lists).
+          </p>
+          <fieldset class="recommend-models-options">
+            <legend>Recommendation</legend>
+            <div class="field-row">
+              <input type="radio" name="recommend-criteria" id="recommend-economical" value="economical" />
+              <label for="recommend-economical">Economical</label>
+            </div>
+            <div class="field-row">
+              <input type="radio" name="recommend-criteria" id="recommend-balanced" value="balanced" checked />
+              <label for="recommend-balanced">Balanced</label>
+            </div>
+            <div class="field-row">
+              <input type="radio" name="recommend-criteria" id="recommend-quality" value="quality" />
+              <label for="recommend-quality">Maximum quality</label>
+            </div>
+          </fieldset>
+          <div class="form-actions confirm-actions">
+            <button type="button" id="recommend-models-ok" class="default">OK</button>
+            <button type="button" id="recommend-models-cancel">Cancel</button>
           </div>
         </div>
       </div>
@@ -685,7 +771,7 @@
                 <button type="button" id="btn-edit-cancel">Cancel</button>
                 <button type="button" id="btn-edit-apply" class="default">Apply</button>
                 <button type="button" id="btn-edit-save" class="default" hidden>Save</button>
-                <button type="button" id="btn-edit-save-as" hidden>Save As…</button>
+                <button type="button" id="btn-edit-save-as">Save As…</button>
               </div>
             </div>
           </div>
@@ -715,6 +801,7 @@
                 <div id="video-edit-crop-box" class="image-edit-crop-box" hidden></div>
               </div>
               <div class="video-edit-transport field-row">
+                <button type="button" id="btn-vedit-play">Play</button>
                 <button type="button" id="btn-vedit-rewind">Rewind to Start</button>
                 <label for="vedit-scrub">Time</label>
                 <input id="vedit-scrub" type="range" min="0" max="1000" step="1" value="0" />
@@ -739,9 +826,10 @@
                 </div>
               </fieldset>
               <p class="hint" id="video-edit-hint">
-                Filters preview on the current frame. Apply rebuilds the video with your segment
-                order and filters (requires ffmpeg on PATH). Load a video here or from the Viewer.
-                Drag a paused frame (0°) to crop. Timeline starts at 0.00s.
+                Sliders preview live on the player while you play and edit the timeline.
+                Apply rebuilds the video with your segment order and filters (requires ffmpeg on PATH).
+                Load a video here or from the Viewer. Drag a paused frame (0°) to crop.
+                Timeline starts at 0.00s.
               </p>
             </div>
             <div class="image-edit-controls">
@@ -845,7 +933,7 @@
                 <button type="button" id="btn-vedit-cancel">Cancel</button>
                 <button type="button" id="btn-vedit-apply" class="default">Apply</button>
                 <button type="button" id="btn-vedit-save" class="default" hidden>Save</button>
-                <button type="button" id="btn-vedit-save-as" hidden>Save As…</button>
+                <button type="button" id="btn-vedit-save-as">Save As…</button>
               </div>
             </div>
           </div>

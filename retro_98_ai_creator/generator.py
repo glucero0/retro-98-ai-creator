@@ -26,8 +26,9 @@ def _active_model_and_provider(config: dict[str, Any]) -> tuple[str, str]:
 
         o = config.get("openrouter") or {}
         return normalize_openrouter_model(o.get("text_model")), "openrouter"
-    model = ((config.get("huggingface") or {}).get("repo_id") or "").strip()
-    return model, "huggingface"
+    from .hf_provider import resolve_hf_model_for_modality
+
+    return resolve_hf_model_for_modality(config.get("huggingface"), "text"), "huggingface"
 
 
 def generate_creation(
@@ -40,9 +41,11 @@ def generate_creation(
     exact_title: bool = False,
     creation_description: str | None = None,
     cancel_event: Any = None,
+    basis_media: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     """Dispatch to the configured backend and return a creation document."""
     from .cancellation import raise_if_cancelled
+    from .modality import infer_prompt_modality
 
     def _cancelled() -> bool:
         return bool(cancel_event is not None and cancel_event.is_set())
@@ -65,14 +68,37 @@ def generate_creation(
         override=creation_description,
     )
 
-    # Prompt intent vs backend (Gemini / OpenRouter route by slot; HF text-only)
+    basis = basis_media if isinstance(basis_media, dict) else None
+    basis_mod = ""
+    if basis:
+        basis_mod = str(basis.get("modality") or "").strip().lower()
+        if basis_mod not in {"image", "video"}:
+            basis_mod = ""
+
+    from .modality import resolve_generation_modality
+
+    # Prompt intent wins (e.g. "generate a video" + image basis → I2V).
+    # Ambiguous prompts with a media basis keep the basis modality.
+    forced_modality = resolve_generation_modality(
+        creation_description or game,
+        basis_modality=basis_mod or None,
+    )
+    prompt_for_compat = creation_description or game
+    if forced_modality == "image" and not infer_prompt_modality(prompt_for_compat):
+        prompt_for_compat = f"Create an image: {prompt_for_compat}"
+    elif forced_modality == "video" and not infer_prompt_modality(prompt_for_compat):
+        prompt_for_compat = f"Generate a video: {prompt_for_compat}"
+
     model_id, provider = _active_model_and_provider(config)
     compat = check_prompt_model_compatibility(
-        creation_description or game,
+        prompt_for_compat,
         model_id,
         provider=provider,
         gemini_cfg=config.get("gemini") if provider == "gemini" else None,
         openrouter_cfg=config.get("openrouter") if provider == "openrouter" else None,
+        huggingface_cfg=(
+            config.get("huggingface") if provider == "huggingface" else None
+        ),
     )
     if not compat.get("ok"):
         raise RuntimeError(compat.get("error") or "Model modality mismatch.")
@@ -90,6 +116,9 @@ def generate_creation(
             creation_description=creation_description,
             progress=progress,
             exact_title=exact_title or generic,
+            basis_media=basis,
+            forced_modality=forced_modality,
+            cancel_event=cancel_event,
         )
 
     if backend in ("openrouter", "open-router", "or"):
@@ -105,26 +134,28 @@ def generate_creation(
             creation_description=creation_description,
             progress=progress,
             exact_title=exact_title or generic,
+            basis_media=basis,
+            forced_modality=forced_modality,
+            cancel_event=cancel_event,
         )
 
     if backend in ("huggingface", "hf", "local", "phi"):
-        from .llm import model_manager
+        from .hf_provider import generate_with_huggingface
 
-        model_manager.set_progress_callback(progress)
-        model_manager.set_cancel_event(cancel_event)
-        try:
-            raise_if_cancelled(_cancelled)
-            return model_manager.generate_creation(
-                game=game,
-                platform=platform,
-                creation_type=creation_type,
-                model_cfg=config.get("huggingface") or {},
-                system_extra=system_extra,
-                creation_description=creation_description,
-                exact_title=exact_title or generic,
-            )
-        finally:
-            model_manager.set_cancel_event(None)
+        raise_if_cancelled(_cancelled)
+        return generate_with_huggingface(
+            game,
+            platform,
+            creation_type,
+            model_cfg=config.get("huggingface") or {},
+            system_extra=system_extra,
+            creation_description=creation_description,
+            progress=progress,
+            exact_title=exact_title or generic,
+            cancel_event=cancel_event,
+            basis_media=basis,
+            forced_modality=forced_modality,
+        )
 
     raise RuntimeError(
         f"Unknown backend provider {backend!r}. Use 'gemini', 'openrouter', or 'huggingface'."
@@ -184,9 +215,36 @@ def provider_status(config: dict[str, Any]) -> dict[str, Any]:
             "device": "api",
         }
 
+    from .config import normalize_huggingface_cfg
+    from .hf_media import local_media_manager
     from .llm import model_manager
 
-    status = dict(model_manager.status)
-    status["provider"] = "huggingface"
-    status.setdefault("modality", "text")
-    return status
+    hf = normalize_huggingface_cfg(config.get("huggingface"))
+    text_m = hf.get("text_model")
+    image_m = hf.get("image_model")
+    video_m = hf.get("video_model")
+    text_status = dict(model_manager.status)
+    media_status = dict(local_media_manager.status)
+    loaded = text_status.get("loaded_repo") or media_status.get("loaded_repo")
+    detail = (
+        f"Hugging Face local · text {text_m} · image {image_m} · video {video_m}"
+    )
+    if loaded:
+        kind = media_status.get("loaded_kind") or "text"
+        device = media_status.get("device") if media_status.get("loaded_repo") else text_status.get("device")
+        detail = f"{detail} · loaded {kind} {loaded} on {device}"
+    else:
+        idle_detail = text_status.get("detail") or media_status.get("detail")
+        if idle_detail:
+            detail = f"{detail}. {idle_detail}"
+    return {
+        "state": text_status.get("state") or media_status.get("state") or "idle",
+        "detail": detail,
+        "provider": "huggingface",
+        "loaded_repo": loaded,
+        "textModel": text_m,
+        "imageModel": image_m,
+        "videoModel": video_m,
+        "modality": "multi",
+        "device": text_status.get("device") or media_status.get("device") or "local",
+    }

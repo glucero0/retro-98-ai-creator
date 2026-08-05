@@ -4,15 +4,15 @@ A Windows 98–themed desktop studio for general-purpose AI creation: **text**, 
 
 > **Work in progress.** This project is under active development. Features, APIs, config, and storage formats may change without notice. **Use at your own risk** — there is no warranty of any kind. You are responsible for API costs, local model downloads, and any data you generate or store. Do not rely on it for production, critical, or irreversible work.
 
-**Default backend: Google Gemini** — text, image, and Veo video via separate model pickers. **OpenRouter** and optional **local Hugging Face** are also available; in this app they are wired for **text** generation today (see backend notes below).
+**Default backend: Google Gemini** — text, image, and Veo video via separate model pickers. **OpenRouter** and optional **local Hugging Face** also support three modality slots (text / image / video).
 
 ## Features
 
 - Win98 desktop UI (98.css) with draggable/minimizable windows, a taskbar, and a Start menu
 - **Creation Studio** — one freeform prompt box; the app infers text/image/video from your prompt and generation intent
 - **Gemini** text, image, and video generation with separate model pickers per modality
-- **OpenRouter** — text chat models today (OpenRouter itself hosts many image/video models; this app does not route those yet)
-- Optional **local Hugging Face** text models (Phi-3.5, Qwen, Gemma, etc.; causal-LM path only — not diffusion/video pipelines)
+- **OpenRouter** — text, image, and video slots (Studio routes by prompt intent)
+- Optional **local Hugging Face** — text (causal LM), image (Diffusers), and video (Diffusers T2V) with separate pickers; Studio media basis uses local img2img (and I2V when the video model supports it)
 - **Archives** — every creation (and its prompt/model metadata) is saved automatically; search, import/export JSON, or import existing text/image/video files
 - **Viewer** — displays the active creation (document, image, or video) with export buttons and a jump into editing
 - **Image Edit** and **Video Edit** — standalone editors (and reachable via Viewer → Edit) for crop/rotate, color/filter adjustments, and (for video) a segment timeline for splitting/reordering/trimming clips
@@ -129,9 +129,9 @@ Use a reasonably current build (roughly ffmpeg 4+). Very old copies on `PATH` (f
 ## OpenRouter setup
 
 1. Create a key at https://openrouter.ai/keys
-2. Control Panel → **Provider: OpenRouter** → paste the key → pick a model → **Save**
+2. Control Panel → **Provider: OpenRouter** → paste the key → pick Text / Image / Video models → **Save**
 3. Google Search grounding is Gemini-only; OpenRouter uses the model's own knowledge (no grounding tool)
-4. **In this app**, OpenRouter generation is text-only for now. Image/video prompts are blocked with a tip to switch to Gemini. (OpenRouter’s catalog does include image — and some video — models; wiring those into Studio would be a separate feature.)
+4. Studio routes by prompt intent to the matching OpenRouter slot (same pattern as Gemini)
 
 ## Local Hugging Face backend (optional)
 
@@ -139,9 +139,13 @@ Use a reasonably current build (roughly ffmpeg 4+). Very old copies on `PATH` (f
 pip install -r requirements-local.txt
 ```
 
-Then in Control Panel set **Provider** to **Hugging Face local**, pick a repo (default `microsoft/Phi-3.5-mini-instruct`), and save. First run downloads weights into the HF cache. Small local models are not recommended for anything requiring factual accuracy or web knowledge.
+Then in Control Panel set **Provider** to **Hugging Face local**, pick **Text**, **Image**, and **Video** models, and save. You can download all three into the Hugging Face cache from the Save dialog. First generation of each modality also downloads on demand.
 
-**In this app**, the HF path is a local **causal language model** (text). The Hub also hosts diffusion / video models, but those need different pipelines (e.g. Diffusers) and are not loaded here — use Gemini for image/video generation.
+- **Text** — causal instruct models (Phi-3.5, Qwen, Gemma, …)
+- **Image** — Diffusers text-to-image (Stable Diffusion 1.5, SD Turbo, …)
+- **Video** — Diffusers text-to-video (ModelScope T2V, Zeroscope, …)
+
+Local image/video is slow on CPU and needs substantial VRAM on GPU. Small text models are not recommended for factual docs or keybindings compared to Gemini/OpenRouter with web search.
 
 ## Display, sound, and UI scale
 
@@ -183,7 +187,9 @@ openrouter:
   temperature: 0.0
 
 huggingface:         # used when provider: huggingface
-  repo_id: microsoft/Phi-3.5-mini-instruct
+  text_model: microsoft/Phi-3.5-mini-instruct
+  image_model: stable-diffusion-v1-5/stable-diffusion-v1-5
+  video_model: ali-vilab/text-to-video-ms-1.7b
   device: auto
   max_new_tokens: 2048
 
