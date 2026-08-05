@@ -70,3 +70,38 @@ def test_merged_aliases_learned_override_builtin():
     }
     aliases = merged_retired_aliases(cfg)
     assert aliases["gemini-2.5-flash-lite"] == "gemini-2.5-flash"
+
+
+def test_suggested_list_includes_veo_31_fast():
+    from retro_98_ai_creator.gemini_provider import SUGGESTED_GEMINI_MODELS
+
+    ids = {m["repo_id"] for m in SUGGESTED_GEMINI_MODELS}
+    assert "veo-3.1-fast-generate-preview" in ids
+
+
+def test_bootstrap_exposes_retired_and_keeps_veo_fast(tmp_path, monkeypatch):
+    import retro_98_ai_creator.api as api_mod
+    from retro_98_ai_creator.api import Api
+
+    cfg = {
+        "backend": {"provider": "gemini"},
+        "gemini": {
+            "text_model": "gemini-2.5-flash",
+            "image_model": "gemini-2.5-flash-image",
+            "video_model": "veo-3.1-fast-generate-preview",
+            "retired_model_aliases": {"gemini-mystery-flash": "gemini-2.5-flash"},
+        },
+        "ui": {},
+        "paths": {"archives": str(tmp_path / "archives.json")},
+        "prompt": {},
+        "openrouter": {},
+        "huggingface": {},
+    }
+    monkeypatch.setattr(api_mod, "load_config", lambda: cfg)
+    api = Api()
+    api.config = cfg
+    boot = api.get_bootstrap()
+    assert "gemini-mystery-flash" in boot["retiredGeminiModels"]
+    suggested_ids = {m["repo_id"] for m in boot["suggestedGeminiModels"]}
+    assert "veo-3.1-fast-generate-preview" in suggested_ids
+    assert boot["config"]["gemini"]["video_model"] == "veo-3.1-fast-generate-preview"

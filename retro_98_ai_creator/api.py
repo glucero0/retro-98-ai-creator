@@ -13,6 +13,7 @@ from . import __version__
 from .config import SUGGESTED_MODELS, load_config, save_config
 from .gemini_provider import (
     SUGGESTED_GEMINI_MODELS,
+    _gemini_model_id,
     extract_model_from_gemini_error,
     is_retired_gemini_error,
     learn_retired_gemini_model,
@@ -148,11 +149,19 @@ class Api:
 
     def get_bootstrap(self) -> dict[str, Any]:
         creations = self.store.load()
+        aliases = merged_retired_aliases(self.config.get("gemini") or {})
         return {
             "version": __version__,
             "config": self._public_config(),
             "suggestedModels": SUGGESTED_MODELS,
-            "suggestedGeminiModels": SUGGESTED_GEMINI_MODELS,
+            "suggestedGeminiModels": [
+                m
+                for m in SUGGESTED_GEMINI_MODELS
+                if (m.get("repo_id") or "").lower() not in {k.lower() for k in aliases}
+            ],
+            "retiredGeminiModels": sorted(
+                {_gemini_model_id(k).lower() for k in aliases if _gemini_model_id(k)}
+            ),
             "suggestedOpenRouterModels": SUGGESTED_OPENROUTER_MODELS,
             "platforms": PLATFORM_OPTIONS,
             "hardwarePlatforms": PLATFORMS,

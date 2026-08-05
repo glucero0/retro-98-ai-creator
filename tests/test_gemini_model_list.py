@@ -72,7 +72,11 @@ def test_classifies_image_and_video_models():
     )
     assert not _is_studio_gemini_model("gemini-2.0-flash-preview-image-generation")
 
-    for mid in ("veo-2.0-generate-001", "veo-3.1-generate-preview"):
+    for mid in (
+        "veo-2.0-generate-001",
+        "veo-3.1-generate-preview",
+        "veo-3.1-fast-generate-preview",
+    ):
         assert classify_model_modality(mid) == "video"
         assert _is_studio_gemini_model(mid)
         assert not _is_text_generation_gemini_model(mid)
