@@ -14,6 +14,7 @@ from retro_98_ai_creator.modality import (
     classify_model_modality,
     infer_prompt_modality,
     normalize_modality,
+    resolve_generation_modality,
 )
 
 
@@ -43,6 +44,39 @@ def test_infer_prompt_modality_video_and_text():
     assert infer_prompt_modality("Generate a video of waves crashing") == "video"
     assert infer_prompt_modality("Write a short poem about autumn") == "text"
     assert infer_prompt_modality("a red bicycle leaning on a fence") is None
+
+
+def test_resolve_generation_modality_prompt_wins_over_image_basis():
+    # Image basis + video prompt → I2V (video), not forced img2img
+    assert (
+        resolve_generation_modality(
+            "Generate a video of the dragon standing up",
+            basis_modality="image",
+        )
+        == "video"
+    )
+    assert (
+        resolve_generation_modality(
+            "turn this into a video",
+            basis_modality="image",
+        )
+        == "video"
+    )
+    assert (
+        resolve_generation_modality(
+            "convert the image to a video clip",
+            basis_modality="image",
+        )
+        == "video"
+    )
+    assert (
+        resolve_generation_modality("make it blue", basis_modality="image") == "image"
+    )
+    assert (
+        resolve_generation_modality("Create an image of a cat", basis_modality="video")
+        == "image"
+    )
+    assert resolve_generation_modality("hello world") is None
 
 
 def test_gemini_routes_image_prompt_ok():

@@ -75,11 +75,18 @@ def generate_creation(
         if basis_mod not in {"image", "video"}:
             basis_mod = ""
 
-    # Prompt intent vs backend; media basis forces image/video routing
+    from .modality import resolve_generation_modality
+
+    # Prompt intent wins (e.g. "generate a video" + image basis → I2V).
+    # Ambiguous prompts with a media basis keep the basis modality.
+    forced_modality = resolve_generation_modality(
+        creation_description or game,
+        basis_modality=basis_mod or None,
+    )
     prompt_for_compat = creation_description or game
-    if basis_mod == "image":
+    if forced_modality == "image" and not infer_prompt_modality(prompt_for_compat):
         prompt_for_compat = f"Create an image: {prompt_for_compat}"
-    elif basis_mod == "video":
+    elif forced_modality == "video" and not infer_prompt_modality(prompt_for_compat):
         prompt_for_compat = f"Generate a video: {prompt_for_compat}"
 
     model_id, provider = _active_model_and_provider(config)
@@ -95,8 +102,6 @@ def generate_creation(
     )
     if not compat.get("ok"):
         raise RuntimeError(compat.get("error") or "Model modality mismatch.")
-
-    forced_modality = basis_mod or infer_prompt_modality(creation_description or game)
 
     if backend in ("gemini", "google", "google-gemini"):
         from .gemini_provider import generate_with_gemini

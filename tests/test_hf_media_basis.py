@@ -193,3 +193,47 @@ def test_generator_passes_basis_to_huggingface():
     assert out["id"] == "doc_test"
     assert captured.get("basis_media") is basis
     assert captured.get("forced_modality") == "image"
+
+
+def test_generator_image_basis_with_video_prompt_routes_video():
+    from retro_98_ai_creator.generator import generate_creation
+
+    captured: dict = {}
+
+    def fake_hf(*_a, **kwargs):
+        captured.update(kwargs)
+        return {"id": "doc_vid", "modality": "video"}
+
+    cfg = {
+        "backend": {"provider": "huggingface"},
+        "huggingface": {
+            "text_model": "microsoft/Phi-3.5-mini-instruct",
+            "image_model": "stable-diffusion-v1-5/stable-diffusion-v1-5",
+            "video_model": "ali-vilab/text-to-video-ms-1.7b",
+        },
+        "prompt": {},
+    }
+    basis = {"bytes": b"abc", "modality": "image", "mime_type": "image/png"}
+
+    with (
+        patch(
+            "retro_98_ai_creator.hf_provider.generate_with_huggingface",
+            side_effect=fake_hf,
+        ),
+        patch(
+            "retro_98_ai_creator.modality.check_prompt_model_compatibility",
+            return_value={"ok": True},
+        ),
+    ):
+        out = generate_creation(
+            "Prompt",
+            "General",
+            "Custom",
+            cfg,
+            creation_description="Generate a video of the subject walking",
+            basis_media=basis,
+        )
+
+    assert out["id"] == "doc_vid"
+    assert captured.get("forced_modality") == "video"
+    assert captured.get("basis_media") is basis

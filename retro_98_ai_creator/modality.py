@@ -106,6 +106,11 @@ _VIDEO_PROMPT_RE = re.compile(
         \b(?:create|generate|make|render|produce|shoot|film)\b
         .{0,48}?
         \b(?:an?\s+)?(?:video|clip|animation|footage|movie|cinematic)\b
+      | \b(?:turn|convert|transform|morph|change)\b
+        .{0,48}?
+        \b(?:into|to)\b
+        .{0,24}?
+        \b(?:an?\s+)?(?:video|clip|animation|footage|movie)\b
       | \b(?:an?\s+)?(?:video|clip|animation|footage)\s+of\b
       | \btext[\s\-]?to[\s\-]?video\b
       | \banimate\b
@@ -216,6 +221,29 @@ def infer_prompt_modality(prompt: str) -> Modality | None:
     if _TEXT_PROMPT_RE.search(text):
         return "text"
     return None
+
+
+def resolve_generation_modality(
+    prompt: str,
+    *,
+    basis_modality: str | None = None,
+) -> Modality | None:
+    """
+    Choose text/image/video for a Studio CREATE.
+
+    Clear prompt intent (including \"generate a video\" with an image basis →
+    image-to-video) wins. Otherwise a media basis keeps the same modality.
+    """
+    prompt_mod = infer_prompt_modality(prompt)
+    basis = (basis_modality or "").strip().lower()
+    if basis not in {"image", "video"}:
+        basis = ""
+
+    if prompt_mod in {"image", "video"}:
+        return prompt_mod
+    if basis:
+        return basis  # type: ignore[return-value]
+    return prompt_mod
 
 
 def suggested_model_ids_for_modality(modality: Modality) -> list[str]:

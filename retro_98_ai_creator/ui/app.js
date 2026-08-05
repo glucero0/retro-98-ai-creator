@@ -4254,9 +4254,9 @@
 
   function applyGenerationResult(creation) {
     if (!creation) return;
-    // Idempotent — poll and evaluate_js may both fire
-    if (state._lastHandledId === creation.id) return;
-    state._lastHandledId = creation.id;
+    // Idempotent — poll and evaluate_js may both fire (require a real id)
+    if (creation.id && state._lastHandledId === creation.id) return;
+    if (creation.id) state._lastHandledId = creation.id;
 
     state.generating = false;
     setCreateBlocked(false);
@@ -4577,12 +4577,34 @@
 
       const basisId =
         (state.studioBasis && state.studioBasis.creationId) || "";
-      // With a media basis, force that modality in the preflight prompt hint
-      const compatPrompt = basisId
-        ? state.studioBasis.modality === "video"
-          ? "Generate a video: " + prompt
-          : "Create an image: " + prompt
-        : prompt;
+      // Prefer prompt intent (video/image keywords); else keep basis modality.
+      // "Generate a video…" + image basis → image-to-video, not img2img.
+      let compatPrompt = prompt;
+      if (basisId && state.studioBasis) {
+        const lower = prompt.toLowerCase();
+        const wantsVideo =
+          /\b(create|generate|make|render|produce|shoot|film)\b[\s\S]{0,48}\b(video|clip|animation|footage|movie|cinematic)\b/.test(
+            lower
+          ) ||
+          /\b(turn|convert|transform|morph|change)\b[\s\S]{0,48}\b(into|to)\b[\s\S]{0,24}\b(video|clip|animation|footage|movie)\b/.test(
+            lower
+          ) ||
+          /\b(video|clip|animation|footage)\s+of\b/.test(lower) ||
+          /\banimate\b/.test(lower);
+        const wantsImage =
+          /\b(create|generate|make|render|draw|paint|illustrate)\b[\s\S]{0,40}\b(image|picture|photo|illustration|drawing)\b/.test(
+            lower
+          ) || /\b(image|picture|photo)\s+of\b/.test(lower);
+        if (wantsVideo) {
+          compatPrompt = "Generate a video: " + prompt;
+        } else if (wantsImage) {
+          compatPrompt = "Create an image: " + prompt;
+        } else if (state.studioBasis.modality === "video") {
+          compatPrompt = "Generate a video: " + prompt;
+        } else {
+          compatPrompt = "Create an image: " + prompt;
+        }
+      }
 
       // Preflight: image/video prompts on text models (and reverse) stop here
       try {

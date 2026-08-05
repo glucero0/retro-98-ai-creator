@@ -475,6 +475,12 @@ class Api:
                 if cancel_evt.is_set():
                     raise GenerationCancelled("Cancelled by user")
                 saved = self.store.upsert(result)
+                logger.info(
+                    "Generation complete: %s modality=%s model=%s",
+                    saved.get("id"),
+                    saved.get("modality"),
+                    (saved.get("_model") or {}).get("repo_id") or "-",
+                )
                 self._set_job(
                     job_id,
                     status="done",

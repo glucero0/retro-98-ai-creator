@@ -108,6 +108,71 @@ def _download_bytes(
     return run_cancellable(_do, cancel_event)
 
 
+def _decode_data_url(url: str) -> tuple[bytes, str] | None:
+    raw = (url or "").strip()
+    if not raw.startswith("data:") or ";base64," not in raw:
+        return None
+    header, b64 = raw.split(";base64,", 1)
+    mime = header[5:] or "image/png"
+    try:
+        return base64.b64decode(b64), mime
+    except Exception:  # noqa: BLE001
+        return None
+
+
+def _extract_images_api_bytes(body: Any) -> tuple[bytes | None, str]:
+    image_bytes: bytes | None = None
+    mime_type = "image/png"
+    if not isinstance(body, dict):
+        return None, mime_type
+    for item in body.get("data") or []:
+        if not isinstance(item, dict):
+            continue
+        b64 = item.get("b64_json") or item.get("b64")
+        if b64:
+            image_bytes = base64.b64decode(b64)
+            mime_type = str(item.get("media_type") or mime_type)
+            break
+        img_url = item.get("url")
+        if img_url and str(img_url).startswith("data:"):
+            decoded = _decode_data_url(str(img_url))
+            if decoded:
+                image_bytes, mime_type = decoded
+                break
+    return image_bytes, mime_type
+
+
+def _extract_chat_image_bytes(body: Any) -> tuple[bytes | None, str]:
+    """Parse OpenRouter chat/completions image output (message.images)."""
+    mime_type = "image/png"
+    if not isinstance(body, dict):
+        return None, mime_type
+    choices = body.get("choices") or []
+    if not choices:
+        return None, mime_type
+    message = (choices[0] or {}).get("message") or {}
+    images = message.get("images") or []
+    for image in images:
+        if not isinstance(image, dict):
+            continue
+        img = image.get("image_url") or image.get("imageUrl") or {}
+        url = ""
+        if isinstance(img, dict):
+            url = str(img.get("url") or "")
+        elif isinstance(img, str):
+            url = img
+        decoded = _decode_data_url(url)
+        if decoded:
+            return decoded
+    # Some providers put a lone data URL in content
+    content = message.get("content")
+    if isinstance(content, str) and content.startswith("data:image"):
+        decoded = _decode_data_url(content)
+        if decoded:
+            return decoded
+    return None, mime_type
+
+
 def generate_image_with_openrouter(
     prompt: str,
     *,
@@ -116,7 +181,7 @@ def generate_image_with_openrouter(
     basis_media: dict[str, Any] | None = None,
     cancel_event: Any = None,
 ) -> dict[str, Any]:
-    """Generate an image via OpenRouter ``POST /images`` and store under media/."""
+    """Generate an image via OpenRouter ``POST /images`` (or chat modalities fallback)."""
     from .openrouter_provider import (
         DEFAULT_OPENROUTER_IMAGE_MODEL,
         OPENROUTER_BASE_URL,
@@ -140,7 +205,8 @@ def generate_image_with_openrouter(
         model_name = normalize_openrouter_model(DEFAULT_OPENROUTER_IMAGE_MODEL)
 
     base_url = (cfg.get("base_url") or OPENROUTER_BASE_URL).strip() or OPENROUTER_BASE_URL
-    url = base_url.rstrip("/") + "/images"
+    images_url = base_url.rstrip("/") + "/images"
+    chat_url = base_url.rstrip("/") + "/chat/completions"
 
     _emit(
         progress,
@@ -155,23 +221,31 @@ def generate_image_with_openrouter(
         title="Generating image",
     )
 
-    payload: dict[str, Any] = {"model": model_name, "prompt": prompt, "n": 1}
     basis_bytes = (basis_media or {}).get("bytes") if basis_media else None
     basis_mime = str((basis_media or {}).get("mime_type") or "image/png")
+    data_url = ""
+    edit_prompt = prompt
     if basis_bytes:
         b64 = base64.b64encode(bytes(basis_bytes)).decode("ascii")
         data_url = f"data:{basis_mime};base64,{b64}"
-        # Common OpenRouter / OpenAI-style image edit fields
-        payload["image"] = [{"type": "image_url", "image_url": {"url": data_url}}]
-        payload["prompt"] = (
+        edit_prompt = (
             "Using the provided reference image as the basis, create a new image. "
             "Follow this instruction:\n" + prompt
         )
 
+    payload: dict[str, Any] = {"model": model_name, "prompt": edit_prompt, "n": 1}
+    if data_url:
+        # Official Images API field for image-to-image / edits
+        payload["input_references"] = [
+            {"type": "image_url", "image_url": {"url": data_url}}
+        ]
+
+    body: Any = None
+    last_err: Exception | None = None
     try:
         body = _request_json(
             method="POST",
-            url=url,
+            url=images_url,
             api_key=api_key,
             payload=payload,
             timeout=300,
@@ -182,53 +256,90 @@ def generate_image_with_openrouter(
 
         if isinstance(exc, GenerationCancelled):
             raise
-        # Retry without image field if the provider rejects it
-        if basis_bytes and "image" in payload:
-            try:
-                payload.pop("image", None)
-                body = _request_json(
-                    method="POST",
-                    url=url,
-                    api_key=api_key,
-                    payload={
-                        "model": model_name,
-                        "prompt": payload["prompt"],
-                        "n": 1,
-                        "image_url": data_url,
-                    },
-                    timeout=300,
-                    cancel_event=cancel_event,
-                )
-            except Exception as exc2:
-                from .cancellation import GenerationCancelled as _GC
-
-                if isinstance(exc2, _GC):
-                    raise
-                raise RuntimeError(
-                    f"OpenRouter image generation error (with basis): {exc2}"
-                ) from exc2
-        else:
-            raise RuntimeError(f"OpenRouter image generation error: {exc}") from exc
+        last_err = exc
+        logger.info("OpenRouter /images failed (%s); trying chat modalities", exc)
 
     image_bytes: bytes | None = None
     mime_type = "image/png"
-    for item in body.get("data") or []:
-        if not isinstance(item, dict):
-            continue
-        b64 = item.get("b64_json") or item.get("b64")
-        if b64:
-            image_bytes = base64.b64decode(b64)
-            mime_type = str(item.get("media_type") or mime_type)
-            break
-        img_url = item.get("url")
-        if img_url:
-            image_bytes = _download_bytes(
-                str(img_url), api_key=api_key, cancel_event=cancel_event
+    if body is not None:
+        image_bytes, mime_type = _extract_images_api_bytes(body)
+        if not image_bytes:
+            for item in body.get("data") or []:
+                if not isinstance(item, dict):
+                    continue
+                remote = item.get("url")
+                if remote and not str(remote).startswith("data:"):
+                    try:
+                        image_bytes = _download_bytes(
+                            str(remote),
+                            api_key=api_key,
+                            cancel_event=cancel_event,
+                        )
+                    except Exception as exc:  # noqa: BLE001
+                        from .cancellation import GenerationCancelled
+
+                        if isinstance(exc, GenerationCancelled):
+                            raise
+                        last_err = exc
+                    break
+        if not image_bytes:
+            # Empty / unusable — often Gemini STOP with a bad reference field
+            last_err = last_err or RuntimeError(
+                f"OpenRouter returned no image data: {body!r}"
             )
-            break
+
+    # Gemini (and some other multimodal image models) are more reliable via
+    # chat/completions + modalities, especially with a reference image.
+    if not image_bytes:
+        chat_content: list[dict[str, Any]] | str
+        if data_url:
+            chat_content = [
+                {"type": "text", "text": edit_prompt},
+                {"type": "image_url", "image_url": {"url": data_url}},
+            ]
+        else:
+            chat_content = edit_prompt
+        chat_payload: dict[str, Any] = {
+            "model": model_name,
+            "messages": [{"role": "user", "content": chat_content}],
+            # Gemini image models expect both; pure image models accept ["image"]
+            "modalities": ["image", "text"],
+        }
+        try:
+            chat_body = _request_json(
+                method="POST",
+                url=chat_url,
+                api_key=api_key,
+                payload=chat_payload,
+                timeout=300,
+                cancel_event=cancel_event,
+            )
+            image_bytes, mime_type = _extract_chat_image_bytes(chat_body)
+            if not image_bytes:
+                raise RuntimeError(
+                    f"OpenRouter chat image response had no images: {chat_body!r}"
+                )
+        except Exception as exc:
+            from .cancellation import GenerationCancelled
+
+            if isinstance(exc, GenerationCancelled):
+                raise
+            if last_err is not None:
+                raise RuntimeError(
+                    f"OpenRouter image generation error"
+                    f"{' (with basis)' if basis_bytes else ''}: {last_err}; "
+                    f"chat fallback: {exc}"
+                ) from exc
+            raise RuntimeError(
+                f"OpenRouter image generation error"
+                f"{' (with basis)' if basis_bytes else ''}: {exc}"
+            ) from exc
 
     if not image_bytes:
-        raise RuntimeError(f"OpenRouter returned no image data: {body!r}")
+        raise RuntimeError(
+            f"OpenRouter image generation error"
+            f"{' (with basis)' if basis_bytes else ''}: {last_err or 'no image data'}"
+        )
 
     _emit(progress, "Saving image…", percent=85, title="Generating image")
     creation_id = f"doc_{uuid.uuid4().hex[:10]}"
@@ -293,10 +404,18 @@ def generate_video_with_openrouter(
     payload: dict[str, Any] = {"model": model_name, "prompt": prompt}
     basis_bytes = (basis_media or {}).get("bytes") if basis_media else None
     basis_mime = str((basis_media or {}).get("mime_type") or "image/png")
+    data_url = ""
     if basis_bytes:
         b64 = base64.b64encode(bytes(basis_bytes)).decode("ascii")
         data_url = f"data:{basis_mime};base64,{b64}"
-        payload["image"] = data_url
+        # Official OpenRouter I2V field (not legacy "image")
+        payload["frame_images"] = [
+            {
+                "type": "image_url",
+                "image_url": {"url": data_url},
+                "frame_type": "first_frame",
+            }
+        ]
         payload["prompt"] = (
             "Using the provided reference image as the starting frame / basis, "
             "generate a new video. Follow this instruction:\n" + prompt
@@ -316,14 +435,27 @@ def generate_video_with_openrouter(
 
         if isinstance(exc, GenerationCancelled):
             raise
-        if basis_bytes:
-            # Retry without image if the endpoint rejects the field
+        if basis_bytes and data_url:
+            # Retry with input_references (style/guidance) if frame_images rejected
             try:
+                logger.info(
+                    "OpenRouter video frame_images rejected (%s); trying input_references",
+                    exc,
+                )
                 job = _request_json(
                     method="POST",
                     url=submit_url,
                     api_key=api_key,
-                    payload={"model": model_name, "prompt": payload["prompt"]},
+                    payload={
+                        "model": model_name,
+                        "prompt": payload["prompt"],
+                        "input_references": [
+                            {
+                                "type": "image_url",
+                                "image_url": {"url": data_url},
+                            }
+                        ],
+                    },
                     timeout=120,
                     cancel_event=cancel_event,
                 )
