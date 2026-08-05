@@ -49,8 +49,10 @@ def generate_image_with_gemini(
     normalize_model: Callable[[str | None], str] | None = None,
     progress: ProgressCallback | None = None,
     basis_media: dict[str, Any] | None = None,
+    cancel_event: Any = None,
 ) -> dict[str, Any]:
     """Generate an image via Gemini image models and store under media/."""
+    from .cancellation import run_cancellable
     from .gemini_provider import normalize_gemini_model as _ngm
     from .gemini_provider import resolve_api_key as _rak
 
@@ -108,12 +110,15 @@ def generate_image_with_gemini(
                 ]
             else:
                 contents = [prompt]
-            response = client.models.generate_content(
-                model=model_name,
-                contents=contents,
-                config=types.GenerateContentConfig(
-                    response_modalities=["TEXT", "IMAGE"],
+            response = run_cancellable(
+                lambda: client.models.generate_content(
+                    model=model_name,
+                    contents=contents,
+                    config=types.GenerateContentConfig(
+                        response_modalities=["TEXT", "IMAGE"],
+                    ),
                 ),
+                cancel_event,
             )
             for cand in getattr(response, "candidates", None) or []:
                 content = getattr(cand, "content", None)
@@ -138,10 +143,13 @@ def generate_image_with_gemini(
                     "Switch the Gemini Image model to a Flash Image model, or Clear basis."
                 )
             _emit(progress, "Generating image (Imagen)…", percent=40, title="Generating image")
-            response = client.models.generate_images(
-                model=model_name,
-                prompt=prompt,
-                config=types.GenerateImagesConfig(number_of_images=1),
+            response = run_cancellable(
+                lambda: client.models.generate_images(
+                    model=model_name,
+                    prompt=prompt,
+                    config=types.GenerateImagesConfig(number_of_images=1),
+                ),
+                cancel_event,
             )
             for generated in getattr(response, "generated_images", None) or []:
                 img = getattr(generated, "image", None)
@@ -189,8 +197,10 @@ def generate_video_with_gemini(
     normalize_model: Callable[[str | None], str] | None = None,
     progress: ProgressCallback | None = None,
     basis_media: dict[str, Any] | None = None,
+    cancel_event: Any = None,
 ) -> dict[str, Any]:
     """Generate a video via Veo and store under media/ as MP4 when possible."""
+    from .cancellation import run_cancellable
     from .gemini_provider import normalize_gemini_model as _ngm
     from .gemini_provider import resolve_api_key as _rak
 
@@ -248,18 +258,22 @@ def generate_video_with_gemini(
                 image_bytes=bytes(basis_bytes),
                 mime_type=basis_mime,
             )
-        try:
-            operation = client.models.generate_videos(**gen_kwargs)
-        except TypeError:
-            if not basis_bytes:
-                raise
-            # Older SDKs: retry without typed Image kwargs
-            operation = client.models.generate_videos(
-                model=model_name,
-                prompt=prompt,
-                image=bytes(basis_bytes),
-                config=types.GenerateVideosConfig(number_of_videos=1),
-            )
+
+        def _start_videos() -> Any:
+            try:
+                return client.models.generate_videos(**gen_kwargs)
+            except TypeError:
+                if not basis_bytes:
+                    raise
+                # Older SDKs: retry without typed Image kwargs
+                return client.models.generate_videos(
+                    model=model_name,
+                    prompt=prompt,
+                    image=bytes(basis_bytes),
+                    config=types.GenerateVideosConfig(number_of_videos=1),
+                )
+
+        operation = run_cancellable(_start_videos, cancel_event)
         waited = 0
         while not getattr(operation, "done", False):
             # 1s ticks so Cancel is noticed quickly (progress raises GenerationCancelled).

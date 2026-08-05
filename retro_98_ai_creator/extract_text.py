@@ -160,6 +160,7 @@ def extract_text_from_creation(
             model_id=model_id,
             progress=progress,
             cancel_check=_cancelled,
+            cancel_event=cancel_event,
         )
         kind = "ocr"
     else:
@@ -171,6 +172,7 @@ def extract_text_from_creation(
             model_id=model_id,
             progress=progress,
             cancel_check=_cancelled,
+            cancel_event=cancel_event,
         )
 
     raise_if_cancelled(_cancelled)
@@ -197,6 +199,7 @@ def _extract_image(
     model_id: str,
     progress: ProgressCallback | None,
     cancel_check: Callable[[], bool],
+    cancel_event: Any = None,
 ) -> tuple[str, str]:
     from .cancellation import raise_if_cancelled
 
@@ -215,6 +218,7 @@ def _extract_image(
             model_id=model_id,
             progress=progress,
             cancel_check=cancel_check,
+            cancel_event=cancel_event,
         )
     return _openrouter_multimodal(
         raw,
@@ -225,6 +229,7 @@ def _extract_image(
         progress=progress,
         cancel_check=cancel_check,
         kind="image",
+        cancel_event=cancel_event,
     )
 
 
@@ -237,6 +242,7 @@ def _extract_video(
     model_id: str,
     progress: ProgressCallback | None,
     cancel_check: Callable[[], bool],
+    cancel_event: Any = None,
 ) -> tuple[str, str, str]:
     from .cancellation import raise_if_cancelled
     from .video_edit import (
@@ -274,6 +280,7 @@ def _extract_video(
                     model_id=model_id,
                     progress=progress,
                     cancel_check=cancel_check,
+                    cancel_event=cancel_event,
                 )
             else:
                 text, model = _openrouter_multimodal(
@@ -285,6 +292,7 @@ def _extract_video(
                     progress=progress,
                     cancel_check=cancel_check,
                     kind="audio",
+                    cancel_event=cancel_event,
                 )
             return text, model, "transcript"
 
@@ -308,6 +316,7 @@ def _extract_video(
             model_id=model_id,
             progress=progress,
             cancel_check=cancel_check,
+            cancel_event=cancel_event,
         )
     else:
         text, model = _openrouter_multimodal(
@@ -319,6 +328,7 @@ def _extract_video(
             progress=progress,
             cancel_check=cancel_check,
             kind="video",
+            cancel_event=cancel_event,
         )
     return text, model, "ocr" if not has_audio else "transcript"
 
@@ -332,8 +342,9 @@ def _gemini_multimodal(
     model_id: str,
     progress: ProgressCallback | None,
     cancel_check: Callable[[], bool],
+    cancel_event: Any = None,
 ) -> tuple[str, str]:
-    from .cancellation import raise_if_cancelled
+    from .cancellation import raise_if_cancelled, run_cancellable
     from .gemini_provider import normalize_gemini_model, resolve_api_key
 
     raise_if_cancelled(cancel_check)
@@ -357,15 +368,22 @@ def _gemini_multimodal(
     client = genai.Client(api_key=api_key)
     raise_if_cancelled(cancel_check)
     try:
-        response = client.models.generate_content(
-            model=model_name,
-            contents=[
-                types.Part.from_bytes(data=data, mime_type=mime_type),
-                prompt,
-            ],
-            config=types.GenerateContentConfig(temperature=0.0),
+        response = run_cancellable(
+            lambda: client.models.generate_content(
+                model=model_name,
+                contents=[
+                    types.Part.from_bytes(data=data, mime_type=mime_type),
+                    prompt,
+                ],
+                config=types.GenerateContentConfig(temperature=0.0),
+            ),
+            cancel_event,
         )
     except Exception as exc:  # noqa: BLE001
+        from .cancellation import GenerationCancelled
+
+        if isinstance(exc, GenerationCancelled):
+            raise
         raise RuntimeError(f"Gemini Extract Text failed: {exc}") from exc
 
     raise_if_cancelled(cancel_check)
@@ -397,8 +415,9 @@ def _openrouter_multimodal(
     progress: ProgressCallback | None,
     cancel_check: Callable[[], bool],
     kind: str,
+    cancel_event: Any = None,
 ) -> tuple[str, str]:
-    from .cancellation import raise_if_cancelled
+    from .cancellation import GenerationCancelled, raise_if_cancelled
     from .openrouter_provider import (
         OPENROUTER_BASE_URL,
         normalize_openrouter_model,
@@ -454,7 +473,10 @@ def _openrouter_multimodal(
             messages=messages,
             temperature=0.0,
             base_url=base_url,
+            cancel_event=cancel_event,
         )
     except Exception as exc:  # noqa: BLE001
+        if isinstance(exc, GenerationCancelled):
+            raise
         raise RuntimeError(f"OpenRouter Extract Text failed: {exc}") from exc
     return (text or "").strip(), model_name

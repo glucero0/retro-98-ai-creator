@@ -54,7 +54,10 @@ def _request_json(
     api_key: str,
     payload: dict[str, Any] | None = None,
     timeout: float = 180,
+    cancel_event: Any = None,
 ) -> Any:
+    from .cancellation import run_cancellable
+
     data = None if payload is None else json.dumps(payload).encode("utf-8")
     headers = {
         "Authorization": f"Bearer {api_key}",
@@ -63,18 +66,26 @@ def _request_json(
     if data is not None:
         headers["Content-Type"] = "application/json"
     req = urllib.request.Request(url, data=data, method=method, headers=headers)
-    try:
-        with urllib.request.urlopen(req, timeout=timeout) as resp:
-            raw = resp.read().decode("utf-8")
-            return json.loads(raw) if raw else {}
-    except urllib.error.HTTPError as exc:
-        detail = exc.read().decode("utf-8", errors="replace") if exc.fp else str(exc)
-        raise RuntimeError(f"OpenRouter HTTP {exc.code}: {detail}") from exc
-    except urllib.error.URLError as exc:
-        raise RuntimeError(f"OpenRouter network error: {exc.reason}") from exc
+
+    def _do() -> Any:
+        try:
+            with urllib.request.urlopen(req, timeout=timeout) as resp:
+                raw = resp.read().decode("utf-8")
+                return json.loads(raw) if raw else {}
+        except urllib.error.HTTPError as exc:
+            detail = exc.read().decode("utf-8", errors="replace") if exc.fp else str(exc)
+            raise RuntimeError(f"OpenRouter HTTP {exc.code}: {detail}") from exc
+        except urllib.error.URLError as exc:
+            raise RuntimeError(f"OpenRouter network error: {exc.reason}") from exc
+
+    return run_cancellable(_do, cancel_event)
 
 
-def _download_bytes(url: str, *, api_key: str, timeout: float = 180) -> bytes:
+def _download_bytes(
+    url: str, *, api_key: str, timeout: float = 180, cancel_event: Any = None
+) -> bytes:
+    from .cancellation import run_cancellable
+
     req = urllib.request.Request(
         url,
         method="GET",
@@ -83,14 +94,18 @@ def _download_bytes(url: str, *, api_key: str, timeout: float = 180) -> bytes:
             "X-Title": "Retro 98 AI Creator",
         },
     )
-    try:
-        with urllib.request.urlopen(req, timeout=timeout) as resp:
-            return resp.read()
-    except urllib.error.HTTPError as exc:
-        detail = exc.read().decode("utf-8", errors="replace") if exc.fp else str(exc)
-        raise RuntimeError(f"OpenRouter download HTTP {exc.code}: {detail}") from exc
-    except urllib.error.URLError as exc:
-        raise RuntimeError(f"OpenRouter download error: {exc.reason}") from exc
+
+    def _do() -> bytes:
+        try:
+            with urllib.request.urlopen(req, timeout=timeout) as resp:
+                return resp.read()
+        except urllib.error.HTTPError as exc:
+            detail = exc.read().decode("utf-8", errors="replace") if exc.fp else str(exc)
+            raise RuntimeError(f"OpenRouter download HTTP {exc.code}: {detail}") from exc
+        except urllib.error.URLError as exc:
+            raise RuntimeError(f"OpenRouter download error: {exc.reason}") from exc
+
+    return run_cancellable(_do, cancel_event)
 
 
 def generate_image_with_openrouter(
@@ -99,6 +114,7 @@ def generate_image_with_openrouter(
     openrouter_cfg: dict[str, Any],
     progress: ProgressCallback | None = None,
     basis_media: dict[str, Any] | None = None,
+    cancel_event: Any = None,
 ) -> dict[str, Any]:
     """Generate an image via OpenRouter ``POST /images`` and store under media/."""
     from .openrouter_provider import (
@@ -159,6 +175,7 @@ def generate_image_with_openrouter(
             api_key=api_key,
             payload=payload,
             timeout=300,
+            cancel_event=cancel_event,
         )
     except Exception as exc:
         from .cancellation import GenerationCancelled
@@ -180,8 +197,13 @@ def generate_image_with_openrouter(
                         "image_url": data_url,
                     },
                     timeout=300,
+                    cancel_event=cancel_event,
                 )
             except Exception as exc2:
+                from .cancellation import GenerationCancelled as _GC
+
+                if isinstance(exc2, _GC):
+                    raise
                 raise RuntimeError(
                     f"OpenRouter image generation error (with basis): {exc2}"
                 ) from exc2
@@ -200,7 +222,9 @@ def generate_image_with_openrouter(
             break
         img_url = item.get("url")
         if img_url:
-            image_bytes = _download_bytes(str(img_url), api_key=api_key)
+            image_bytes = _download_bytes(
+                str(img_url), api_key=api_key, cancel_event=cancel_event
+            )
             break
 
     if not image_bytes:
@@ -231,6 +255,7 @@ def generate_video_with_openrouter(
     openrouter_cfg: dict[str, Any],
     progress: ProgressCallback | None = None,
     basis_media: dict[str, Any] | None = None,
+    cancel_event: Any = None,
 ) -> dict[str, Any]:
     """Generate a video via OpenRouter async ``/videos`` and store under media/."""
     from .openrouter_provider import (
@@ -284,6 +309,7 @@ def generate_video_with_openrouter(
             api_key=api_key,
             payload=payload,
             timeout=120,
+            cancel_event=cancel_event,
         )
     except Exception as exc:
         from .cancellation import GenerationCancelled
@@ -299,8 +325,13 @@ def generate_video_with_openrouter(
                     api_key=api_key,
                     payload={"model": model_name, "prompt": payload["prompt"]},
                     timeout=120,
+                    cancel_event=cancel_event,
                 )
             except Exception as exc2:
+                from .cancellation import GenerationCancelled as _GC
+
+                if isinstance(exc2, _GC):
+                    raise
                 raise RuntimeError(
                     f"OpenRouter video submit error (with basis): {exc2}"
                 ) from exc2
@@ -339,6 +370,7 @@ def generate_video_with_openrouter(
                 url=polling_url,
                 api_key=api_key,
                 timeout=60,
+                cancel_event=cancel_event,
             )
         except Exception as exc:
             from .cancellation import GenerationCancelled
@@ -368,7 +400,9 @@ def generate_video_with_openrouter(
         content_url = urljoin(base_url, content_url)
 
     _emit(progress, "Downloading video…", percent=80, title="Generating video")
-    video_bytes = _download_bytes(content_url, api_key=api_key, timeout=300)
+    video_bytes = _download_bytes(
+        content_url, api_key=api_key, timeout=300, cancel_event=cancel_event
+    )
     if not video_bytes:
         raise RuntimeError("OpenRouter returned empty video content.")
 

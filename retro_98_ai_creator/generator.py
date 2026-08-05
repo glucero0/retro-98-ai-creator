@@ -113,6 +113,7 @@ def generate_creation(
             exact_title=exact_title or generic,
             basis_media=basis,
             forced_modality=forced_modality,
+            cancel_event=cancel_event,
         )
 
     if backend in ("openrouter", "open-router", "or"):
@@ -130,6 +131,7 @@ def generate_creation(
             exact_title=exact_title or generic,
             basis_media=basis,
             forced_modality=forced_modality,
+            cancel_event=cancel_event,
         )
 
     if backend in ("huggingface", "hf", "local", "phi"):

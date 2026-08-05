@@ -405,6 +405,7 @@ def generate_with_gemini(
     exact_title: bool = False,
     basis_media: dict[str, Any] | None = None,
     forced_modality: str | None = None,
+    cancel_event: Any = None,
 ) -> dict[str, Any]:
     """Call Gemini; prompt intent (or forced modality / media basis) selects the slot."""
     from .modality import infer_prompt_modality
@@ -426,6 +427,7 @@ def generate_with_gemini(
             gemini_cfg=cfg,
             progress=progress,
             basis_media=basis_media,
+            cancel_event=cancel_event,
         )
     if modality == "video":
         from .gemini_media import generate_video_with_gemini
@@ -435,6 +437,7 @@ def generate_with_gemini(
             gemini_cfg=cfg,
             progress=progress,
             basis_media=basis_media,
+            cancel_event=cancel_event,
         )
 
     return _generate_text_with_gemini(
@@ -448,6 +451,7 @@ def generate_with_gemini(
         exact_title=exact_title,
         prompt_text=prompt_text,
         model_name=model_name,
+        cancel_event=cancel_event,
     )
 
 
@@ -463,6 +467,7 @@ def _generate_text_with_gemini(
     exact_title: bool = False,
     prompt_text: str = "",
     model_name: str = DEFAULT_GEMINI_TEXT_MODEL,
+    cancel_event: Any = None,
 ) -> dict[str, Any]:
     """Text generation path (freeform Prompt or classic structured document)."""
 
@@ -531,10 +536,15 @@ def _generate_text_with_gemini(
         elif json_mime:
             config_kwargs["response_mime_type"] = "application/json"
 
-        response = client.models.generate_content(
-            model=model_name,
-            contents=prompt,
-            config=types.GenerateContentConfig(**config_kwargs),
+        from .cancellation import run_cancellable
+
+        response = run_cancellable(
+            lambda: client.models.generate_content(
+                model=model_name,
+                contents=prompt,
+                config=types.GenerateContentConfig(**config_kwargs),
+            ),
+            cancel_event,
         )
         if with_search:
             grounding_sources = _extract_grounding_sources(response)
@@ -550,6 +560,10 @@ def _generate_text_with_gemini(
                 json_mime=False,
             )
         except Exception as exc:
+            from .cancellation import GenerationCancelled
+
+            if isinstance(exc, GenerationCancelled):
+                raise
             raise RuntimeError(f"Gemini API error: {exc}") from exc
         if not response_text:
             raise RuntimeError("Gemini returned an empty response.")
@@ -606,6 +620,10 @@ def _generate_text_with_gemini(
                 )
                 search_used = True
             except Exception as search_err:
+                from .cancellation import GenerationCancelled
+
+                if isinstance(search_err, GenerationCancelled):
+                    raise
                 logger.warning(
                     "Gemini search-grounded call failed; retrying without search: %s",
                     search_err,
@@ -693,6 +711,10 @@ def _generate_text_with_gemini(
                     json_mime=True,
                 )
             except Exception as verify_err:
+                from .cancellation import GenerationCancelled
+
+                if isinstance(verify_err, GenerationCancelled):
+                    raise
                 logger.warning(
                     "Pass 2 verification failed; using Pass 1 output: %s", verify_err
                 )

@@ -573,6 +573,7 @@ ul[role="tablist"] li[role="tab"] a:focus {
   overflow: auto;
   max-height: calc(100vh - 280px);
   padding: 12px;
+  font-family: var(--ui-font);
   box-shadow:
     inset -1px -1px var(--ui-border-light),
     inset 1px 1px var(--ui-border-dark),
@@ -1130,7 +1131,7 @@ ul[role="tablist"] li[role="tab"] a:focus {
 .print-layout {
   background: #fff;
   color: #000;
-  font-family: "Courier New", Courier, monospace;
+  font-family: var(--ui-font);
   font-size: 11px;
 }
 
@@ -1524,6 +1525,40 @@ ul[role="tablist"] li[role="tab"] a:focus {
 .confirm-actions {
   justify-content: flex-end;
   gap: 8px;
+}
+
+#recommend-models-overlay {
+  position: absolute;
+  inset: 0;
+  z-index: 2100;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(0, 0, 0, 0.35);
+  pointer-events: auto;
+}
+
+#recommend-models-overlay[hidden] {
+  display: none !important;
+}
+
+#recommend-models-window {
+  width: min(440px, calc(100% - 32px));
+  z-index: 2101;
+}
+
+#recommend-models-message {
+  margin: 0 0 12px;
+  font-size: 12px;
+  line-height: 1.4;
+}
+
+.recommend-models-options {
+  margin: 0 0 12px;
+}
+
+.recommend-models-options .field-row {
+  margin: 6px 0;
 }
 
 #search-results-overlay {

@@ -233,6 +233,22 @@ class Api:
                 "source": "fallback",
             }
 
+    def recommend_models(self, criteria: str = "balanced", provider: str = "") -> dict[str, Any]:
+        """Pick Text / Image / Video models from live catalogs for a provider."""
+        from .recommend_models import recommend_models_for_config
+
+        try:
+            return recommend_models_for_config(
+                self.config,
+                criteria,
+                provider=(provider or "").strip() or None,
+            )
+        except ValueError as exc:
+            return {"ok": False, "error": str(exc)}
+        except Exception as exc:  # noqa: BLE001
+            logger.warning("recommend_models failed: %s", exc)
+            return {"ok": False, "error": str(exc)}
+
     def save_settings(self, updates: dict[str, Any]) -> dict[str, Any]:
         """Persist Control Panel changes."""
         if not isinstance(updates, dict):

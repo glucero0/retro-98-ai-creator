@@ -83,12 +83,11 @@
                   <button type="button" id="btn-studio-load-text">Load Text…</button>
                   <button type="button" id="btn-studio-load-image">Load Image…</button>
                   <button type="button" id="btn-studio-load-video">Load Video…</button>
-                  <button type="button" id="btn-studio-use-active">Use Active as Basis</button>
                 </div>
                 <p class="hint" id="studio-load-hint">
-                  Load Text into the prompt. Load Image / Video (or Use Active) sets a media
-                  basis shown on the right — then describe the change and CREATE a new
-                  image or video from it.
+                  Load Text into the prompt. Load Image / Video sets a media basis shown on
+                  the right — then describe the change and CREATE. To reuse something already
+                  in Archives, open it in the Viewer and choose Use as Basis.
                 </p>
               </form>
             </div>
@@ -110,7 +109,6 @@
           <div class="status-bar" id="studio-status-bar">
             <p class="status-bar-field" id="gen-status-text">Ready</p>
             <p class="status-bar-field" id="studio-model-field">Backend: Gemini</p>
-            <p class="status-bar-field" id="studio-theme-field">Theme Engine: Auto Box Art Palette</p>
           </div>
         </div>
       </div>
@@ -253,8 +251,12 @@
                   </div>
                   <p class="hint" id="gemini-model-hint">
                     Each list shows only models compatible with that modality.
-                    Refreshed from Google when Control Panel opens (requires a saved API key).
+                    Refresh loads models from Google (requires a saved API key).
                   </p>
+                  <div class="form-actions">
+                    <button type="button" id="btn-gemini-refresh-models">Refresh…</button>
+                    <button type="button" id="btn-gemini-recommend-models">Recommend Models…</button>
+                  </div>
                   <div class="field-row-stacked">
                     <label for="gemini-key">
                       <span>API key</span>
@@ -303,6 +305,7 @@
                   </div>
                   <div class="form-actions">
                     <button type="button" id="btn-openrouter-refresh-models">Refresh OpenRouter models…</button>
+                    <button type="button" id="btn-openrouter-recommend-models">Recommend Models…</button>
                   </div>
                   <p class="hint" id="openrouter-model-hint">
                     Each list starts with a curated set. Refresh loads up to 20 popular
@@ -350,6 +353,7 @@
                   </div>
                   <div class="form-actions">
                     <button type="button" id="btn-hf-refresh-models">Refresh Hub models…</button>
+                    <button type="button" id="btn-hf-recommend-models">Recommend Models…</button>
                   </div>
                   <p class="hint" id="hf-model-hint">
                     Each list starts with a curated set. Refresh loads up to 20 popular
@@ -453,6 +457,10 @@
                     <input type="checkbox" id="opt-sound" />
                     <label for="opt-sound">Sound effects</label>
                   </div>
+                  <p class="hint">
+                    Sparse Win95/98-style cues for create / extract success, errors, and cancel —
+                    not click chirps. Synthesized in-app (no Microsoft system WAVs).
+                  </p>
                 </fieldset>
 
                 <fieldset>
@@ -549,6 +557,39 @@
           <div class="form-actions confirm-actions">
             <button type="button" id="confirm-yes" class="default">Yes</button>
             <button type="button" id="confirm-no">No</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div id="recommend-models-overlay" hidden>
+      <div class="window" id="recommend-models-window" role="dialog" aria-modal="true" aria-labelledby="recommend-models-title">
+        <div class="title-bar">
+          <div class="title-bar-text" id="recommend-models-title">Recommend Models</div>
+        </div>
+        <div class="window-body">
+          <p id="recommend-models-message">
+            Choose how to pick Text, Image, and Video models for the active provider.
+            The app will query the live catalog (not only the current picker lists).
+          </p>
+          <fieldset class="recommend-models-options">
+            <legend>Recommendation</legend>
+            <div class="field-row">
+              <input type="radio" name="recommend-criteria" id="recommend-economical" value="economical" />
+              <label for="recommend-economical">Economical</label>
+            </div>
+            <div class="field-row">
+              <input type="radio" name="recommend-criteria" id="recommend-balanced" value="balanced" checked />
+              <label for="recommend-balanced">Balanced</label>
+            </div>
+            <div class="field-row">
+              <input type="radio" name="recommend-criteria" id="recommend-quality" value="quality" />
+              <label for="recommend-quality">Maximum quality</label>
+            </div>
+          </fieldset>
+          <div class="form-actions confirm-actions">
+            <button type="button" id="recommend-models-ok" class="default">OK</button>
+            <button type="button" id="recommend-models-cancel">Cancel</button>
           </div>
         </div>
       </div>

@@ -332,7 +332,10 @@ def _chat_completion(
     messages: list[dict[str, Any]],
     temperature: float,
     base_url: str,
+    cancel_event: Any = None,
 ) -> str:
+    from .cancellation import run_cancellable
+
     url = base_url.rstrip("/") + "/chat/completions"
     payload = {
         "model": model,
@@ -350,14 +353,18 @@ def _chat_completion(
             "X-Title": "Retro 98 AI Creator",
         },
     )
-    try:
-        with urllib.request.urlopen(req, timeout=180) as resp:
-            body = json.loads(resp.read().decode("utf-8"))
-    except urllib.error.HTTPError as exc:
-        detail = exc.read().decode("utf-8", errors="replace") if exc.fp else str(exc)
-        raise RuntimeError(f"OpenRouter HTTP {exc.code}: {detail}") from exc
-    except urllib.error.URLError as exc:
-        raise RuntimeError(f"OpenRouter network error: {exc.reason}") from exc
+
+    def _do_request() -> Any:
+        try:
+            with urllib.request.urlopen(req, timeout=180) as resp:
+                return json.loads(resp.read().decode("utf-8"))
+        except urllib.error.HTTPError as exc:
+            detail = exc.read().decode("utf-8", errors="replace") if exc.fp else str(exc)
+            raise RuntimeError(f"OpenRouter HTTP {exc.code}: {detail}") from exc
+        except urllib.error.URLError as exc:
+            raise RuntimeError(f"OpenRouter network error: {exc.reason}") from exc
+
+    body = run_cancellable(_do_request, cancel_event)
 
     try:
         content = body["choices"][0]["message"]["content"]
@@ -389,6 +396,7 @@ def generate_with_openrouter(
     exact_title: bool = False,
     basis_media: dict[str, Any] | None = None,
     forced_modality: str | None = None,
+    cancel_event: Any = None,
 ) -> dict[str, Any]:
     """Call OpenRouter; prompt intent (or forced modality / media basis) selects the slot."""
     from .modality import infer_prompt_modality
@@ -410,6 +418,7 @@ def generate_with_openrouter(
             openrouter_cfg=cfg,
             progress=progress,
             basis_media=basis_media,
+            cancel_event=cancel_event,
         )
     if modality == "video":
         from .openrouter_media import generate_video_with_openrouter
@@ -419,6 +428,7 @@ def generate_with_openrouter(
             openrouter_cfg=cfg,
             progress=progress,
             basis_media=basis_media,
+            cancel_event=cancel_event,
         )
 
     return _generate_text_with_openrouter(
@@ -432,6 +442,7 @@ def generate_with_openrouter(
         exact_title=exact_title,
         prompt_text=prompt_text,
         model_name=model_name,
+        cancel_event=cancel_event,
     )
 
 
@@ -447,6 +458,7 @@ def _generate_text_with_openrouter(
     exact_title: bool = False,
     prompt_text: str = "",
     model_name: str = DEFAULT_OPENROUTER_TEXT_MODEL,
+    cancel_event: Any = None,
 ) -> dict[str, Any]:
     """Text generation path (freeform Prompt or classic structured document)."""
 
@@ -519,6 +531,7 @@ def _generate_text_with_openrouter(
             messages=messages,
             temperature=temperature,
             base_url=base_url,
+            cancel_event=cancel_event,
         )
     except Exception as exc:
         from .cancellation import GenerationCancelled

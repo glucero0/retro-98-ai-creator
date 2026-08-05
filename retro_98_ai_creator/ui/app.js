@@ -213,12 +213,19 @@
   }
 
   function fontStackFromStyle(fontStyle) {
+    // Legacy theme font styles (kept for older exports / callers).
+    // Viewer display uses currentUiFontStack() / var(--ui-font) instead.
     const s = (fontStyle || "").toLowerCase();
     if (s === "dos-vga" || s === "workbench" || s === "pixel" || s === "mono") {
       return FONT_STACKS.mono;
     }
     if (s === "serif-parchment" || s === "serif") return FONT_STACKS.serif;
     return FONT_STACKS.sans;
+  }
+
+  function currentUiFontStack() {
+    const key = resolveUiFontKey(state.uiFont || "inter");
+    return (UI_FONTS[key] || UI_FONTS.inter).stack;
   }
 
   /** Palette overrides ported from retro_web_app CreationViewerWindow */
@@ -736,19 +743,114 @@
   }
 
   let audioCtx = null;
-  function beep(freq, dur, type) {
+
+  function ensureAudioCtx() {
+    audioCtx = audioCtx || new (window.AudioContext || window.webkitAudioContext)();
+    if (audioCtx.state === "suspended") {
+      try {
+        audioCtx.resume();
+      } catch (_) {
+        /* ignore */
+      }
+    }
+    return audioCtx;
+  }
+
+  function _tone(ctx, { freq, type, start, dur, peak, attack, release }) {
+    const o = ctx.createOscillator();
+    const g = ctx.createGain();
+    o.type = type || "sine";
+    o.frequency.setValueAtTime(freq, start);
+    const a = attack != null ? attack : 0.01;
+    const r = release != null ? release : Math.max(0.04, dur * 0.55);
+    const p = peak != null ? peak : 0.08;
+    g.gain.setValueAtTime(0.0001, start);
+    g.gain.exponentialRampToValueAtTime(p, start + a);
+    g.gain.exponentialRampToValueAtTime(0.0001, start + Math.max(a + 0.02, dur - 0.01));
+    o.connect(g);
+    g.connect(ctx.destination);
+    o.start(start);
+    o.stop(start + dur + 0.02);
+  }
+
+  /**
+   * Sparse Win95/98-inspired UI cues (synthesized — no Microsoft WAV assets).
+   * Kinds: success (chord), error (stop), notify (ding), cancel (soft drop).
+   */
+  function playUiSound(kind) {
     if (!state.soundEnabled) return;
     try {
-      audioCtx = audioCtx || new (window.AudioContext || window.webkitAudioContext)();
-      const o = audioCtx.createOscillator();
-      const g = audioCtx.createGain();
-      o.type = type || "square";
-      o.frequency.value = freq;
-      g.gain.value = 0.04;
-      o.connect(g);
-      g.connect(audioCtx.destination);
-      o.start();
-      o.stop(audioCtx.currentTime + (dur || 0.06));
+      const ctx = ensureAudioCtx();
+      const t0 = ctx.currentTime + 0.01;
+      if (kind === "success") {
+        // Soft major chord — reminiscent of the classic "Chord" event cue
+        const freqs = [523.25, 659.25, 783.99]; // C5 E5 G5
+        freqs.forEach((freq, i) => {
+          _tone(ctx, {
+            freq,
+            type: "triangle",
+            start: t0 + i * 0.02,
+            dur: 0.42 - i * 0.04,
+            peak: 0.055,
+            attack: 0.02,
+          });
+        });
+        return;
+      }
+      if (kind === "error") {
+        // Low dissonant buzz — critical-stop spirit, not a click chirp
+        _tone(ctx, {
+          freq: 185,
+          type: "sawtooth",
+          start: t0,
+          dur: 0.22,
+          peak: 0.06,
+          attack: 0.005,
+        });
+        _tone(ctx, {
+          freq: 155,
+          type: "square",
+          start: t0 + 0.12,
+          dur: 0.28,
+          peak: 0.045,
+          attack: 0.005,
+        });
+        return;
+      }
+      if (kind === "cancel") {
+        _tone(ctx, {
+          freq: 392,
+          type: "triangle",
+          start: t0,
+          dur: 0.12,
+          peak: 0.04,
+        });
+        _tone(ctx, {
+          freq: 311,
+          type: "triangle",
+          start: t0 + 0.09,
+          dur: 0.16,
+          peak: 0.035,
+        });
+        return;
+      }
+      // notify / ding — soft bell ping
+      _tone(ctx, {
+        freq: 987.77,
+        type: "sine",
+        start: t0,
+        dur: 0.28,
+        peak: 0.07,
+        attack: 0.005,
+      });
+      _tone(ctx, {
+        freq: 1318.5,
+        type: "sine",
+        start: t0,
+        dur: 0.18,
+        peak: 0.03,
+        attack: 0.005,
+      });
     } catch (_) {
       /* ignore */
     }
@@ -869,6 +971,172 @@
   }
 
   /**
+   * Recommend Models dialog — returns "economical" | "balanced" | "quality", or null if cancelled.
+   */
+  function showRecommendModelsDialog() {
+    return new Promise((resolve) => {
+      const overlay = $("#recommend-models-overlay");
+      const okBtn = $("#recommend-models-ok");
+      const cancelBtn = $("#recommend-models-cancel");
+      if (!overlay || !okBtn || !cancelBtn) {
+        resolve(null);
+        return;
+      }
+      const balanced = $("#recommend-balanced");
+      if (balanced) balanced.checked = true;
+      overlay.hidden = false;
+
+      const finish = (value) => {
+        overlay.hidden = true;
+        okBtn.removeEventListener("click", onOk);
+        cancelBtn.removeEventListener("click", onCancel);
+        resolve(value);
+      };
+      const onCancel = () => finish(null);
+      const onOk = () => {
+        const chosen = document.querySelector(
+          'input[name="recommend-criteria"]:checked'
+        );
+        finish((chosen && chosen.value) || "balanced");
+      };
+      okBtn.addEventListener("click", onOk);
+      cancelBtn.addEventListener("click", onCancel);
+      okBtn.focus();
+    });
+  }
+
+  async function runRecommendModels(provider) {
+    const criteria = await showRecommendModelsDialog();
+    if (!criteria) return;
+
+    const a = api();
+    if (!a) {
+      showToast("Python bridge not ready.");
+      return;
+    }
+
+    const pretty =
+      criteria === "economical"
+        ? "Economical"
+        : criteria === "quality"
+          ? "Maximum quality"
+          : "Balanced";
+    beginBusy(
+      "Recommend Models",
+      "Finding " + pretty + " models from the live catalog…",
+      {
+        delayMs: 0,
+        percent: 20,
+        hint:
+          "Queries Google, OpenRouter, or Hugging Face for the provider you chose — not only the current picker lists.",
+      }
+    );
+
+    try {
+      const res = await a.recommend_models(criteria, provider || "");
+      if (!res || !res.ok) {
+        showToast((res && res.error) || "Could not recommend models.");
+        return;
+      }
+      applyRecommendedModels(res);
+      showToast(res.message || "Models recommended.");
+      playUiSound("notify");
+    } catch (err) {
+      showToast("Recommend Models failed: " + err);
+      playUiSound("error");
+    } finally {
+      endBusy("Ready");
+      requestAnimationFrame(() => syncDesktopScrollExtent());
+    }
+  }
+
+  function applyRecommendedModels(res) {
+    const picks = (res && res.picks) || {};
+    const models = (res && res.models) || [];
+    const provider = (res && res.provider) || "gemini";
+
+    if (provider === "gemini") {
+      fillGeminiModalitySelect(
+        $("#gemini-text-model"),
+        picks.text,
+        models,
+        "text"
+      );
+      fillGeminiModalitySelect(
+        $("#gemini-image-model"),
+        picks.image,
+        models,
+        "image"
+      );
+      fillGeminiModalitySelect(
+        $("#gemini-video-model"),
+        picks.video,
+        models,
+        "video"
+      );
+      updateStudioBackendLabel({
+        config: {
+          backend: { provider: "gemini" },
+          gemini: {
+            text_model: picks.text,
+            image_model: picks.image,
+            video_model: picks.video,
+          },
+        },
+      });
+      return;
+    }
+
+    if (provider === "openrouter") {
+      state.suggestedOpenRouterModels = models;
+      fillOpenRouterModalitySelect(
+        $("#openrouter-text-model"),
+        picks.text,
+        models,
+        "text"
+      );
+      fillOpenRouterModalitySelect(
+        $("#openrouter-image-model"),
+        picks.image,
+        models,
+        "image"
+      );
+      fillOpenRouterModalitySelect(
+        $("#openrouter-video-model"),
+        picks.video,
+        models,
+        "video"
+      );
+      updateStudioBackendLabel({
+        config: {
+          backend: { provider: "openrouter" },
+          openrouter: {
+            text_model: picks.text,
+            image_model: picks.image,
+            video_model: picks.video,
+          },
+        },
+      });
+      return;
+    }
+
+    state.suggestedModels = models;
+    fillHfModalitySelect($("#hf-text-model"), picks.text, models, "text");
+    fillHfModalitySelect($("#hf-image-model"), picks.image, models, "image");
+    fillHfModalitySelect($("#hf-video-model"), picks.video, models, "video");
+    updateStudioBackendLabel({
+      config: {
+        backend: { provider: "huggingface" },
+        huggingface: {
+          text_model: picks.text,
+          image_model: picks.image,
+          video_model: picks.video,
+        },
+      },
+    });
+  }
+
+  /**
    * Search Results dialog for ambiguous game titles.
    * Resolves to the selected candidate object, or null if cancelled.
    */
@@ -958,10 +1226,10 @@
     if (ok) {
       showToast("Local model ready");
       closeWindow("control");
-      beep(880, 0.08, "triangle");
+      playUiSound("success");
     } else {
       showToast(errMsg || "Model download / load failed");
-      beep(200, 0.2, "sawtooth");
+      playUiSound("error");
     }
   }
 
@@ -1043,8 +1311,6 @@
     // Always close Control Panel after a successful Save.
     closeWindow("control");
     showToast(res.message || "Saved");
-    beep(750, 0.05);
-
     if (!offerDownload) return;
 
     const go = await showConfirm(
@@ -1282,7 +1548,6 @@
       setStudioPrompt(seeded);
       openWindow("form");
       showToast("Text loaded into Studio as basis — edit the prompt, then CREATE.");
-      beep(700, 0.04);
       return;
     }
 
@@ -1298,7 +1563,6 @@
       (mod === "image" ? "Image" : "Video") +
         " loaded as Studio basis — describe the change, then CREATE."
     );
-    beep(700, 0.04);
   }
 
   function clearStudioBasis() {
@@ -1403,7 +1667,6 @@
       setStudioPrompt(res.text || "");
       openWindow("form");
       showToast("Text loaded into Studio prompt — edit and CREATE when ready.");
-      beep(700, 0.04);
     } catch (err) {
       showToast("Load failed: " + err);
     }
@@ -1430,7 +1693,6 @@
         (modality === "image" ? "Image" : "Video") +
           " loaded as Studio basis — describe the change, then CREATE."
       );
-      beep(900, 0.05);
     } catch (err) {
       showToast("Load failed: " + err);
     } finally {
@@ -1455,7 +1717,6 @@
       }
       openWindow("library");
       showToast("Text imported into Archives");
-      beep(900, 0.05);
     } catch (err) {
       showToast("Import failed: " + err);
     }
@@ -1482,7 +1743,6 @@
       showToast(
         (kind === "image" ? "Image" : "Video") + " imported into Archives"
       );
-      beep(900, 0.05);
     } catch (err) {
       showToast("Import failed: " + err);
     } finally {
@@ -1515,7 +1775,6 @@
       el.classList.remove("minimized");
     }
     focusWindow(id);
-    beep(660, 0.04);
     // Let layout settle (esp. Control Panel height:auto) then extend scroll area
     requestAnimationFrame(() => syncDesktopScrollExtent());
     if (id === "control") {
@@ -1889,7 +2148,6 @@
       else state.focused = null;
     }
     renderTaskbar();
-    beep(440, 0.04);
     syncDesktopScrollExtent();
   }
 
@@ -1898,7 +2156,6 @@
     const el = document.getElementById("win-" + id);
     if (el) el.classList.add("minimized");
     renderTaskbar();
-    beep(520, 0.03);
     syncDesktopScrollExtent();
   }
 
@@ -2142,7 +2399,7 @@
   function resolveTheme(creation) {
     const t = (creation && creation.theme) || {};
     return {
-      themeName: t.themeName || "Authentic Era Box Art Palette",
+      themeName: t.themeName || "Default",
       bgColor: t.bgColor || "#0055aa",
       cardBg: t.cardBg || "#ffffff",
       textColor: t.textColor || "#000000",
@@ -2200,7 +2457,6 @@
     }
     if (state.speechPlaying) {
       stopSpeech();
-      beep(400, 0.05);
       return;
     }
     const c = state.active;
@@ -2224,7 +2480,6 @@
       btn.textContent = "Stop Reading";
       btn.classList.add("speaking");
     }
-    beep(700, 0.04);
   }
 
   function setViewerTab(tab) {
@@ -2602,16 +2857,16 @@
     if (modality === "image" || modality === "video") {
       canvas.style.background = "#111";
       canvas.style.color = "#eee";
-      canvas.style.fontFamily = FONT_STACKS.sans;
+      canvas.style.fontFamily = "var(--ui-font)";
       if (tab === "extracted") {
         canvas.style.background = "#ffffff";
         canvas.style.color = "#000000";
-        canvas.style.fontFamily = FONT_STACKS.mono;
+        canvas.style.fontFamily = "var(--ui-font)";
         canvas.innerHTML = renderExtractedTab(creation);
       } else if (tab === "grounding") {
         canvas.style.background = "#ffffff";
         canvas.style.color = "#000000";
-        canvas.style.fontFamily = FONT_STACKS.mono;
+        canvas.style.fontFamily = "var(--ui-font)";
         canvas.innerHTML = renderGroundingTab(creation);
       } else {
         canvas.innerHTML = renderMediaPlaceholder(creation, modality);
@@ -2628,17 +2883,17 @@
     } else if (tab === "grounding") {
       canvas.style.background = "#ffffff";
       canvas.style.color = "#000000";
-      canvas.style.fontFamily = FONT_STACKS.mono;
+      canvas.style.fontFamily = "var(--ui-font)";
       canvas.innerHTML = renderGroundingTab(creation);
     } else if (tab === "print") {
       canvas.style.background = "#ffffff";
       canvas.style.color = "#000000";
-      canvas.style.fontFamily = FONT_STACKS.mono;
+      canvas.style.fontFamily = "var(--ui-font)";
       canvas.innerHTML = renderPrintTab(creation);
     } else {
       canvas.style.background = theme.cardBg || "#fff";
       canvas.style.color = theme.textColor || "#000";
-      canvas.style.fontFamily = fontStackFromStyle(theme.fontStyle);
+      canvas.style.fontFamily = "var(--ui-font)";
       canvas.innerHTML = renderDocTab(creation, theme);
     }
 
@@ -2768,7 +3023,7 @@
       "z-index:2147483646",
       "background:" + (theme.cardBg || "#ffffff"),
       "color:" + (theme.textColor || "#000000"),
-      "font-family:" + fontStackFromStyle(theme.fontStyle),
+      "font-family:" + currentUiFontStack(),
       "font-size:14px",
       "line-height:1.35",
     ].join(";");
@@ -2841,7 +3096,6 @@
           const res = await a.save_binary_file_dialog(base + ".png", payload.dataUrl);
           if (res.ok) {
             showToast("Saved PNG");
-            beep(900, 0.05);
           } else if (!res.cancelled) {
             showToast(res.error || "PNG export failed");
           }
@@ -2868,7 +3122,6 @@
         const res = await a.save_binary_file_dialog(base + ".pdf", dataUri);
         if (res.ok) {
           showToast("Saved PDF");
-          beep(900, 0.05);
         } else if (!res.cancelled) {
           showToast(res.error || "PDF export failed");
         }
@@ -2890,7 +3143,6 @@
         const res = await a.save_binary_file_dialog(base + ".png", pngDataUrl);
         if (res.ok) {
           showToast("Saved PNG");
-          beep(900, 0.05);
         } else if (!res.cancelled) {
           showToast(res.error || "PNG export failed");
         }
@@ -2915,7 +3167,6 @@
       const res = await a.save_binary_file_dialog(base + ".pdf", dataUri);
       if (res.ok) {
         showToast("Saved PDF");
-        beep(900, 0.05);
       } else if (!res.cancelled) {
         showToast(res.error || "PDF export failed");
       }
@@ -2996,7 +3247,6 @@
       };
     }
     renderArchives();
-    beep(650, 0.02);
   }
 
   function renderArchives() {
@@ -3036,7 +3286,6 @@
         openBtn.title = "Open in Viewer";
         openBtn.addEventListener("click", () => {
           renderDocument(c);
-          beep(700, 0.04);
         });
         tdName.appendChild(openBtn);
 
@@ -3070,7 +3319,6 @@
             renderDocument(null);
           }
           renderArchives();
-          beep(300, 0.08);
         });
         tdActions.appendChild(basis);
         tdActions.appendChild(del);
@@ -3505,8 +3753,6 @@
       $("#app-theme").value = state.appTheme;
     }
     applyAppTheme(state.appTheme);
-    // Sync theme/status only — don't overwrite studio fields mid-session
-    applyGameDefaults({ applyPlatform: false, applyTheme: true });
 
     syncBackendPanels();
     updateStudioBackendLabel(boot);
@@ -3928,22 +4174,6 @@
     syncCustomThemeControlsVisibility();
   }
 
-  function themeDisplayName(themeKey) {
-    if (!themeKey || themeKey === "auto") return "Auto Box Art Palette";
-    if (THEMES[themeKey] && THEMES[themeKey].themeName) return THEMES[themeKey].themeName;
-    return themeKey;
-  }
-
-  function updateStudioThemeField() {
-    const el = $("#studio-theme-field");
-    if (!el) return;
-    el.textContent = "Theme Engine: " + themeDisplayName("auto");
-  }
-
-  function applyGameDefaults(_opts) {
-    updateStudioThemeField();
-  }
-
   function applyCreationPlaceholders(template, game, platform) {
     let text = String(template || "").replace(/\r\n/g, "\n");
     const g = String(game || "").trim();
@@ -4039,8 +4269,7 @@
     renderDocument(creation);
     openWindow("viewer");
     focusWindow("viewer");
-    beep(880, 0.08, "triangle");
-    beep(1175, 0.1, "triangle");
+    playUiSound("success");
   }
 
   function applyGenerationError(err) {
@@ -4048,15 +4277,16 @@
     setCreateBlocked(false);
     endBusy("Ready");
     showToast(String(err));
-    beep(200, 0.2, "sawtooth");
+    playUiSound("error");
   }
 
   function applyGenerationCancelled() {
+    if (!state.generating && !busy.visible) return;
     state.generating = false;
     setCreateBlocked(false);
     endBusy("Ready");
     showToast("Generation cancelled");
-    beep(320, 0.08, "triangle");
+    playUiSound("cancel");
   }
 
   function applyExtractResult(creation) {
@@ -4078,7 +4308,7 @@
     showToast(
       kind === "transcript" ? "Transcript ready." : "Extracted text ready."
     );
-    beep(880, 0.08, "triangle");
+    playUiSound("success");
   }
 
   async function extractCreationText() {
@@ -4145,7 +4375,16 @@
         showToast((res && res.error) || "Could not cancel");
         return;
       }
-      updateBusy("Cancelling — waiting for the current step to stop…");
+      // Dismiss overlay immediately; pollJob still waits for cancelled status.
+      const kind = busy.activity;
+      endBusy("Cancelling…");
+      setProgress("Cancelling…");
+      if (kind === "generate") {
+        // Keep CREATE blocked until pollJob sees cancelled/error/done.
+        setCreateBlocked(true);
+        state.generating = true;
+      }
+      showToast("Cancelling…");
     } catch (err) {
       busy.cancelling = false;
       setBusyCancelVisible(true);
@@ -4171,11 +4410,9 @@
 
     if (candidates.length < 2) {
       showToast('Game Not Found — could not disambiguate "' + (payload.query || "") + '".');
-      beep(200, 0.2, "sawtooth");
       return;
     }
 
-    beep(660, 0.06, "triangle");
     const picked = await showSearchResults(payload.query, candidates);
     if (!picked || !picked.game) {
       showToast("Cancelled — pick a game from Search Results when ready.");
@@ -4253,6 +4490,7 @@
         } else if (kind === "extract") {
           endBusy();
           showToast("Extract Text cancelled.");
+          playUiSound("cancel");
         } else {
           finishModelDownload(false, "Cancelled");
         }
@@ -4260,7 +4498,8 @@
       }
 
       if (job.status === "cancelling") {
-        updateBusy("Cancelling…");
+        // Overlay already dismissed after cancel_job; keep status line only.
+        setProgress("Cancelling…");
       }
 
       if (job.status === "error" || job.status === "missing") {
@@ -4269,6 +4508,7 @@
         } else if (kind === "extract") {
           endBusy();
           showToast(job.error || "Extract Text failed");
+          playUiSound("error");
         } else {
           finishModelDownload(false, job.error || "Model load failed");
         }
@@ -4283,6 +4523,7 @@
     } else if (kind === "extract") {
       endBusy();
       showToast("Timed out waiting for Extract Text.");
+      playUiSound("error");
     } else {
       finishModelDownload(false, "Timed out waiting for model load.");
     }
@@ -4300,7 +4541,7 @@
       "This prompt needs Google Gemini (image/video). Switch provider in Control Panel.";
     showToast(msg, 14000);
     setProgress("Stopped — switch provider");
-    beep(200, 0.2, "sawtooth");
+    playUiSound("error");
     openWindow("control");
     if ($("#backend-provider") && $("#backend-provider").value !== "gemini") {
       // Leave provider panel visible — user should switch to Gemini
@@ -4370,8 +4611,6 @@
         activity: "generate",
         hint: BUSY_HINTS.generate,
       });
-      beep(400, 0.05);
-
       try {
         await a.ping();
       } catch (err) {
@@ -4829,7 +5068,6 @@
     openWindow("image-edit");
     // Preview after the window is shown/laid out
     requestAnimationFrame(() => scheduleImageEditPreview());
-    beep(700, 0.04);
     return true;
   }
 
@@ -4944,7 +5182,6 @@
       renderDocument(saved);
       closeImageEditor();
       showToast("Image edit applied");
-      beep(900, 0.05);
     } catch (err) {
       showToast("Edit failed: " + err);
     } finally {
@@ -4963,7 +5200,6 @@
       if (!saved) return;
       await reloadImageEditorFromCreation(saved);
       showToast("Image saved");
-      beep(900, 0.05);
     } catch (err) {
       showToast("Save failed: " + err);
     } finally {
@@ -5010,7 +5246,6 @@
         return;
       }
       showToast("Saved to " + (res.path || "file"));
-      beep(900, 0.05);
     } catch (err) {
       showToast("Save As failed: " + err);
     } finally {
@@ -5234,13 +5469,11 @@
         if (imageEdit.crop) markImageEditDirty();
         imageEdit.crop = null;
         scheduleImageEditPreview();
-        beep(650, 0.03);
       });
     }
     if ($("#btn-edit-reset")) {
       $("#btn-edit-reset").addEventListener("click", () => {
         resetImageEditor();
-        beep(650, 0.03);
       });
     }
     if ($("#btn-edit-cancel")) {
@@ -5457,7 +5690,6 @@
           updateVideoEditTimeLabel();
         }
         renderVideoSegments();
-        beep(650, 0.02);
       });
       track.appendChild(btn);
     });
@@ -5513,7 +5745,6 @@
     markVideoEditDirty();
     renderVideoSegments();
     updateVideoEditTimeLabel();
-    beep(700, 0.04);
   }
 
   function deleteSelectedVideoSegment() {
@@ -5538,7 +5769,6 @@
     snapPlayerToEditedTimeline(keepEdited);
     renderVideoSegments();
     updateVideoEditTimeLabel();
-    beep(300, 0.06);
   }
 
   function moveSelectedVideoSegment(dir) {
@@ -5561,7 +5791,6 @@
     snapPlayerToEditedTimeline(newEditStart + within);
     renderVideoSegments();
     updateVideoEditTimeLabel();
-    beep(650, 0.03);
   }
 
   function clearVideoFilterPreview() {
@@ -6039,7 +6268,6 @@
     syncVideoEditChrome();
     openWindow("video-edit");
     scheduleVideoFilterPreview();
-    beep(700, 0.04);
     return true;
   }
 
@@ -6110,7 +6338,6 @@
       renderDocument(saved);
       closeVideoEditor();
       showToast("Video edit applied");
-      beep(900, 0.05);
     } catch (err) {
       showToast("Video edit failed: " + err);
     } finally {
@@ -6147,7 +6374,6 @@
       renderArchives();
       await openVideoEditor(saved, { standalone: keepStandalone });
       showToast("Video saved");
-      beep(900, 0.05);
     } catch (err) {
       showToast("Save failed: " + err);
     } finally {
@@ -6178,7 +6404,6 @@
         return;
       }
       showToast("Saved to " + (res.path || "file"));
-      beep(900, 0.05);
     } catch (err) {
       showToast("Save As failed: " + err);
     } finally {
@@ -6306,7 +6531,6 @@
     if ($("#btn-vedit-play")) {
       $("#btn-vedit-play").addEventListener("click", () => {
         toggleVideoEditPlayback();
-        beep(650, 0.03);
       });
     }
     if ($("#btn-vedit-rewind")) {
@@ -6318,7 +6542,6 @@
         updateVideoEditTimeLabel();
         scheduleVideoFilterPreview();
         syncVideoEditPlayButton();
-        beep(650, 0.03);
       });
     }
     if ($("#btn-vedit-split")) {
@@ -6369,7 +6592,6 @@
     if ($("#btn-vedit-reset")) {
       $("#btn-vedit-reset").addEventListener("click", () => {
         resetVideoEditor();
-        beep(650, 0.03);
       });
     }
     if ($("#btn-vedit-cancel")) {
@@ -6422,7 +6644,6 @@
         e.preventDefault();
         e.stopPropagation();
         toggleStartMenu();
-        beep(600, 0.03);
         return;
       }
 
@@ -6461,16 +6682,10 @@
         studioLoadMediaFile("video")
       );
     }
-    if ($("#btn-studio-use-active")) {
-      $("#btn-studio-use-active").addEventListener("click", () =>
-        useCreationAsBasis(state.active)
-      );
-    }
     if ($("#btn-studio-clear-basis")) {
       $("#btn-studio-clear-basis").addEventListener("click", () => {
         clearStudioBasis();
         showToast("Media basis cleared");
-        beep(650, 0.03);
       });
     }
     if ($("#btn-use-basis")) {
@@ -6508,7 +6723,6 @@
       const json = await a.export_creations_json();
       const date = new Date().toISOString().slice(0, 10);
       await a.save_file_dialog("retro_98_ai_creator_archives_" + date + ".json", json);
-      beep(900, 0.05);
     });
 
     $("#btn-import").addEventListener("click", async () => {
@@ -6519,7 +6733,6 @@
         state.creations = res.creations;
         renderArchives();
         showToast("Imported " + res.imported + " item(s)");
-        beep(900, 0.05);
       } else if (!res.cancelled) {
         showToast(res.error || "Import failed");
       }
@@ -6618,7 +6831,6 @@
               ? "Saved MP4"
               : "Saved media file"
           );
-          beep(900, 0.05);
         } else if (!res.cancelled) {
           showToast(res.error || "Media save failed");
         }
@@ -6632,7 +6844,6 @@
     document.querySelectorAll(".viewer-tab").forEach((btn) => {
       btn.addEventListener("click", () => {
         setViewerTab(btn.getAttribute("data-tab"));
-        beep(650, 0.03);
       });
     });
 
@@ -6645,7 +6856,6 @@
       try {
         await navigator.clipboard.writeText(text);
         showToast("ASCII document copied to clipboard");
-        beep(1000, 0.04);
       } catch (_) {
         showToast("Clipboard unavailable");
       }
@@ -6751,6 +6961,28 @@
       });
     }
 
+    if ($("#btn-gemini-refresh-models")) {
+      $("#btn-gemini-refresh-models").addEventListener("click", () => {
+        void refreshGeminiModelsForControlPanel();
+      });
+    }
+
+    if ($("#btn-gemini-recommend-models")) {
+      $("#btn-gemini-recommend-models").addEventListener("click", () => {
+        void runRecommendModels("gemini");
+      });
+    }
+    if ($("#btn-openrouter-recommend-models")) {
+      $("#btn-openrouter-recommend-models").addEventListener("click", () => {
+        void runRecommendModels("openrouter");
+      });
+    }
+    if ($("#btn-hf-recommend-models")) {
+      $("#btn-hf-recommend-models").addEventListener("click", () => {
+        void runRecommendModels("huggingface");
+      });
+    }
+
     $("#btn-save-settings").addEventListener("click", async () => {
       await saveControlPanelSettings({ applyDisplay: true });
     });
@@ -6765,7 +6997,6 @@
       const activate = (e) => {
         e.preventDefault();
         setControlTab(tabEl.getAttribute("data-control-tab"));
-        beep(650, 0.03);
       };
       const link = tabEl.querySelector("a");
       if (link) link.addEventListener("click", activate);
@@ -6782,20 +7013,17 @@
     if ($("#ui-scale")) {
       $("#ui-scale").addEventListener("change", () => {
         applyUiScale(readUiScaleFromControl());
-        beep(700, 0.03);
       });
     }
     if ($("#app-theme")) {
       $("#app-theme").addEventListener("change", () => {
         syncCustomThemeControlsVisibility();
         applyAppTheme($("#app-theme").value);
-        beep(700, 0.03);
       });
     }
     if ($("#ui-font")) {
       $("#ui-font").addEventListener("change", () => {
         applyUiFont($("#ui-font").value);
-        beep(700, 0.03);
       });
     }
     [
@@ -6848,7 +7076,6 @@
       state.creations = boot.creations || [];
       fillCatalogs(boot);
       fillControlPanel(boot);
-      applyGameDefaults({ applyPlatform: true, applyTheme: true });
       renderArchives();
       // Do not auto-open Viewer/Archives on launch — user opens them explicitly
       renderTaskbar();
