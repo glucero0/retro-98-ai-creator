@@ -329,7 +329,7 @@ def _chat_completion(
     *,
     api_key: str,
     model: str,
-    messages: list[dict[str, str]],
+    messages: list[dict[str, Any]],
     temperature: float,
     base_url: str,
 ) -> str:

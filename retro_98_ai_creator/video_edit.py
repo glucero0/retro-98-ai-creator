@@ -267,6 +267,136 @@ def extract_video_frame_png(
         return out.read_bytes()
 
 
+def video_has_audio_stream(source: str | Path) -> bool:
+    """True if ffprobe reports at least one audio stream."""
+    ffprobe = _require_ffprobe()
+    src = Path(source)
+    if not src.is_file():
+        raise FileNotFoundError(f"Video not found: {src}")
+    proc = _run(
+        [
+            ffprobe,
+            "-v",
+            "error",
+            "-select_streams",
+            "a",
+            "-show_entries",
+            "stream=index",
+            "-of",
+            "csv=p=0",
+            str(src),
+        ],
+        timeout=60,
+    )
+    if proc.returncode != 0:
+        detail = (proc.stderr or proc.stdout or "").strip()
+        raise RuntimeError(detail or "ffprobe failed while checking audio streams")
+    lines = [ln.strip() for ln in (proc.stdout or "").splitlines() if ln.strip()]
+    return bool(lines)
+
+
+def extract_audio_mp3(
+    source: str | Path,
+    *,
+    max_seconds: float | None = 600.0,
+) -> bytes:
+    """Demux audio to a compact mono MP3 for speech transcription."""
+    import tempfile
+
+    ffmpeg = _require_ffmpeg()
+    src = Path(source)
+    if not src.is_file():
+        raise FileNotFoundError(f"Video not found: {src}")
+    with tempfile.TemporaryDirectory(prefix="rgc_audio_") as tmp:
+        out = Path(tmp) / "audio.mp3"
+        cmd = [ffmpeg, *_ffmpeg_quiet_args(), "-i", str(src)]
+        if max_seconds is not None and float(max_seconds) > 0:
+            cmd.extend(["-t", f"{float(max_seconds):.3f}"])
+        cmd.extend(
+            [
+                "-vn",
+                "-ac",
+                "1",
+                "-ar",
+                "16000",
+                "-c:a",
+                "libmp3lame",
+                "-b:a",
+                "64k",
+                "-y",
+                str(out),
+            ]
+        )
+        proc = _run(cmd, timeout=300)
+        if proc.returncode != 0 or not out.is_file() or out.stat().st_size < 32:
+            detail = (proc.stderr or proc.stdout or "").strip()
+            raise RuntimeError(
+                "Could not extract audio from video"
+                + (f": {detail}" if detail else ".")
+            )
+        return out.read_bytes()
+
+
+def extract_video_clip_bytes(
+    source: str | Path,
+    *,
+    max_seconds: float = 90.0,
+) -> bytes:
+    """Re-encode a short MP4 clip for multimodal fallback when audio is missing."""
+    import tempfile
+
+    ffmpeg = _require_ffmpeg()
+    src = Path(source)
+    if not src.is_file():
+        raise FileNotFoundError(f"Video not found: {src}")
+    dur = max(1.0, float(max_seconds or 90.0))
+    with tempfile.TemporaryDirectory(prefix="rgc_clip_") as tmp:
+        out = Path(tmp) / "clip.mp4"
+        cmd = [
+            ffmpeg,
+            *_ffmpeg_quiet_args(),
+            "-i",
+            str(src),
+            "-t",
+            f"{dur:.3f}",
+            "-c:v",
+            "libx264",
+            "-preset",
+            "veryfast",
+            "-crf",
+            "28",
+            "-an",
+            "-movflags",
+            "+faststart",
+            "-y",
+            str(out),
+        ]
+        proc = _run(cmd, timeout=300)
+        if proc.returncode != 0 or not out.is_file():
+            # Copy first N seconds without re-encode as a fallback.
+            cmd2 = [
+                ffmpeg,
+                *_ffmpeg_quiet_args(),
+                "-i",
+                str(src),
+                "-t",
+                f"{dur:.3f}",
+                "-c",
+                "copy",
+                "-an",
+                "-y",
+                str(out),
+            ]
+            proc2 = _run(cmd2, timeout=120)
+            if proc2.returncode != 0 or not out.is_file():
+                detail = (proc.stderr or proc2.stderr or "").strip()
+                raise RuntimeError(
+                    "Could not prepare a short video clip"
+                    + (f": {detail}" if detail else ".")
+                )
+        return out.read_bytes()
+
+
 def _ffmpeg_quiet_args() -> list[str]:
     """Global quiet flags compatible with older and newer ffmpeg."""
     # Avoid -hide_banner: missing on ancient builds (e.g. 2013 Python Scripts stubs).

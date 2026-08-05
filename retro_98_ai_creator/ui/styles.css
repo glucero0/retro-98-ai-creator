@@ -1011,6 +1011,41 @@ ul[role="tablist"] li[role="tab"] a:focus {
   box-sizing: border-box;
 }
 
+.extracted-pane {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  min-height: 100%;
+  box-sizing: border-box;
+}
+
+.extracted-intro {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 8px 14px;
+}
+
+.extracted-meta {
+  font-size: 11px;
+  color: #555;
+}
+
+.extracted-text {
+  width: 100%;
+  min-height: 280px;
+  flex: 1;
+  box-sizing: border-box;
+  font: inherit;
+  resize: vertical;
+  padding: 8px;
+}
+
+.extracted-actions {
+  display: flex;
+  gap: 8px;
+}
+
 .doc-header h2 {
   margin: 0 0 4px;
   font-size: 1.4rem;
@@ -1696,12 +1731,18 @@ code {
   word-break: break-word;
 }
 
-/* Control Panel — AI Model needs room for provider pickers; Display can be narrower. */
+/* Control Panel — fixed tab widths; no resize grip; height follows content (desktop scrolls). */
 #win-control.app-window {
   height: auto;
   max-height: none;
-  overflow-x: hidden;
+  overflow: visible;
   box-sizing: border-box;
+  min-height: 0;
+}
+
+#win-control .window-resize-handle {
+  display: none !important;
+  pointer-events: none;
 }
 
 #win-control.control-tab-ai {
@@ -1728,8 +1769,7 @@ code {
 
 #win-control > .window-body,
 #win-control .control-tab-panel > .window-body {
-  overflow-x: hidden;
-  overflow-y: visible;
+  overflow: visible;
   flex: 0 0 auto;
   max-height: none;
 }

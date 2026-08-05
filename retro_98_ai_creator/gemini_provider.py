@@ -35,6 +35,18 @@ DEFAULT_GEMINI_TEXT_MODEL = "gemini-2.5-flash"
 DEFAULT_GEMINI_IMAGE_MODEL = "gemini-2.5-flash-image"
 DEFAULT_GEMINI_VIDEO_MODEL = "veo-2.0-generate-001"
 
+# Shut down by Google (e.g. Gemini 2.0 on 2026-06-01). Remap so saved Control Panel
+# picks and Extract Text keep working without a manual model switch.
+GEMINI_RETIRED_MODEL_ALIASES: dict[str, str] = {
+    "gemini-2.0-flash": "gemini-2.5-flash",
+    "gemini-2.0-flash-001": "gemini-2.5-flash",
+    "gemini-2.0-flash-lite": "gemini-2.5-flash-lite",
+    "gemini-2.0-flash-lite-001": "gemini-2.5-flash-lite",
+    "gemini-2.0-flash-lite-preview": "gemini-2.5-flash-lite",
+    "gemini-2.0-flash-lite-preview-02-05": "gemini-2.5-flash-lite",
+    "gemini-2.0-flash-preview-image-generation": DEFAULT_GEMINI_IMAGE_MODEL,
+}
+
 SUGGESTED_GEMINI_MODELS: list[dict[str, str]] = [
     {
         "repo_id": "gemini-2.5-flash",
@@ -147,8 +159,11 @@ def _is_studio_gemini_model(
     supported_actions: list[str] | None = None,
 ) -> bool:
     """True for Gemini text / image / video models usable in the studio."""
-    mid = (model_id or "").strip().lower().rstrip("/")
+    mid = _gemini_model_id(model_id).lower().rstrip("/")
     if not mid:
+        return False
+    # Drop shut-down ids even if Google still lists them briefly
+    if mid in GEMINI_RETIRED_MODEL_ALIASES:
         return False
     # Allow imagen / veo even without "gemini" in the id
     modality = classify_model_modality(
@@ -277,8 +292,17 @@ def list_available_gemini_models(api_key: str) -> list[dict[str, str]]:
 
 
 def normalize_gemini_model(model_name: str | None) -> str:
-    name = (model_name or "").strip()
-    return name or DEFAULT_GEMINI_TEXT_MODEL
+    """Strip models/ prefix and remap shut-down Gemini ids to current replacements."""
+    name = _gemini_model_id(model_name)
+    if not name:
+        return DEFAULT_GEMINI_TEXT_MODEL
+    remapped = GEMINI_RETIRED_MODEL_ALIASES.get(name) or GEMINI_RETIRED_MODEL_ALIASES.get(
+        name.lower()
+    )
+    if remapped:
+        logger.info("Remapping retired Gemini model %s → %s", name, remapped)
+        return remapped
+    return name
 
 
 def resolve_gemini_model_for_modality(
@@ -288,10 +312,19 @@ def resolve_gemini_model_for_modality(
     cfg = gemini_cfg or {}
     mod = (modality or "text").lower().strip()
     if mod == "image":
-        return (cfg.get("image_model") or "").strip() or DEFAULT_GEMINI_IMAGE_MODEL
-    if mod == "video":
-        return (cfg.get("video_model") or "").strip() or DEFAULT_GEMINI_VIDEO_MODEL
-    return (cfg.get("text_model") or "").strip() or DEFAULT_GEMINI_TEXT_MODEL
+        raw = (cfg.get("image_model") or "").strip() or DEFAULT_GEMINI_IMAGE_MODEL
+        fallback = DEFAULT_GEMINI_IMAGE_MODEL
+    elif mod == "video":
+        raw = (cfg.get("video_model") or "").strip() or DEFAULT_GEMINI_VIDEO_MODEL
+        fallback = DEFAULT_GEMINI_VIDEO_MODEL
+    else:
+        raw = (cfg.get("text_model") or "").strip() or DEFAULT_GEMINI_TEXT_MODEL
+        fallback = DEFAULT_GEMINI_TEXT_MODEL
+    name = _gemini_model_id(raw)
+    remapped = GEMINI_RETIRED_MODEL_ALIASES.get(name) or GEMINI_RETIRED_MODEL_ALIASES.get(
+        name.lower()
+    )
+    return remapped or name or fallback
 
 
 def resolve_api_key(gemini_cfg: dict[str, Any] | None = None) -> str | None:

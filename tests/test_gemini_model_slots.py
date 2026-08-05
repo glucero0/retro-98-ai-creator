@@ -37,6 +37,11 @@ def test_resolve_gemini_defaults_when_empty():
     assert resolve_gemini_model_for_modality({}, "video") == DEFAULT_GEMINI_VIDEO_MODEL
 
 
+def test_resolve_gemini_remaps_retired_text_model():
+    cfg = {"text_model": "gemini-2.0-flash-lite"}
+    assert resolve_gemini_model_for_modality(cfg, "text") == "gemini-2.5-flash-lite"
+
+
 def test_resolve_openrouter_modality_slots():
     cfg = {
         "text_model": "openai/gpt-4o",

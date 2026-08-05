@@ -588,9 +588,16 @@ class Api:
 
     def export_creation_txt(self, creation: dict[str, Any]) -> str:
         """Export only the generated text body (no prompt or metadata)."""
+        from .extract_text import get_extracted_text
+
         modality = str((creation or {}).get("modality") or "text").lower()
         if modality in {"image", "video"}:
-            raise RuntimeError(f"TXT export is not available for {modality} creations.")
+            extracted = get_extracted_text(creation)
+            if extracted:
+                return extracted + ("\n" if not extracted.endswith("\n") else "")
+            raise RuntimeError(
+                f"TXT export is not available for {modality} creations until you run Extract Text…"
+            )
 
         lines: list[str] = []
         overview = str(creation.get("overview") or "").strip()
@@ -619,6 +626,101 @@ class Api:
                 lines.append(f"  • {kv.get('label', '')}: {kv.get('value', '')}")
             lines.append("")
         return "\n".join(lines).strip() + ("\n" if lines else "")
+
+    def extract_creation_text(self, creation_id: str) -> dict[str, Any]:
+        """Start OCR (image) or transcription (video) in a background job."""
+        from .cancellation import GenerationCancelled
+        from .extract_text import extract_text_from_creation
+        from .media_store import resolve_media_path
+
+        creation_id = (creation_id or "").strip()
+        if not creation_id:
+            return {"ok": False, "error": "Missing creation id"}
+
+        target = next((c for c in self.store.load() if c.get("id") == creation_id), None)
+        if not target:
+            return {"ok": False, "error": "Creation not found"}
+        modality = str(target.get("modality") or "").lower()
+        if modality not in {"image", "video"}:
+            return {"ok": False, "error": "Extract Text is only for image or video creations."}
+
+        path = resolve_media_path(target.get("mediaPath"), config=self.config)
+        if path is None:
+            return {"ok": False, "error": "Media file is missing on disk."}
+
+        if not self._gen_lock.acquire(blocking=False):
+            return {"ok": False, "error": "Another AI job is already in progress."}
+
+        job_id = f"extract_{uuid.uuid4().hex[:10]}"
+        cancel_evt = threading.Event()
+        with self._jobs_lock:
+            self._cancel_events[job_id] = cancel_evt
+        title = "Extracting text" if modality == "image" else "Transcribing"
+        self._set_job(
+            job_id,
+            status="running",
+            kind="extract",
+            progress={
+                "message": f"Starting {title.lower()}…",
+                "percent": 0,
+                "phase": "extract",
+                "title": title,
+            },
+        )
+
+        def _progress(payload: Any) -> None:
+            from .cancellation import GenerationCancelled as _GC
+
+            if cancel_evt.is_set():
+                raise _GC("Cancelled by user")
+            self._on_job_progress(job_id, payload)
+
+        def _run() -> None:
+            try:
+                updated = extract_text_from_creation(
+                    target,
+                    config=self.config,
+                    media_path=path,
+                    progress=_progress,
+                    cancel_event=cancel_evt,
+                )
+                if cancel_evt.is_set():
+                    raise GenerationCancelled("Cancelled by user")
+                saved = self.store.upsert(updated)
+                self._set_job(
+                    job_id,
+                    status="done",
+                    result=saved,
+                    progress={
+                        "message": "Ready",
+                        "percent": 100,
+                        "phase": "ready",
+                        "title": title,
+                    },
+                )
+            except GenerationCancelled:
+                logger.info("Extract text cancelled: %s", job_id)
+                self._set_job(
+                    job_id,
+                    status="cancelled",
+                    error="Cancelled",
+                    progress={
+                        "message": "Cancelled",
+                        "percent": 100,
+                        "phase": "cancelled",
+                        "title": "Cancelled",
+                    },
+                )
+            except Exception as exc:  # noqa: BLE001
+                logger.exception("Extract text failed")
+                self._set_job(job_id, status="error", error=str(exc))
+            finally:
+                with self._jobs_lock:
+                    self._cancel_events.pop(job_id, None)
+                self._gen_lock.release()
+
+        threading.Thread(target=_run, daemon=True, name=job_id).start()
+        return {"ok": True, "job_id": job_id}
 
     def _resolve_basis_media(self, creation_id: str) -> dict[str, Any]:
         """Load Archive media for Studio image/video → new media generation."""
@@ -763,6 +865,9 @@ class Api:
         target["mediaPath"] = stored["mediaPath"]
         target["mimeType"] = stored["mimeType"]
         target["modality"] = "image"
+        from .extract_text import clear_extraction_fields
+
+        target = clear_extraction_fields(target)
         saved = self.store.upsert(target)
         return {"ok": True, "creation": saved}
 
@@ -872,6 +977,9 @@ class Api:
             target["mediaPath"] = stored["mediaPath"]
             target["mimeType"] = stored["mimeType"]
             target["modality"] = "video"
+            from .extract_text import clear_extraction_fields
+
+            target = clear_extraction_fields(target)
             saved = self.store.upsert(target)
             return {"ok": True, "creation": saved}
         except Exception as exc:  # noqa: BLE001

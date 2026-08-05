@@ -145,6 +145,35 @@ def normalize_huggingface_cfg(hf: dict[str, Any] | None) -> dict[str, Any]:
     return out
 
 
+def normalize_gemini_cfg(section: dict[str, Any] | None) -> dict[str, Any]:
+    """Normalize Gemini keys and remap shut-down model ids."""
+    from .gemini_provider import (
+        DEFAULT_GEMINI_IMAGE_MODEL,
+        DEFAULT_GEMINI_TEXT_MODEL,
+        DEFAULT_GEMINI_VIDEO_MODEL,
+        GEMINI_RETIRED_MODEL_ALIASES,
+        _gemini_model_id,
+        normalize_gemini_model,
+    )
+
+    out = dict(section or {})
+    raw_key = (out.get("api_key") or "").strip()
+    out["api_key"] = raw_key or None
+    text = normalize_gemini_model(out.get("text_model") or DEFAULT_GEMINI_TEXT_MODEL)
+    image_raw = _gemini_model_id(out.get("image_model") or DEFAULT_GEMINI_IMAGE_MODEL)
+    image = (
+        GEMINI_RETIRED_MODEL_ALIASES.get(image_raw)
+        or GEMINI_RETIRED_MODEL_ALIASES.get(image_raw.lower())
+        or image_raw
+        or DEFAULT_GEMINI_IMAGE_MODEL
+    )
+    video = _gemini_model_id(out.get("video_model") or "") or DEFAULT_GEMINI_VIDEO_MODEL
+    out["text_model"] = text
+    out["image_model"] = image
+    out["video_model"] = video
+    return out
+
+
 def load_config() -> dict[str, Any]:
     """Merge defaults ← config.yaml ← optional config.local.yaml."""
     cfg = copy.deepcopy(DEFAULTS)
@@ -153,6 +182,7 @@ def load_config() -> dict[str, Any]:
         cfg = _deep_merge(cfg, _load_yaml(path))
 
     cfg["huggingface"] = normalize_huggingface_cfg(cfg.get("huggingface"))
+    cfg["gemini"] = normalize_gemini_cfg(cfg.get("gemini"))
 
     paths = cfg.setdefault("paths", {})
     if not paths.get("archives"):
@@ -195,7 +225,7 @@ def save_config(updates: dict[str, Any], existing: dict[str, Any] | None = None)
     paths = merged.setdefault("paths", {})
     ui_out = dict(merged.get("ui") or {})
 
-    gemini_out = _normalize_api_key(merged.get("gemini") or {})
+    gemini_out = normalize_gemini_cfg(merged.get("gemini") or {})
     openrouter_out = _normalize_api_key(merged.get("openrouter") or {})
     huggingface_out = normalize_huggingface_cfg(merged.get("huggingface") or {})
     prompt_out = dict(merged.get("prompt") or {})

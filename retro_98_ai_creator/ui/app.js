@@ -1451,11 +1451,42 @@
       if (res.creation) {
         rememberImportedCreation(res.creation);
         renderDocument(res.creation);
+        openWindow("viewer");
       }
+      openWindow("library");
       showToast("Text imported into Archives");
       beep(900, 0.05);
     } catch (err) {
       showToast("Import failed: " + err);
+    }
+  }
+
+  async function archivesImportMedia(modality) {
+    const a = api();
+    if (!a) return;
+    const kind = modality === "video" ? "video" : "image";
+    beginBusy("Importing " + kind, "Copying into Archives…", { delayMs: 0 });
+    try {
+      const res = await a.import_media_file(kind);
+      if (!res || res.cancelled) return;
+      if (!res.ok) {
+        showToast(res.error || "Import failed");
+        return;
+      }
+      if (res.creation) {
+        rememberImportedCreation(res.creation);
+        renderDocument(res.creation);
+        openWindow("viewer");
+      }
+      openWindow("library");
+      showToast(
+        (kind === "image" ? "Image" : "Video") + " imported into Archives"
+      );
+      beep(900, 0.05);
+    } catch (err) {
+      showToast("Import failed: " + err);
+    } finally {
+      endBusy("Ready");
     }
   }
 
@@ -1976,6 +2007,11 @@
 
   function enableWindowResizing() {
     document.querySelectorAll(".app-window").forEach((win) => {
+      // Control Panel uses fixed tab widths + vertical scroll — no resize grip.
+      if (win.id === "win-control") {
+        win.querySelectorAll(".window-resize-handle").forEach((h) => h.remove());
+        return;
+      }
       if (win.querySelector(".window-resize-handle")) return;
       const handle = document.createElement("div");
       handle.className = "window-resize-handle";
@@ -1988,7 +2024,7 @@
       const handle = e.target.closest(".window-resize-handle");
       if (!handle) return;
       const win = handle.closest(".app-window");
-      if (!win) return;
+      if (!win || win.id === "win-control") return;
       const id = win.dataset.window;
       if (id) focusWindow(id);
 
@@ -2434,6 +2470,51 @@
     return html;
   }
 
+  function getExtractedText(creation) {
+    if (!creation || !creation.meta) return "";
+    return String(creation.meta.extractedText || "").trim();
+  }
+
+  function renderExtractedTab(creation) {
+    const text = getExtractedText(creation);
+    const meta = (creation && creation.meta) || {};
+    const kind = String(meta.extractionKind || "").toLowerCase();
+    const label = kind === "transcript" ? "Transcript" : "Extracted text";
+    const modality = creationModality(creation);
+    let html = '<div class="extracted-pane">';
+    html += '<div class="extracted-intro"><strong>' + escapeHtml(label) + "</strong>";
+    if (meta.extractedAt || meta.extractionModel) {
+      html +=
+        '<span class="extracted-meta">' +
+        escapeHtml(
+          [meta.extractionProvider, meta.extractionModel, meta.extractedAt]
+            .filter(Boolean)
+            .join(" · ")
+        ) +
+        "</span>";
+    }
+    html += "</div>";
+    if (!text) {
+      html +=
+        '<p class="muted">' +
+        (modality === "video"
+          ? "No transcript yet. Click <strong>Transcribe…</strong> to pull speech (or on-screen text) from this video."
+          : "No text extracted yet. Click <strong>Extract Text…</strong> to OCR this image.") +
+        "</p>";
+    } else {
+      html +=
+        '<textarea class="extracted-text" readonly>' +
+        escapeHtml(text) +
+        "</textarea>";
+      html +=
+        '<div class="extracted-actions">' +
+        '<button type="button" id="btn-copy-extracted">Copy</button>' +
+        "</div>";
+    }
+    html += "</div>";
+    return html;
+  }
+
   function renderPrintTab(creation) {
     const meta = creation.meta || {};
     let html = '<div class="print-layout">';
@@ -2522,7 +2603,12 @@
       canvas.style.background = "#111";
       canvas.style.color = "#eee";
       canvas.style.fontFamily = FONT_STACKS.sans;
-      if (tab === "grounding") {
+      if (tab === "extracted") {
+        canvas.style.background = "#ffffff";
+        canvas.style.color = "#000000";
+        canvas.style.fontFamily = FONT_STACKS.mono;
+        canvas.innerHTML = renderExtractedTab(creation);
+      } else if (tab === "grounding") {
         canvas.style.background = "#ffffff";
         canvas.style.color = "#000000";
         canvas.style.fontFamily = FONT_STACKS.mono;
@@ -2733,55 +2819,6 @@
       return await fn(host, opts);
     } finally {
       if (host.parentNode) host.parentNode.removeChild(host);
-    }
-  }
-
-  /**
-   * Viewer Save As… — write the active creation's native file (TXT / image / video).
-   */
-  async function viewerSaveAs() {
-    if (!state.active) {
-      showToast("Open a creation in the Viewer first.");
-      return;
-    }
-    const a = api();
-    if (!a) {
-      showToast("Python bridge not ready.");
-      return;
-    }
-    const modality = creationModality(state.active);
-    beginBusy("Save As", "Choosing destination…", { delayMs: 0 });
-    try {
-      if (modality === "image" || modality === "video") {
-        const res = await a.export_creation_media(state.active);
-        if (res && res.cancelled) return;
-        if (!res || !res.ok) {
-          showToast((res && res.error) || "Save As failed");
-          return;
-        }
-        showToast(
-          modality === "video"
-            ? "Saved video to " + (res.path || "file")
-            : "Saved image to " + (res.path || "file")
-        );
-        beep(900, 0.05);
-        return;
-      }
-
-      const txt = await a.export_creation_txt(state.active);
-      const name = exportBaseName(state.active) + ".txt";
-      const res = await a.save_file_dialog(name, txt);
-      if (res && res.cancelled) return;
-      if (!res || !res.ok) {
-        showToast((res && res.error) || "Save As failed");
-        return;
-      }
-      showToast("Saved text to " + (res.path || "file"));
-      beep(900, 0.05);
-    } catch (err) {
-      showToast("Save As failed: " + err);
-    } finally {
-      endBusy("Ready");
     }
   }
 
@@ -3249,9 +3286,11 @@
   function syncViewerChrome(creation) {
     const modality = creation ? creationModality(creation) : "";
     const isMedia = modality === "image" || modality === "video";
+    const extracted = getExtractedText(creation);
 
     const tabDoc = $("#tab-doc");
     const tabMedia = $("#tab-media");
+    const tabExtracted = $("#tab-extracted");
     const tabGrounding = $("#tab-grounding");
     const tabPrint = $("#tab-print");
     const tabAscii = $("#tab-ascii");
@@ -3260,6 +3299,15 @@
       tabMedia.hidden = !isMedia;
       tabMedia.textContent = modality === "video" ? "Video" : "Image";
     }
+    if (tabExtracted) {
+      tabExtracted.hidden = !isMedia;
+      const kind =
+        creation &&
+        creation.meta &&
+        String(creation.meta.extractionKind || "").toLowerCase();
+      tabExtracted.textContent =
+        kind === "transcript" ? "Transcript" : "Extracted";
+    }
     if (tabPrint) tabPrint.hidden = isMedia || !creation;
     if (tabAscii) tabAscii.hidden = isMedia || !creation;
     if (tabGrounding) {
@@ -3267,7 +3315,7 @@
       tabGrounding.hidden = !creation || (isMedia && !sources.length);
     }
 
-    const showTxt = modality === "text";
+    const showTxt = modality === "text" || (isMedia && !!extracted);
     const showPng = modality === "text" || modality === "image";
     const showPdf = modality === "text" || modality === "image";
     const showMp4 = modality === "video";
@@ -3275,11 +3323,14 @@
     const showVoice = modality === "text";
     const showEditImage = modality === "image";
     const showEditVideo = modality === "video";
+    const showExtract = isMedia;
     const showMetadata = !!creation;
-    const showSaveAs = !!creation;
 
-    if ($("#btn-save-as")) $("#btn-save-as").hidden = !showSaveAs;
-    if ($("#btn-export-txt")) $("#btn-export-txt").hidden = !showTxt;
+    if ($("#btn-export-txt")) {
+      $("#btn-export-txt").hidden = !showTxt;
+      $("#btn-export-txt").textContent =
+        isMedia && extracted ? "Export Extracted TXT" : "Export TXT";
+    }
     if ($("#btn-export-png")) {
       $("#btn-export-png").hidden = !showPng;
       $("#btn-export-png").textContent =
@@ -3295,6 +3346,14 @@
       $("#btn-export-media").hidden = !showMp4;
       $("#btn-export-media").textContent = "Save MP4…";
     }
+    if ($("#btn-extract-text")) {
+      $("#btn-extract-text").hidden = !showExtract;
+      $("#btn-extract-text").textContent = extracted
+        ? "Re-extract Text…"
+        : modality === "video"
+          ? "Transcribe…"
+          : "Extract Text…";
+    }
     if ($("#btn-edit-image")) $("#btn-edit-image").hidden = !showEditImage;
     if ($("#btn-edit-video")) $("#btn-edit-video").hidden = !showEditVideo;
     if ($("#btn-copy-ascii")) $("#btn-copy-ascii").hidden = !showAscii;
@@ -3307,7 +3366,7 @@
     if (isMedia && (state.viewerTab === "doc" || state.viewerTab === "print" || state.viewerTab === "ascii")) {
       state.viewerTab = "media";
     }
-    if (!isMedia && state.viewerTab === "media") {
+    if (!isMedia && (state.viewerTab === "media" || state.viewerTab === "extracted")) {
       state.viewerTab = "doc";
     }
   }
@@ -3830,6 +3889,10 @@
     win.classList.toggle("control-tab-display", !ai);
     // Keep inline style in sync so open/drag layout matches CSS
     win.style.width = ai ? "820px" : "560px";
+    // Drop any leftover resize height so the panel sizes to content / max-height
+    win.style.height = "";
+    win.style.maxHeight = "";
+    win.style.maxWidth = "";
   }
 
   function applyDisplaySettingsFromControls() {
@@ -3996,6 +4059,69 @@
     beep(320, 0.08, "triangle");
   }
 
+  function applyExtractResult(creation) {
+    if (!creation) {
+      endBusy();
+      return;
+    }
+    endBusy("Ready");
+    state.creations = [creation].concat(
+      state.creations.filter((c) => c.id !== creation.id)
+    );
+    renderArchives();
+    state.viewerTab = "extracted";
+    renderDocument(creation);
+    openWindow("viewer");
+    focusWindow("viewer");
+    const kind =
+      creation.meta && String(creation.meta.extractionKind || "").toLowerCase();
+    showToast(
+      kind === "transcript" ? "Transcript ready." : "Extracted text ready."
+    );
+    beep(880, 0.08, "triangle");
+  }
+
+  async function extractCreationText() {
+    if (!state.active) return;
+    const modality = creationModality(state.active);
+    if (modality !== "image" && modality !== "video") {
+      showToast("Extract Text is for images and videos.");
+      return;
+    }
+    if (state.generating || state.modelLoading) {
+      showToast("Wait for the current AI job to finish.");
+      return;
+    }
+    const a = api();
+    if (!a) {
+      showToast("Python bridge not ready.");
+      return;
+    }
+    const title = modality === "video" ? "Transcribing…" : "Extracting text…";
+    beginBusy(title, "Starting…", {
+      delayMs: 0,
+      cancellable: true,
+      activity: "other",
+      hint:
+        modality === "video"
+          ? "Pulling speech from the video via your text model. This can take a minute."
+          : "Reading text from the image via your text model.",
+    });
+    try {
+      const res = await a.extract_creation_text(state.active.id);
+      if (!res || !res.ok) {
+        endBusy();
+        showToast((res && res.error) || "Could not start Extract Text.");
+        return;
+      }
+      busy.jobId = res.job_id;
+      await pollJob(res.job_id, "extract");
+    } catch (err) {
+      endBusy();
+      showToast(String(err));
+    }
+  }
+
   async function requestCancelBusyJob() {
     if (!busy.cancellable || busy.cancelling) return;
     const jobId = busy.jobId;
@@ -4085,6 +4211,9 @@
       } catch (err) {
         if (kind === "preload") {
           finishModelDownload(false, "Lost connection to Python bridge: " + err);
+        } else if (kind === "extract") {
+          endBusy();
+          showToast("Lost connection to Python bridge: " + err);
         } else {
           applyGenerationError("Lost connection to Python bridge: " + err);
         }
@@ -4105,6 +4234,8 @@
           applyGenerationResult(job.result);
         } else if (kind === "preload") {
           finishModelDownload(true);
+        } else if (kind === "extract") {
+          applyExtractResult(job.result);
         }
         return;
       }
@@ -4119,6 +4250,9 @@
       if (job.status === "cancelled") {
         if (kind === "generate") {
           applyGenerationCancelled();
+        } else if (kind === "extract") {
+          endBusy();
+          showToast("Extract Text cancelled.");
         } else {
           finishModelDownload(false, "Cancelled");
         }
@@ -4132,6 +4266,9 @@
       if (job.status === "error" || job.status === "missing") {
         if (kind === "generate") {
           applyGenerationError(job.error || "Generation failed");
+        } else if (kind === "extract") {
+          endBusy();
+          showToast(job.error || "Extract Text failed");
         } else {
           finishModelDownload(false, job.error || "Model load failed");
         }
@@ -4143,6 +4280,9 @@
 
     if (kind === "generate") {
       applyGenerationError("Timed out waiting for generation.");
+    } else if (kind === "extract") {
+      endBusy();
+      showToast("Timed out waiting for Extract Text.");
     } else {
       finishModelDownload(false, "Timed out waiting for model load.");
     }
@@ -6371,10 +6511,6 @@
       beep(900, 0.05);
     });
 
-    if ($("#btn-save-as")) {
-      $("#btn-save-as").addEventListener("click", () => viewerSaveAs());
-    }
-
     $("#btn-import").addEventListener("click", async () => {
       const a = api();
       if (!a) return;
@@ -6394,31 +6530,64 @@
     }
     if ($("#btn-import-image")) {
       $("#btn-import-image").addEventListener("click", () =>
-        studioLoadMediaFile("image")
+        archivesImportMedia("image")
       );
     }
     if ($("#btn-import-video")) {
       $("#btn-import-video").addEventListener("click", () =>
-        studioLoadMediaFile("video")
+        archivesImportMedia("video")
       );
     }
 
     $("#btn-export-txt").addEventListener("click", async () => {
       if (!state.active) return;
-      if (creationModality(state.active) !== "text") {
-        showToast("TXT export is for text creations only.");
+      const modality = creationModality(state.active);
+      const extracted = getExtractedText(state.active);
+      if (modality !== "text" && !extracted) {
+        showToast("Run Extract Text… first, or open a text creation.");
         return;
       }
       const a = api();
       if (!a) return;
       try {
         const txt = await a.export_creation_txt(state.active);
-        const name = exportBaseName(state.active) + ".txt";
+        const suffix =
+          modality === "video"
+            ? "_transcript.txt"
+            : modality === "image"
+              ? "_ocr.txt"
+              : ".txt";
+        const name =
+          modality === "text"
+            ? exportBaseName(state.active) + ".txt"
+            : exportBaseName(state.active) + suffix;
         await a.save_file_dialog(name, txt);
       } catch (err) {
         showToast(String(err));
       }
     });
+
+    if ($("#btn-extract-text")) {
+      $("#btn-extract-text").addEventListener("click", () => {
+        extractCreationText();
+      });
+    }
+
+    const docCanvas = $("#doc-canvas");
+    if (docCanvas) {
+      docCanvas.addEventListener("click", async (e) => {
+        const btn = e.target && e.target.closest && e.target.closest("#btn-copy-extracted");
+        if (!btn) return;
+        const text = getExtractedText(state.active);
+        if (!text) return;
+        try {
+          await navigator.clipboard.writeText(text);
+          showToast("Copied extracted text.");
+        } catch (_) {
+          showToast("Could not copy to clipboard.");
+        }
+      });
+    }
 
     $("#btn-export-json").addEventListener("click", async () => {
       if (!state.active) return;
