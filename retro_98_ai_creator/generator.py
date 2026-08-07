@@ -42,6 +42,7 @@ def generate_creation(
     creation_description: str | None = None,
     cancel_event: Any = None,
     basis_media: dict[str, Any] | None = None,
+    tool_aliases: list[str] | None = None,
 ) -> dict[str, Any]:
     """Dispatch to the configured backend and return a creation document."""
     from .cancellation import raise_if_cancelled
@@ -119,6 +120,7 @@ def generate_creation(
             basis_media=basis,
             forced_modality=forced_modality,
             cancel_event=cancel_event,
+            tool_aliases=tool_aliases,
         )
 
     if backend in ("openrouter", "open-router", "or"):

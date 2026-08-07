@@ -18,6 +18,7 @@ from retro_98_ai_creator.gemini_provider import normalize_gemini_model
 def test_default_backend_is_gemini():
     assert DEFAULTS["backend"]["provider"] == "gemini"
     assert DEFAULTS["gemini"]["text_model"] == "gemini-2.5-flash"
+    assert DEFAULTS["gemini"]["use_tools"] is False
     assert DEFAULTS["openrouter"]["text_model"] == "google/gemini-2.5-flash"
 
 

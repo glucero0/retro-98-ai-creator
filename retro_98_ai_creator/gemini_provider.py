@@ -24,6 +24,7 @@ from .prompts import (
     build_general_text_prompt,
     build_prompt,
     build_search_extract_prompt,
+    build_tools_research_prompt,
     build_verification_prompt,
 )
 
@@ -558,6 +559,7 @@ def generate_with_gemini(
     basis_media: dict[str, Any] | None = None,
     forced_modality: str | None = None,
     cancel_event: Any = None,
+    tool_aliases: list[str] | None = None,
 ) -> dict[str, Any]:
     """Call Gemini; prompt intent (or forced modality / media basis) selects the slot."""
     from .modality import infer_prompt_modality
@@ -604,6 +606,7 @@ def generate_with_gemini(
         prompt_text=prompt_text,
         model_name=model_name,
         cancel_event=cancel_event,
+        tool_aliases=tool_aliases,
     )
 
 
@@ -620,6 +623,7 @@ def _generate_text_with_gemini(
     prompt_text: str = "",
     model_name: str = DEFAULT_GEMINI_TEXT_MODEL,
     cancel_event: Any = None,
+    tool_aliases: list[str] | None = None,
 ) -> dict[str, Any]:
     """Text generation path (freeform Prompt or classic structured document)."""
 
@@ -649,12 +653,19 @@ def _generate_text_with_gemini(
             "Gemini API key missing. Paste your key in Control Panel → AI Model (Gemini)."
         )
 
-    use_search = gemini_cfg.get("google_search", True)
+    from .gemini_tools import normalize_tool_aliases
+
+    use_tools_cfg = bool(gemini_cfg.get("use_tools"))
+    selected_tools = normalize_tool_aliases(tool_aliases) if use_tools_cfg else []
+    use_tools = bool(selected_tools)
+
+    use_search = bool(gemini_cfg.get("google_search", True))
     temperature = float(
         gemini_cfg.get("temperature") if gemini_cfg.get("temperature") is not None else 0.0
     )
     generic = is_generic_studio_request(game, platform, creation_type)
-    if generic:
+    # Classic freeform Studio (no tools) historically skips Search; tools + Search may combine.
+    if generic and not use_tools:
         use_search = False
     two_pass = _two_pass_enabled(gemini_cfg, use_search=bool(use_search)) and not generic
 
@@ -678,13 +689,20 @@ def _generate_text_with_gemini(
         with_search: bool,
         call_temperature: float,
         json_mime: bool,
+        with_url_context: bool = False,
     ) -> str:
         nonlocal grounding_sources
         config_kwargs: dict[str, Any] = {
             "temperature": call_temperature,
         }
+        tools: list[Any] = []
         if with_search:
-            config_kwargs["tools"] = [types.Tool(google_search=types.GoogleSearch())]
+            tools.append(types.Tool(google_search=types.GoogleSearch()))
+        if with_url_context:
+            # Lets the model open promising pages and extract full tables (when fetch works).
+            tools.append(types.Tool(url_context=types.UrlContext()))
+        if tools:
+            config_kwargs["tools"] = tools
         elif json_mime:
             config_kwargs["response_mime_type"] = "application/json"
 
@@ -702,15 +720,174 @@ def _generate_text_with_gemini(
             grounding_sources = _extract_grounding_sources(response)
         return (response.text or "").strip()
 
+    def _call_with_tools(
+        prompt: str,
+        *,
+        call_temperature: float,
+        with_search: bool,
+    ) -> str:
+        nonlocal grounding_sources, search_used
+        from .cancellation import run_cancellable
+        from .gemini_tools import (
+            MAX_TOOL_ITERATIONS,
+            execute_tool,
+            extract_function_calls,
+            response_text,
+            tools_config_for,
+        )
+
+        tools = tools_config_for(selected_tools, with_search=with_search)
+        if not tools:
+            raise RuntimeError("No valid Gemini tools were selected.")
+
+        config_kwargs: dict[str, Any] = {
+            "temperature": call_temperature,
+            "tools": tools,
+        }
+        if with_search:
+            # Required to combine Google Search (server-side) with function calling.
+            config_kwargs["tool_config"] = types.ToolConfig(
+                include_server_side_tool_invocations=True,
+            )
+
+        config = types.GenerateContentConfig(**config_kwargs)
+        contents: list[Any] = [
+            types.Content(
+                role="user",
+                parts=[types.Part.from_text(text=prompt)],
+            )
+        ]
+
+        for step in range(MAX_TOOL_ITERATIONS):
+            emit(
+                f"Gemini tools (step {step + 1}/{MAX_TOOL_ITERATIONS})…",
+                percent=30 + min(50, step * 5),
+                title="Using tools",
+            )
+            response = run_cancellable(
+                lambda c=contents: client.models.generate_content(
+                    model=model_name,
+                    contents=c,
+                    config=config,
+                ),
+                cancel_event,
+            )
+            if with_search:
+                found = _extract_grounding_sources(response)
+                if found:
+                    # Prefer latest non-empty grounding; keep first if later turns omit it.
+                    grounding_sources = found
+                    search_used = True
+
+            calls = extract_function_calls(response)
+            if not calls:
+                text = response_text(response)
+                if text:
+                    return text
+                raise RuntimeError("Gemini returned an empty response.")
+
+            model_content = None
+            try:
+                cands = getattr(response, "candidates", None) or []
+                if cands:
+                    model_content = getattr(cands[0], "content", None)
+            except Exception:  # noqa: BLE001
+                model_content = None
+            if model_content is not None:
+                contents.append(model_content)
+            else:
+                # Reconstruct function_call parts if content is missing
+                fc_parts = []
+                for name, args in calls:
+                    fc_parts.append(
+                        types.Part.from_function_call(name=name, args=args)
+                    )
+                contents.append(types.Content(role="model", parts=fc_parts))
+
+            response_parts = []
+            for name, args in calls:
+                emit(f"Running tool {name}…", percent=None, title="Using tools")
+                result = execute_tool(name, args)
+                response_parts.append(
+                    types.Part.from_function_response(name=name, response=result)
+                )
+            contents.append(types.Content(role="user", parts=response_parts))
+
+        raise RuntimeError(
+            f"Gemini tool loop exceeded {MAX_TOOL_ITERATIONS} iterations."
+        )
+
     if generic:
         emit("Calling Gemini…", percent=40)
         try:
-            response_text = _call(
-                build_general_text_prompt(prompt_text, system_extra=system_extra),
-                with_search=False,
-                call_temperature=temperature,
-                json_mime=False,
-            )
+            if use_tools:
+                research_context = ""
+                # Search-first: Google Search alone, then file tools with that brief.
+                # Combining Search + function calling lets the model skip Search and
+                # invent write_json payloads; a dedicated research pass forces grounding.
+                if use_search:
+                    emit("Google Search research…", percent=25, title="Searching")
+                    try:
+                        # Slightly warmer than 0 helps recall; keep user temp if already higher.
+                        research_temp = max(float(temperature), 0.4)
+                        research_context = _call(
+                            build_tools_research_prompt(
+                                prompt_text, system_extra=system_extra
+                            ),
+                            with_search=True,
+                            with_url_context=True,
+                            call_temperature=research_temp,
+                            json_mime=False,
+                        )
+                        if grounding_sources:
+                            search_used = True
+                            # Append explicit citations so the tool pass cannot "lose" URLs.
+                            cite_lines = []
+                            for src in grounding_sources:
+                                title = (src.get("title") or "").strip() or "source"
+                                url = (src.get("url") or "").strip()
+                                if url:
+                                    cite_lines.append(f"- {title}: {url}")
+                            if cite_lines:
+                                research_context = (
+                                    (research_context or "").rstrip()
+                                    + "\n\nCITED SOURCES FROM GOOGLE SEARCH:\n"
+                                    + "\n".join(cite_lines)
+                                    + "\n"
+                                )
+                        elif research_context:
+                            # Search ran even if citation metadata was sparse.
+                            search_used = True
+                    except Exception as research_err:
+                        from .cancellation import GenerationCancelled
+
+                        if isinstance(research_err, GenerationCancelled):
+                            raise
+                        logger.warning(
+                            "Tools research search failed; continuing with tools only: %s",
+                            research_err,
+                        )
+                        research_context = ""
+
+                response_text = _call_with_tools(
+                    build_general_text_prompt(
+                        prompt_text,
+                        system_extra=system_extra,
+                        tool_aliases=selected_tools,
+                        with_search=False,
+                        research_context=research_context,
+                    ),
+                    call_temperature=temperature,
+                    # Research already done; keep the tool loop on file tools only.
+                    with_search=False,
+                )
+            else:
+                response_text = _call(
+                    build_general_text_prompt(prompt_text, system_extra=system_extra),
+                    with_search=False,
+                    call_temperature=temperature,
+                    json_mime=False,
+                )
         except Exception as exc:
             from .cancellation import GenerationCancelled
 
@@ -720,18 +897,34 @@ def _generate_text_with_gemini(
         if not response_text:
             raise RuntimeError("Gemini returned an empty response.")
         emit("Formatting response…", percent=90)
-        return build_text_creation_from_plain(
+        model_info: dict[str, Any] = {
+            "provider": "gemini",
+            "repo_id": model_name,
+            "modality": "text",
+            "temperature": temperature,
+            # True when Search was enabled for this tools run (search-first phase).
+            "google_search": bool(use_search and use_tools and search_used),
+            "two_pass_verify": False,
+            "use_tools": bool(use_tools),
+        }
+        if use_tools:
+            model_info["tools"] = list(selected_tools)
+            if use_search:
+                model_info["search_first"] = True
+        creation = build_text_creation_from_plain(
             response_text,
             prompt=prompt_text,
-            model_info={
-                "provider": "gemini",
-                "repo_id": model_name,
-                "modality": "text",
-                "temperature": temperature,
-                "google_search": False,
-                "two_pass_verify": False,
-            },
+            model_info=model_info,
         )
+        if grounding_sources:
+            creation["groundingSources"] = grounding_sources
+        # Keep a truncated research brief for Viewer debugging (not a second document body).
+        if use_tools and use_search and (research_context or "").strip():
+            brief = research_context.strip()
+            if len(brief) > 12000:
+                brief = brief[:12000] + "\n…[truncated]"
+            creation["researchBrief"] = brief
+        return creation
 
     if two_pass:
         pass1_prompt = build_search_extract_prompt(

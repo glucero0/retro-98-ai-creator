@@ -169,10 +169,56 @@ def _platform_hardware_block(
     )
 
 
+def build_tools_research_prompt(
+    prompt: str,
+    *,
+    system_extra: str = "",
+) -> str:
+    """Search-only research brief used before the file-tool loop."""
+    user = (prompt or "").strip()
+    extra = (
+        f"\n\nADDITIONAL USER INSTRUCTIONS:\n{system_extra.strip()}"
+        if system_extra.strip()
+        else ""
+    )
+    return (
+        "You are a research assistant with Google Search grounding enabled.\n"
+        "This pass is RESEARCH ONLY — do not write files and do not simulate later filter steps.\n"
+        "\n"
+        "How to search:\n"
+        "- Infer the core lookup from the user task (game, platform, what data is needed).\n"
+        "- Run multiple distinct searches when useful (official/manual, major guides, FAQs, "
+        "secondary corroboration).\n"
+        "- Prefer pages that publish a FULL control/binding table over short forum stubs.\n"
+        "- If Url Context / page fetch is available, open the best candidate pages and extract "
+        "complete tables from them.\n"
+        "\n"
+        "What to collect:\n"
+        "- As many high-quality sources as Search can find for the ORIGINAL subject "
+        "(e.g. original 2014 Watch Dogs on PlayStation 4 DualShock), not a minimal set.\n"
+        "- For each useful source: full https URL, site name, game title, publisher, platform, "
+        "and the COMPLETE binding list when the page has one (every face button, bumper, "
+        "trigger, stick, D-pad direction, Options/Share/Touchpad, etc.).\n"
+        "- Clearly label wrong-game, wrong-platform, or incomplete sources if you mention them; "
+        "do not invent filler rows just to create filter fodder.\n"
+        "- Do not invent facts, bindings, or URLs — only report what Search (and fetched pages) show.\n"
+        "\n"
+        "Ignore later pipeline steps in the user task (filtering sequels, removing incomplete "
+        "rows, writing intermediate files) except as clues about what 'good' data looks like.\n"
+        "If Search returns little that is complete, say so explicitly and still list every "
+        "partial source with URL.\n"
+        f"{extra}\n\n"
+        f"USER TASK:\n{user}\n"
+    )
+
+
 def build_general_text_prompt(
     prompt: str,
     *,
     system_extra: str = "",
+    tool_aliases: list[str] | None = None,
+    with_search: bool = False,
+    research_context: str = "",
 ) -> str:
     """Freeform studio text prompt (not game-manual JSON)."""
     user = (prompt or "").strip()
@@ -181,12 +227,41 @@ def build_general_text_prompt(
         if system_extra.strip()
         else ""
     )
+    tools = [a for a in (tool_aliases or []) if str(a).strip()]
+    tools_block = ""
+    if tools:
+        names = ", ".join(tools)
+        tools_block = (
+            "\n\nAVAILABLE TOOLS:\n"
+            f"You may call these tools by name when the user prompt requires them: {names}.\n"
+            "Use absolute filesystem paths from the user prompt as tool arguments.\n"
+            "Call tools as needed (for example read_json then write_json), then give a brief "
+            "final text summary of what you did.\n"
+        )
+        if with_search and not (research_context or "").strip():
+            tools_block += (
+                "Google Search grounding is enabled. When the user asks you to search the "
+                "internet or cite sources, use Search to find real pages, prefer primary/"
+                "reputable sources, and include full source URLs in any JSON you write.\n"
+                "Do not invent website names or bindings — ground them in Search results.\n"
+            )
+    research = (research_context or "").strip()
+    research_block = ""
+    if research:
+        research_block = (
+            "\n\nWEB RESEARCH FINDINGS (from Google Search — authoritative for this run):\n"
+            f"{research}\n\n"
+            "Base any write_json / write_text content on these findings. "
+            "Do not invent URLs, bindings, or sources that are not supported above. "
+            "If the findings are insufficient for a step, write what you can and note gaps "
+            "in your final summary.\n"
+        )
     return (
         "You are a general-purpose AI writing assistant.\n"
         "Respond directly to the user's prompt with high-quality text.\n"
         "You may use Markdown headings and lists when helpful.\n"
         "Do NOT wrap the entire answer in a JSON object unless the user explicitly asks for JSON.\n"
-        f"{extra}\n\n"
+        f"{extra}{tools_block}{research_block}\n\n"
         f"USER PROMPT:\n{user}\n"
     )
 

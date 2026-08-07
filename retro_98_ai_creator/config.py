@@ -38,6 +38,8 @@ DEFAULTS: dict[str, Any] = {
         "google_search": True,
         # When google_search is on: Pass 1 extract + Pass 2 verify at temperature 0
         "two_pass_verify": True,
+        # Local file tools via Gemini function calling (can combine with google_search)
+        "use_tools": False,
         "temperature": 0.0,
         # Runtime-learned: { "old-model-id": "replacement-id" } merged with built-ins
         "retired_model_aliases": {},
