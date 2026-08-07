@@ -13,6 +13,8 @@ gemini:
   google_search: true
   # Pass 1: search & extract with sourceSnippets; Pass 2: verify at temperature 0
   two_pass_verify: true
+  # Local file tools via Gemini function calling (can combine with google_search)
+  use_tools: false
   temperature: 0.0
 
 openrouter:

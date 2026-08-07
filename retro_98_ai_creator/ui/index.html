@@ -76,6 +76,22 @@
                   ></textarea>
                 </div>
 
+                <div id="studio-tools-panel" class="studio-tools-panel" hidden>
+                  <fieldset>
+                    <legend>Tools</legend>
+                    <div class="form-actions studio-tools-actions">
+                      <button type="button" id="btn-studio-add-tool">Add Tool…</button>
+                    </div>
+                    <ul id="studio-tools-list" class="studio-tools-list" aria-label="Attached tools"></ul>
+                    <p class="hint" id="studio-tools-hint">
+                      Attach tools for this run, then reference them by alias in your prompt
+                      (for example: use <code>read_json</code> to load
+                      <code>c:\data\step1.json</code>, then <code>write_json</code> for the result).
+                      Absolute paths only. Tools apply to text generations.
+                    </p>
+                  </fieldset>
+                </div>
+
                 <div class="form-actions">
                   <button type="button" id="btn-generate" class="default">⚡ CREATE</button>
                 </div>
@@ -276,6 +292,16 @@
                   <p class="hint" id="gemini-two-pass-hint">
                     Pass 1 searches and quotes sources; Pass 2 strips anything not proven by those snippets.
                     Requires Google Search grounding. Applies to text documents only.
+                  </p>
+                  <div class="field-row">
+                    <input type="checkbox" id="gemini-use-tools" />
+                    <label for="gemini-use-tools">Use Tools (local file read/write)</label>
+                  </div>
+                  <p class="hint" id="gemini-use-tools-hint">
+                    Enables built-in file tools in Creator (read_json, write_json, read_text, write_text)
+                    via Gemini function calling. Absolute paths only; overwrites allowed.
+                    With Google Search on, Creator runs a deep Search (+ URL context) research pass
+                    first, then file tools use that brief. Text prompts only.
                   </p>
                   <div class="field-row">
                     <label for="gemini-temp">Temperature</label>
@@ -619,6 +645,21 @@
           <ul id="search-results-list" class="search-results-list" role="listbox" aria-label="Matching games"></ul>
           <div class="form-actions confirm-actions">
             <button type="button" id="search-results-cancel">Cancel</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div id="studio-add-tool-overlay" hidden>
+      <div class="window" id="studio-add-tool-window" role="dialog" aria-modal="true" aria-labelledby="studio-add-tool-title">
+        <div class="title-bar">
+          <div class="title-bar-text" id="studio-add-tool-title">Add Tool</div>
+        </div>
+        <div class="window-body">
+          <p id="studio-add-tool-message">Choose a built-in tool to attach for this generation.</p>
+          <ul id="studio-add-tool-list" class="search-results-list" role="listbox" aria-label="Available tools"></ul>
+          <div class="form-actions confirm-actions">
+            <button type="button" id="studio-add-tool-cancel">Cancel</button>
           </div>
         </div>
       </div>

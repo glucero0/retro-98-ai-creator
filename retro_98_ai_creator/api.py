@@ -169,7 +169,17 @@ class Api:
             "presets": POPULAR_GAME_PRESETS,
             "creations": creations,
             "modelStatus": provider_status(self.config),
+            "geminiTools": self._gemini_tools_catalog(),
         }
+
+    def _gemini_tools_catalog(self) -> list[dict[str, str]]:
+        from .gemini_tools import list_tool_catalog
+
+        return list_tool_catalog()
+
+    def list_gemini_tools(self) -> dict[str, Any]:
+        """Built-in Gemini file tools available when Use Tools is enabled."""
+        return {"ok": True, "tools": self._gemini_tools_catalog()}
 
     def _public_config(self) -> dict[str, Any]:
         cfg = self.config
@@ -430,15 +440,17 @@ class Api:
         exact_title: bool = False,
         creation_description: str = "",
         basis_creation_id: str = "",
+        tool_aliases: list[str] | None = None,
     ) -> dict[str, Any]:
         """Start generation in a background thread; UI must poll get_job(job_id)."""
         logger.info(
-            "create_creation requested: %s / %s / %s (exact=%s, basis=%s)",
+            "create_creation requested: %s / %s / %s (exact=%s, basis=%s, tools=%s)",
             game,
             platform,
             creation_type,
             exact_title,
             (basis_creation_id or "")[:24] or "-",
+            ",".join(tool_aliases or []) or "-",
         )
 
         if not game or not platform or not creation_type:
@@ -492,6 +504,9 @@ class Api:
 
         job_id = f"gen_{uuid.uuid4().hex[:10]}"
         desc_override = (creation_description or "").strip()
+        from .gemini_tools import normalize_tool_aliases
+
+        tools_for_job = normalize_tool_aliases(tool_aliases)
         cancel_evt = threading.Event()
         with self._jobs_lock:
             self._cancel_events[job_id] = cancel_evt
@@ -528,6 +543,7 @@ class Api:
                     creation_description=desc_override or None,
                     cancel_event=cancel_evt,
                     basis_media=basis_media,
+                    tool_aliases=tools_for_job,
                 )
                 if cancel_evt.is_set():
                     raise GenerationCancelled("Cancelled by user")

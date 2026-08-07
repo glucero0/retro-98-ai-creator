@@ -30,6 +30,9 @@
     suggestedHfModels: null,
     suggestedOpenRouterModels: null,
     studioBasis: null, // { creationId, modality, fileUrl, mimeType, title }
+    studioTools: [], // selected Gemini tool aliases for this session
+    geminiToolsCatalog: null, // from bootstrap / list_gemini_tools
+    studioAddToolOpen: false,
     appTheme: "light",
     customTheme: {
       desktopColor: "#008080",
@@ -1270,6 +1273,175 @@
     });
   }
 
+  function studioToolsEnabled() {
+    const cfg = state.config || {};
+    const backend = (cfg.backend && cfg.backend.provider) || "gemini";
+    const gemini = cfg.gemini || {};
+    return backend === "gemini" && !!gemini.use_tools;
+  }
+
+  function getGeminiToolsCatalog() {
+    if (Array.isArray(state.geminiToolsCatalog) && state.geminiToolsCatalog.length) {
+      return state.geminiToolsCatalog;
+    }
+    return [
+      {
+        alias: "read_json",
+        display_name: "Read JSON",
+        summary: "Read and parse a JSON file at an absolute path",
+      },
+      {
+        alias: "write_json",
+        display_name: "Write JSON",
+        summary: "Write JSON data to a file at an absolute path (overwrites)",
+      },
+      {
+        alias: "read_text",
+        display_name: "Read text",
+        summary: "Read a text file at an absolute path",
+      },
+      {
+        alias: "write_text",
+        display_name: "Write text",
+        summary: "Write text to a file at an absolute path (overwrites)",
+      },
+    ];
+  }
+
+  function toolMeta(alias) {
+    const found = getGeminiToolsCatalog().find((t) => t.alias === alias);
+    return found || { alias: alias, display_name: alias, summary: "" };
+  }
+
+  function syncStudioToolsPanel() {
+    const panel = $("#studio-tools-panel");
+    if (!panel) return;
+    const enabled = studioToolsEnabled();
+    panel.hidden = !enabled;
+    if (!enabled) {
+      state.studioTools = [];
+    }
+    renderStudioToolsList();
+  }
+
+  function renderStudioToolsList() {
+    const listEl = $("#studio-tools-list");
+    if (!listEl) return;
+    listEl.innerHTML = "";
+    (state.studioTools || []).forEach((alias) => {
+      const meta = toolMeta(alias);
+      const li = document.createElement("li");
+      li.className = "studio-tool-chip";
+      const label = document.createElement("code");
+      label.textContent = alias;
+      label.title = meta.summary || meta.display_name || alias;
+      li.appendChild(label);
+      const insertBtn = document.createElement("button");
+      insertBtn.type = "button";
+      insertBtn.className = "studio-tool-insert";
+      insertBtn.textContent = "Insert";
+      insertBtn.title = "Insert alias into prompt";
+      insertBtn.addEventListener("click", () => insertStudioToolAlias(alias));
+      li.appendChild(insertBtn);
+      const removeBtn = document.createElement("button");
+      removeBtn.type = "button";
+      removeBtn.className = "studio-tool-remove";
+      removeBtn.textContent = "×";
+      removeBtn.title = "Remove tool";
+      removeBtn.addEventListener("click", () => {
+        state.studioTools = (state.studioTools || []).filter((a) => a !== alias);
+        renderStudioToolsList();
+      });
+      li.appendChild(removeBtn);
+      listEl.appendChild(li);
+    });
+  }
+
+  function insertStudioToolAlias(alias) {
+    const ta = $("#studio-prompt");
+    if (!ta) return;
+    const text = String(alias || "");
+    const start = ta.selectionStart != null ? ta.selectionStart : ta.value.length;
+    const end = ta.selectionEnd != null ? ta.selectionEnd : start;
+    const before = ta.value.slice(0, start);
+    const after = ta.value.slice(end);
+    const padBefore = before && !/\s$/.test(before) ? " " : "";
+    const padAfter = after && !/^\s/.test(after) ? " " : "";
+    ta.value = before + padBefore + text + padAfter + after;
+    const cursor = start + padBefore.length + text.length;
+    ta.focus();
+    ta.setSelectionRange(cursor, cursor);
+  }
+
+  function showAddToolDialog() {
+    return new Promise((resolve) => {
+      const overlay = $("#studio-add-tool-overlay");
+      const listEl = $("#studio-add-tool-list");
+      const cancelBtn = $("#studio-add-tool-cancel");
+      const msgEl = $("#studio-add-tool-message");
+      if (!overlay || !listEl || !cancelBtn) {
+        resolve(null);
+        return;
+      }
+
+      const attached = new Set(state.studioTools || []);
+      const available = getGeminiToolsCatalog().filter((t) => !attached.has(t.alias));
+      if (msgEl) {
+        msgEl.textContent = available.length
+          ? "Choose a built-in tool to attach for this generation."
+          : "All built-in tools are already attached.";
+      }
+
+      const finish = (value) => {
+        state.studioAddToolOpen = false;
+        overlay.hidden = true;
+        cancelBtn.removeEventListener("click", onCancel);
+        overlay.removeEventListener("keydown", onKey);
+        listEl.innerHTML = "";
+        resolve(value);
+      };
+      const onCancel = () => finish(null);
+      const onKey = (e) => {
+        if (e.key === "Escape") {
+          e.preventDefault();
+          e.stopPropagation();
+          finish(null);
+        }
+      };
+
+      listEl.innerHTML = "";
+      available.forEach((t, idx) => {
+        const li = document.createElement("li");
+        li.setAttribute("role", "option");
+        const btn = document.createElement("button");
+        btn.type = "button";
+        const titleSpan = document.createElement("span");
+        titleSpan.className = "sr-title";
+        titleSpan.textContent = (t.display_name || t.alias) + " (" + t.alias + ")";
+        btn.appendChild(titleSpan);
+        if (t.summary) {
+          const metaSpan = document.createElement("span");
+          metaSpan.className = "sr-meta";
+          metaSpan.textContent = t.summary;
+          btn.appendChild(metaSpan);
+        }
+        btn.addEventListener("click", () => finish(t.alias));
+        if (idx === 0) btn.dataset.first = "1";
+        li.appendChild(btn);
+        listEl.appendChild(li);
+      });
+
+      state.studioAddToolOpen = true;
+      overlay.hidden = false;
+      cancelBtn.addEventListener("click", onCancel);
+      overlay.addEventListener("keydown", onKey);
+      // Keep focus inside the dialog so Escape / Tab stay modal.
+      overlay.setAttribute("tabindex", "-1");
+      const firstBtn = listEl.querySelector("button[data-first]") || cancelBtn;
+      firstBtn.focus();
+    });
+  }
+
   function setCreateBlocked(blocked) {
     const btn = $("#btn-generate");
     if (!btn) return;
@@ -2160,6 +2332,10 @@
   }
 
   async function requestCloseWindow(id) {
+    if (state.studioAddToolOpen) {
+      showToast("Close the Add Tool dialog first.");
+      return false;
+    }
     if (id === "image-edit") {
       if (!(await confirmDiscardEditorEdits("image"))) return false;
     } else if (id === "video-edit") {
@@ -3474,7 +3650,7 @@
     if (gemini) gemini.hidden = provider !== "gemini";
     if (openrouter) openrouter.hidden = provider !== "openrouter";
     if (hf) hf.hidden = provider !== "huggingface";
-    syncGeminiTwoPassAvailability();
+    syncGeminiToolsAvailability();
   }
 
   function syncGeminiTwoPassAvailability() {
@@ -3484,9 +3660,18 @@
     if (!twoPass) return;
     const searchOn = !search || search.checked;
     twoPass.disabled = !searchOn;
+    if (!searchOn) {
+      twoPass.checked = false;
+    }
     if (hint) {
       hint.classList.toggle("muted", !searchOn);
     }
+  }
+
+  function syncGeminiToolsAvailability() {
+    // Tools may be combined with Search; only refresh Studio strip + two-pass (search-gated).
+    syncGeminiTwoPassAvailability();
+    syncStudioToolsPanel();
   }
 
   function modelOptionLabel(m, maxLen) {
@@ -3761,6 +3946,9 @@
 
   function fillControlPanel(boot) {
     if (boot && boot.config) state.config = boot.config;
+    if (boot && Array.isArray(boot.geminiTools)) {
+      state.geminiToolsCatalog = boot.geminiTools.slice();
+    }
     if (boot && Array.isArray(boot.retiredGeminiModels)) {
       state.retiredGeminiModels = boot.retiredGeminiModels.slice();
     }
@@ -3784,7 +3972,10 @@
     if ($("#gemini-two-pass")) {
       $("#gemini-two-pass").checked = gemini.two_pass_verify !== false;
     }
-    syncGeminiTwoPassAvailability();
+    if ($("#gemini-use-tools")) {
+      $("#gemini-use-tools").checked = !!gemini.use_tools;
+    }
+    syncGeminiToolsAvailability();
 
     const suggested = boot.suggestedGeminiModels || [];
     fillGeminiModalitySelect(
@@ -3903,6 +4094,7 @@
 
     syncBackendPanels();
     updateStudioBackendLabel(boot);
+    syncStudioToolsPanel();
   }
 
   function updateStudioBackendLabel(boot) {
@@ -4181,6 +4373,7 @@
         api_key: ($("#gemini-key") && $("#gemini-key").value.trim()) || "",
         google_search: $("#gemini-search") ? $("#gemini-search").checked : true,
         two_pass_verify: $("#gemini-two-pass") ? $("#gemini-two-pass").checked : true,
+        use_tools: $("#gemini-use-tools") ? $("#gemini-use-tools").checked : false,
         temperature: $("#gemini-temp") ? Number($("#gemini-temp").value) || 0 : 0,
       },
       openrouter: {
@@ -4779,11 +4972,15 @@
         return;
       }
 
+      const toolsOn = studioToolsEnabled();
+      let toolAliases = toolsOn ? (state.studioTools || []).slice() : [];
+
       const basisId =
         (state.studioBasis && state.studioBasis.creationId) || "";
       // Prefer prompt intent (video/image keywords); else keep basis modality.
       // "Generate a video…" + image basis → image-to-video, not img2img.
       let compatPrompt = prompt;
+      let wantsMedia = false;
       if (basisId && state.studioBasis) {
         const lower = prompt.toLowerCase();
         const wantsVideo =
@@ -4801,12 +4998,16 @@
           ) || /\b(image|picture|photo)\s+of\b/.test(lower);
         if (wantsVideo) {
           compatPrompt = "Generate a video: " + prompt;
+          wantsMedia = true;
         } else if (wantsImage) {
           compatPrompt = "Create an image: " + prompt;
+          wantsMedia = true;
         } else if (state.studioBasis.modality === "video") {
           compatPrompt = "Generate a video: " + prompt;
+          wantsMedia = true;
         } else {
           compatPrompt = "Create an image: " + prompt;
+          wantsMedia = true;
         }
       }
 
@@ -4818,9 +5019,25 @@
             applyModalityMismatch(compat);
             return;
           }
+          if (
+            compat &&
+            (compat.promptModality === "image" || compat.promptModality === "video")
+          ) {
+            wantsMedia = true;
+          }
         }
       } catch (_) {
         /* fall through — server create_creation still guards */
+      }
+
+      if (toolsOn && wantsMedia) {
+        if (toolAliases.length) {
+          showToast("Tools apply to text only — generating without tools.");
+        }
+        toolAliases = [];
+      } else if (toolsOn && !toolAliases.length) {
+        showToast("Use Tools is on — attach at least one tool with Add Tool…");
+        return;
       }
 
       const game = ((opts && opts.game) || "Prompt").trim() || "Prompt";
@@ -4852,7 +5069,8 @@
           creationType,
           true,
           creationDescription,
-          basisId
+          basisId,
+          toolAliases
         );
       } catch (err) {
         applyGenerationError(err);
@@ -7177,6 +7395,27 @@
       });
     }
 
+    if ($("#gemini-use-tools")) {
+      $("#gemini-use-tools").addEventListener("change", () => {
+        syncGeminiToolsAvailability();
+      });
+    }
+
+    if ($("#btn-studio-add-tool")) {
+      $("#btn-studio-add-tool").addEventListener("click", async () => {
+        if (!studioToolsEnabled()) {
+          showToast("Enable Use Tools in Control Panel → Gemini, then Save.");
+          return;
+        }
+        const alias = await showAddToolDialog();
+        if (!alias) return;
+        if (!(state.studioTools || []).includes(alias)) {
+          state.studioTools = (state.studioTools || []).concat([alias]);
+          renderStudioToolsList();
+        }
+      });
+    }
+
     $("#btn-save-model").addEventListener("click", async () => {
       await saveControlPanelSettings({ offerDownload: true });
     });
@@ -7326,12 +7565,16 @@
     try {
       const boot = await a.get_bootstrap();
       state.config = boot.config;
+      if (Array.isArray(boot.geminiTools)) {
+        state.geminiToolsCatalog = boot.geminiTools.slice();
+      }
       state.creations = boot.creations || [];
       fillCatalogs(boot);
       fillControlPanel(boot);
       renderArchives();
       // Do not auto-open Viewer/Archives on launch — user opens them explicitly
       renderTaskbar();
+      syncStudioToolsPanel();
     } catch (err) {
       console.error(err);
       showToast("Bootstrap failed: " + err);
