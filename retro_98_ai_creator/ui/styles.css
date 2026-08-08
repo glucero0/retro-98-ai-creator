@@ -516,6 +516,35 @@ ul[role="tablist"] li[role="tab"] a:focus {
   color: var(--ui-input-text);
 }
 
+.studio-prompt.studio-search,
+.studio-prompt.studio-tool-use {
+  min-height: 8em;
+  max-height: min(35vh, 18em);
+}
+
+#studio-search-wrap,
+#studio-tool-use-wrap {
+  margin-top: 8px;
+}
+
+/* WebView2 can ignore [hidden] on flex .field-row-stacked — enforce both modes. */
+#create-form:not(.studio-tools-mode) #studio-search-wrap,
+#create-form:not(.studio-tools-mode) #studio-tool-use-wrap,
+#create-form:not(.studio-tools-mode) #studio-tools-panel {
+  display: none !important;
+}
+
+#create-form.studio-tools-mode #studio-prompt-wrap {
+  display: none !important;
+}
+
+#studio-prompt-wrap[hidden],
+#studio-search-wrap[hidden],
+#studio-tool-use-wrap[hidden],
+#studio-tools-panel[hidden] {
+  display: none !important;
+}
+
 .mission-banner {
   background: var(--ui-highlight);
   color: var(--ui-text);

@@ -30,7 +30,7 @@ VIDEO_FALLBACK_PROMPT = (
 )
 
 # Inline multimodal payloads stay reasonable for API requests.
-_MAX_INLINE_BYTES = 18 * 1024 * 1024
+MAX_INLINE_BYTES = 18 * 1024 * 1024
 
 
 def _emit(
@@ -190,6 +190,39 @@ def extract_text_from_creation(
     )
 
 
+def ocr_image_bytes(
+    raw: bytes,
+    *,
+    mime_type: str = "image/png",
+    config: dict[str, Any],
+    progress: ProgressCallback | None = None,
+    cancel_event: Any = None,
+) -> tuple[str, str]:
+    """OCR image bytes via the configured multimodal provider (Gemini)."""
+    from .cancellation import raise_if_cancelled
+    from .generator import _active_model_and_provider
+
+    def _cancelled() -> bool:
+        return bool(cancel_event is not None and cancel_event.is_set())
+
+    raise_if_cancelled(_cancelled)
+    model_id, provider = _active_model_and_provider(config)
+    if provider != "gemini":
+        raise RuntimeError(
+            "Search image OCR requires Gemini. Switch provider in Control Panel → AI Model."
+        )
+    return _extract_image(
+        raw,
+        mime_type=mime_type,
+        config=config,
+        provider=provider,
+        model_id=model_id,
+        progress=progress,
+        cancel_check=_cancelled,
+        cancel_event=cancel_event,
+    )
+
+
 def _extract_image(
     raw: bytes,
     *,
@@ -204,7 +237,7 @@ def _extract_image(
     from .cancellation import raise_if_cancelled
 
     raise_if_cancelled(cancel_check)
-    if len(raw) > _MAX_INLINE_BYTES:
+    if len(raw) > MAX_INLINE_BYTES:
         raise RuntimeError(
             f"Image is too large for Extract Text ({len(raw) // (1024 * 1024)} MB). "
             "Try a smaller image."
@@ -269,7 +302,7 @@ def _extract_video(
             logger.warning("Audio extract failed, falling back to video: %s", exc)
             audio = b""
         raise_if_cancelled(cancel_check)
-        if audio and len(audio) <= _MAX_INLINE_BYTES:
+        if audio and len(audio) <= MAX_INLINE_BYTES:
             _emit(progress, "Transcribing audio…", percent=45, title="Transcribing")
             if provider == "gemini":
                 text, model = _gemini_multimodal(
@@ -302,7 +335,7 @@ def _extract_video(
 
     clip = extract_video_clip_bytes(path, max_seconds=90)
     raise_if_cancelled(cancel_check)
-    if len(clip) > _MAX_INLINE_BYTES:
+    if len(clip) > MAX_INLINE_BYTES:
         raise RuntimeError(
             "Video is too large to analyze without audio. "
             "Trim it in Video Edit, or use a clip with a spoken track."

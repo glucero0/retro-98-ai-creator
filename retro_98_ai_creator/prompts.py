@@ -192,6 +192,8 @@ def build_tools_research_prompt(
         "- Prefer pages that publish a FULL control/binding table over short forum stubs.\n"
         "- If Url Context / page fetch is available, open the best candidate pages and extract "
         "complete tables from them.\n"
+        "- When key data appears only in images (diagrams, scanned tables, infographics), "
+        "note the image URLs so they can be OCR'd in a later step.\n"
         "\n"
         "What to collect:\n"
         "- As many high-quality sources as Search can find for the ORIGINAL subject "
@@ -235,7 +237,8 @@ def build_general_text_prompt(
             "\n\nAVAILABLE TOOLS:\n"
             f"You may call these tools by name when the user prompt requires them: {names}.\n"
             "Use absolute filesystem paths from the user prompt as tool arguments.\n"
-            "Call tools as needed (for example read_json then write_json), then give a brief "
+            "Call tools as needed (for example execute_powershell then write_text, or "
+            "read_json then write_json), then give a brief "
             "final text summary of what you did.\n"
         )
         if with_search and not (research_context or "").strip():

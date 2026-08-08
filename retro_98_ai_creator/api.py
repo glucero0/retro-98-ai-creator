@@ -441,16 +441,18 @@ class Api:
         creation_description: str = "",
         basis_creation_id: str = "",
         tool_aliases: list[str] | None = None,
+        search_query: str = "",
     ) -> dict[str, Any]:
         """Start generation in a background thread; UI must poll get_job(job_id)."""
         logger.info(
-            "create_creation requested: %s / %s / %s (exact=%s, basis=%s, tools=%s)",
+            "create_creation requested: %s / %s / %s (exact=%s, basis=%s, tools=%s, search=%s)",
             game,
             platform,
             creation_type,
             exact_title,
             (basis_creation_id or "")[:24] or "-",
             ",".join(tool_aliases or []) or "-",
+            "yes" if (search_query or "").strip() else "no",
         )
 
         if not game or not platform or not creation_type:
@@ -504,6 +506,7 @@ class Api:
 
         job_id = f"gen_{uuid.uuid4().hex[:10]}"
         desc_override = (creation_description or "").strip()
+        search_override = (search_query or "").strip()
         from .gemini_tools import normalize_tool_aliases
 
         tools_for_job = normalize_tool_aliases(tool_aliases)
@@ -544,6 +547,7 @@ class Api:
                     cancel_event=cancel_evt,
                     basis_media=basis_media,
                     tool_aliases=tools_for_job,
+                    search_query=search_override or None,
                 )
                 if cancel_evt.is_set():
                     raise GenerationCancelled("Cancelled by user")

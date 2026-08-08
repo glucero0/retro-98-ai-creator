@@ -66,13 +66,23 @@
           <div class="studio-layout" id="studio-layout">
             <div class="studio-main">
               <form id="create-form">
-                <div class="field-row-stacked">
+                <div id="studio-prompt-wrap" class="field-row-stacked">
                   <label for="studio-prompt">Prompt</label>
                   <textarea
                     id="studio-prompt"
                     class="studio-prompt"
                     rows="14"
                     placeholder="Describe the text, image, or video you want to create…"
+                  ></textarea>
+                </div>
+
+                <div id="studio-search-wrap" class="field-row-stacked" hidden>
+                  <label for="studio-search">Search <span class="label-hint">(optional)</span></label>
+                  <textarea
+                    id="studio-search"
+                    class="studio-prompt studio-search"
+                    rows="8"
+                    placeholder="What should Google Search look up for this run (leave blank to skip)…"
                   ></textarea>
                 </div>
 
@@ -84,12 +94,23 @@
                     </div>
                     <ul id="studio-tools-list" class="studio-tools-list" aria-label="Attached tools"></ul>
                     <p class="hint" id="studio-tools-hint">
-                      Attach tools for this run, then reference them by alias in your prompt
-                      (for example: use <code>read_json</code> to load
-                      <code>c:\data\step1.json</code>, then <code>write_json</code> for the result).
+                      Attach tools for this run, then reference them by alias in Tool Use
+                      (for example: use <code>execute_powershell</code> on
+                      <code>c:\scripts\getdir.ps1</code>, then <code>write_text</code> the
+                      returned stdout to <code>c:\output\dirs.txt</code>).
                       Absolute paths only. Tools apply to text generations.
                     </p>
                   </fieldset>
+                </div>
+
+                <div id="studio-tool-use-wrap" class="field-row-stacked" hidden>
+                  <label for="studio-tool-use">Tool Use</label>
+                  <textarea
+                    id="studio-tool-use"
+                    class="studio-prompt studio-tool-use"
+                    rows="8"
+                    placeholder="Describe the tool steps — reference attached aliases (e.g. read_json, write_json)…"
+                  ></textarea>
                 </div>
 
                 <div class="form-actions">
@@ -298,10 +319,27 @@
                     <label for="gemini-use-tools">Use Tools (local file read/write)</label>
                   </div>
                   <p class="hint" id="gemini-use-tools-hint">
-                    Enables built-in file tools in Creator (read_json, write_json, read_text, write_text)
-                    via Gemini function calling. Absolute paths only; overwrites allowed.
-                    With Google Search on, Creator runs a deep Search (+ URL context) research pass
-                    first, then file tools use that brief. Text prompts only.
+                    Enables built-in file tools in Creator (read_json, write_json, read_text,
+                    write_text, execute_powershell) via Gemini function calling. Absolute paths
+                    only; overwrites allowed. Google Search is optional: when on, Creator can run a deep Search (+ URL context) research pass
+                    before file tools; when off, only Tool Use runs. Text prompts only.
+                  </p>
+                  <div class="field-row">
+                    <input type="checkbox" id="gemini-ocr-search-images" checked />
+                    <label for="gemini-ocr-search-images">OCR images from search</label>
+                  </div>
+                  <p class="hint" id="gemini-ocr-search-images-hint">
+                    After a Google Search grounding pass, download images from cited pages and OCR
+                    them so diagrams and scanned tables are included in the research material.
+                    Requires Google Search grounding.
+                  </p>
+                  <div class="field-row">
+                    <input type="checkbox" id="gemini-youtube-search-captions" checked />
+                    <label for="gemini-youtube-search-captions">YouTube captions from search</label>
+                  </div>
+                  <p class="hint" id="gemini-youtube-search-captions-hint">
+                    After Search, pull captions from up to two cited YouTube videos and append them
+                    to the research material. Requires Google Search grounding.
                   </p>
                   <div class="field-row">
                     <label for="gemini-temp">Temperature</label>

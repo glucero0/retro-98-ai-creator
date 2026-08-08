@@ -536,6 +536,35 @@ def _extract_grounding_sources(response: Any) -> list[dict[str, str]]:
     return sources
 
 
+def _record_search_enrichment_meta(
+    model_info: dict[str, Any],
+    meta: dict[str, Any],
+) -> None:
+    if meta.get("ocrImageCount"):
+        model_info["ocr_search_images"] = True
+        model_info["ocrImageCount"] = meta["ocrImageCount"]
+        model_info["ocrImageUrls"] = list(meta.get("ocrImageUrls") or [])
+    if meta.get("youtubeCaptionCount"):
+        model_info["youtube_search_captions"] = True
+        model_info["youtubeCaptionCount"] = meta["youtubeCaptionCount"]
+        model_info["youtubeUrls"] = list(meta.get("youtubeUrls") or [])
+
+
+def _build_enrichment_refinement_prompt(
+    user_prompt: str,
+    draft: str,
+    enrichment_block: str,
+) -> str:
+    return (
+        "You are refining a search-grounded answer with additional extracted material.\n"
+        "Incorporate the draft and the extracted material faithfully. "
+        "Do not invent facts, URLs, or captions that are not supported below.\n\n"
+        f"USER REQUEST:\n{user_prompt.strip()}\n\n"
+        f"SEARCH-GROUNDED DRAFT:\n{draft.strip()}\n\n"
+        f"ADDITIONAL EXTRACTED MATERIAL:\n{enrichment_block.strip()}\n"
+    )
+
+
 def _two_pass_enabled(gemini_cfg: dict[str, Any], *, use_search: bool) -> bool:
     """Two-pass verify defaults on whenever Google Search grounding is enabled."""
     if not use_search:
@@ -560,6 +589,7 @@ def generate_with_gemini(
     forced_modality: str | None = None,
     cancel_event: Any = None,
     tool_aliases: list[str] | None = None,
+    search_query: str | None = None,
 ) -> dict[str, Any]:
     """Call Gemini; prompt intent (or forced modality / media basis) selects the slot."""
     from .modality import infer_prompt_modality
@@ -607,6 +637,7 @@ def generate_with_gemini(
         model_name=model_name,
         cancel_event=cancel_event,
         tool_aliases=tool_aliases,
+        search_query=search_query,
     )
 
 
@@ -624,6 +655,7 @@ def _generate_text_with_gemini(
     model_name: str = DEFAULT_GEMINI_TEXT_MODEL,
     cancel_event: Any = None,
     tool_aliases: list[str] | None = None,
+    search_query: str | None = None,
 ) -> dict[str, Any]:
     """Text generation path (freeform Prompt or classic structured document)."""
 
@@ -664,9 +696,7 @@ def _generate_text_with_gemini(
         gemini_cfg.get("temperature") if gemini_cfg.get("temperature") is not None else 0.0
     )
     generic = is_generic_studio_request(game, platform, creation_type)
-    # Classic freeform Studio (no tools) historically skips Search; tools + Search may combine.
-    if generic and not use_tools:
-        use_search = False
+    use_search = bool(gemini_cfg.get("google_search", True))
     two_pass = _two_pass_enabled(gemini_cfg, use_search=bool(use_search)) and not generic
 
     try:
@@ -682,6 +712,8 @@ def _generate_text_with_gemini(
 
     grounding_sources: list[dict[str, str]] = []
     search_used = False
+    enrich_meta: dict[str, Any] = {}
+    search_enrichment_appendix = ""
 
     def _call(
         prompt: str,
@@ -826,48 +858,63 @@ def _generate_text_with_gemini(
                 # Combining Search + function calling lets the model skip Search and
                 # invent write_json payloads; a dedicated research pass forces grounding.
                 if use_search:
-                    emit("Google Search research…", percent=25, title="Searching")
-                    try:
-                        # Slightly warmer than 0 helps recall; keep user temp if already higher.
-                        research_temp = max(float(temperature), 0.4)
-                        research_context = _call(
-                            build_tools_research_prompt(
-                                prompt_text, system_extra=system_extra
-                            ),
-                            with_search=True,
-                            with_url_context=True,
-                            call_temperature=research_temp,
-                            json_mime=False,
-                        )
-                        if grounding_sources:
-                            search_used = True
-                            # Append explicit citations so the tool pass cannot "lose" URLs.
-                            cite_lines = []
-                            for src in grounding_sources:
-                                title = (src.get("title") or "").strip() or "source"
-                                url = (src.get("url") or "").strip()
-                                if url:
-                                    cite_lines.append(f"- {title}: {url}")
-                            if cite_lines:
-                                research_context = (
-                                    (research_context or "").rstrip()
-                                    + "\n\nCITED SOURCES FROM GOOGLE SEARCH:\n"
-                                    + "\n".join(cite_lines)
-                                    + "\n"
-                                )
-                        elif research_context:
-                            # Search ran even if citation metadata was sparse.
-                            search_used = True
-                    except Exception as research_err:
-                        from .cancellation import GenerationCancelled
+                    research_prompt = (search_query or "").strip()
+                    if research_prompt:
+                        emit("Google Search research…", percent=25, title="Searching")
+                        try:
+                            # Slightly warmer than 0 helps recall; keep user temp if already higher.
+                            research_temp = max(float(temperature), 0.4)
+                            research_context = _call(
+                                build_tools_research_prompt(
+                                    research_prompt, system_extra=system_extra
+                                ),
+                                with_search=True,
+                                with_url_context=True,
+                                call_temperature=research_temp,
+                                json_mime=False,
+                            )
+                            if grounding_sources:
+                                search_used = True
+                                # Append explicit citations so the tool pass cannot "lose" URLs.
+                                cite_lines = []
+                                for src in grounding_sources:
+                                    title = (src.get("title") or "").strip() or "source"
+                                    url = (src.get("url") or "").strip()
+                                    if url:
+                                        cite_lines.append(f"- {title}: {url}")
+                                if cite_lines:
+                                    research_context = (
+                                        (research_context or "").rstrip()
+                                        + "\n\nCITED SOURCES FROM GOOGLE SEARCH:\n"
+                                        + "\n".join(cite_lines)
+                                        + "\n"
+                                    )
+                            elif research_context:
+                                # Search ran even if citation metadata was sparse.
+                                search_used = True
 
-                        if isinstance(research_err, GenerationCancelled):
-                            raise
-                        logger.warning(
-                            "Tools research search failed; continuing with tools only: %s",
-                            research_err,
-                        )
-                        research_context = ""
+                            if grounding_sources and (research_context or "").strip():
+                                from .search_enrichment import apply_search_enrichment
+
+                                research_context, appended, enrich_meta = apply_search_enrichment(
+                                    research_context,
+                                    grounding_sources=grounding_sources,
+                                    gemini_cfg=gemini_cfg,
+                                    progress=progress,
+                                    cancel_event=cancel_event,
+                                )
+                                if appended:
+                                    search_enrichment_appendix = appended
+                        except Exception as research_err:
+                            from .cancellation import GenerationCancelled
+
+                            if isinstance(research_err, GenerationCancelled):
+                                raise
+                            logger.warning(
+                                "Tools research search failed; continuing with tools only: %s",
+                                research_err,
+                            )
+                            research_context = ""
 
                 response_text = _call_with_tools(
                     build_general_text_prompt(
@@ -882,12 +929,48 @@ def _generate_text_with_gemini(
                     with_search=False,
                 )
             else:
-                response_text = _call(
-                    build_general_text_prompt(prompt_text, system_extra=system_extra),
-                    with_search=False,
-                    call_temperature=temperature,
-                    json_mime=False,
-                )
+                if use_search:
+                    from .search_enrichment import apply_search_enrichment
+
+                    emit("Google Search grounding…", percent=25, title="Searching")
+                    draft = _call(
+                        build_general_text_prompt(
+                            prompt_text,
+                            system_extra=system_extra,
+                            with_search=True,
+                        ),
+                        with_search=True,
+                        with_url_context=True,
+                        call_temperature=temperature,
+                        json_mime=False,
+                    )
+                    search_used = True
+                    response_text = draft
+                    if grounding_sources:
+                        _, appended, enrich_meta = apply_search_enrichment(
+                            draft,
+                            grounding_sources=grounding_sources,
+                            gemini_cfg=gemini_cfg,
+                            progress=progress,
+                            cancel_event=cancel_event,
+                        )
+                        if appended:
+                            search_enrichment_appendix = appended
+                            response_text = _call(
+                                _build_enrichment_refinement_prompt(
+                                    prompt_text, draft, appended
+                                ),
+                                with_search=False,
+                                call_temperature=temperature,
+                                json_mime=False,
+                            )
+                else:
+                    response_text = _call(
+                        build_general_text_prompt(prompt_text, system_extra=system_extra),
+                        with_search=False,
+                        call_temperature=temperature,
+                        json_mime=False,
+                    )
         except Exception as exc:
             from .cancellation import GenerationCancelled
 
@@ -902,8 +985,7 @@ def _generate_text_with_gemini(
             "repo_id": model_name,
             "modality": "text",
             "temperature": temperature,
-            # True when Search was enabled for this tools run (search-first phase).
-            "google_search": bool(use_search and use_tools and search_used),
+            "google_search": bool(use_search and search_used),
             "two_pass_verify": False,
             "use_tools": bool(use_tools),
         }
@@ -911,6 +993,7 @@ def _generate_text_with_gemini(
             model_info["tools"] = list(selected_tools)
             if use_search:
                 model_info["search_first"] = True
+        _record_search_enrichment_meta(model_info, enrich_meta)
         creation = build_text_creation_from_plain(
             response_text,
             prompt=prompt_text,
@@ -918,9 +1001,13 @@ def _generate_text_with_gemini(
         )
         if grounding_sources:
             creation["groundingSources"] = grounding_sources
-        # Keep a truncated research brief for Viewer debugging (not a second document body).
+        brief_source = ""
         if use_tools and use_search and (research_context or "").strip():
-            brief = research_context.strip()
+            brief_source = research_context.strip()
+        elif use_search and search_enrichment_appendix:
+            brief_source = search_enrichment_appendix
+        if brief_source:
+            brief = brief_source
             if len(brief) > 12000:
                 brief = brief[:12000] + "\n…[truncated]"
             creation["researchBrief"] = brief
@@ -964,6 +1051,18 @@ def _generate_text_with_gemini(
                     json_mime=False,
                 )
                 search_used = True
+                if grounding_sources:
+                    from .search_enrichment import apply_search_enrichment
+
+                    _, appended, enrich_meta = apply_search_enrichment(
+                        response_text,
+                        grounding_sources=grounding_sources,
+                        gemini_cfg=gemini_cfg,
+                        progress=progress,
+                        cancel_event=cancel_event,
+                    )
+                    if appended:
+                        search_enrichment_appendix = appended
             except Exception as search_err:
                 from .cancellation import GenerationCancelled
 
@@ -1046,7 +1145,11 @@ def _generate_text_with_gemini(
                 candidate_document=pass1_parsed,
                 source_snippets=snippets,
                 creation_description=creation_description,
-                system_extra=system_extra,
+                system_extra=(
+                    (system_extra + "\n\nADDITIONAL EXTRACTED SEARCH MATERIAL:\n" + search_enrichment_appendix).strip()
+                    if search_enrichment_appendix
+                    else system_extra
+                ),
             )
             try:
                 verified_text = _call(
@@ -1084,19 +1187,21 @@ def _generate_text_with_gemini(
                     )
 
     emit("Parsing Gemini JSON…", percent=90, title="Generating document")
+    model_info = {
+        "provider": "gemini",
+        "repo_id": model_name,
+        "modality": "text",
+        "temperature": temperature,
+        "google_search": bool(search_used),
+        "two_pass_verify": bool(verified),
+    }
+    _record_search_enrichment_meta(model_info, enrich_meta)
     return finalize_creation(
         response_text,
         game,
         platform,
         creation_type,
-        model_info={
-            "provider": "gemini",
-            "repo_id": model_name,
-            "modality": "text",
-            "temperature": temperature,
-            "google_search": bool(search_used),
-            "two_pass_verify": bool(verified),
-        },
+        model_info=model_info,
         grounding_sources=grounding_sources or None,
         exact_title=exact_title,
         prompt=prompt_text,

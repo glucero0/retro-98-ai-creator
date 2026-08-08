@@ -9,7 +9,9 @@ A Windows 98–themed desktop studio for general-purpose AI creation: **text**, 
 ## Features
 
 - Win98 desktop UI (98.css) with draggable/minimizable windows, a taskbar, and a Start menu
-- **Creation Studio** — one freeform prompt box; the app infers text/image/video from your prompt and generation intent
+- **Creation Studio** — one freeform prompt box; the app infers text/image/video from your prompt and generation intent. With **Gemini Use Tools** enabled, Studio switches to **Search** (optional) + **Tool Use** for local file and PowerShell automation.
+- **Gemini Use Tools** (optional) — attach built-in tools (`read_json`, `write_json`, `read_text`, `write_text`, `execute_powershell`) and describe steps in natural language; Gemini calls them via function calling (text generations only, Windows for PowerShell)
+- **Google Search enrichment** (optional, Gemini text) — when Search runs, the app can OCR images and pull YouTube captions from cited results before the tool or document pass
 - **Gemini** text, image, and video generation with separate model pickers per modality
 - **OpenRouter** — text, image, and video slots (Studio routes by prompt intent)
 - Optional **local Hugging Face** — text (causal LM), image (Diffusers), and video (Diffusers T2V) with separate pickers; Studio media basis uses local img2img (and I2V when the video model supports it)
@@ -111,12 +113,12 @@ Use a reasonably current build (roughly ffmpeg 4+). Very old copies on `PATH` (f
 
 | Window | What it does |
 | --- | --- |
-| **Creation Studio** | Type a prompt and hit **Create**. You can also load an existing text/image/video file, or use the Viewer's active item as a starting basis for a new creation. |
+| **Creation Studio** | Type a prompt and hit **Create**. With **Use Tools** off, one prompt box handles text/image/video. With **Use Tools** on (Control Panel → Gemini), Studio shows **Search** (optional), a **Tools** panel, and **Tool Use** instead — text only. Load text/image/video files or use the Viewer's active item as a basis. |
 | **Archives** | The library of everything you've generated or imported. Search, delete, import/export JSON, or import a text/image/video file directly. |
 | **Viewer** | Shows the active creation — rendered document, image, or video — with export buttons (TXT/JSON/PNG/PDF/MP4 depending on type) and an **Edit** shortcut into Image Edit or Video Edit. |
 | **Image Edit** | Crop, rotate, and adjust (brightness/contrast/saturation/hue/sepia/blur/exposure/gamma/vignette/tint, grayscale, threshold, sharpen, background removal). Opened standalone or via Viewer → Edit. |
 | **Video Edit** | Same filter/crop/rotate toolset plus a **segment timeline**: split at the playhead, delete/reorder segments, then re-render. Requires ffmpeg. Opened standalone or via Viewer → Edit. |
-| **Control Panel** | AI backend + model pickers, display theme, sound, CRT scanlines, UI scale. |
+| **Control Panel** | AI backend + model pickers, Gemini search/tools toggles, display theme, sound, CRT scanlines, UI scale. **Save** writes `config.yaml` and immediately updates Creation Studio (tools mode, search field visibility, model labels). |
 
 ### Image Edit / Video Edit: Apply vs. Save
 
@@ -128,6 +130,70 @@ Use a reasonably current build (roughly ffmpeg 4+). Very old copies on `PATH` (f
 1. Create a key at https://aistudio.google.com/apikey
 2. Open **Control Panel** → paste the key → pick Text / Image / Video models → **Save**
 3. Model lists are fetched live from Google once a key is saved; each list only shows models compatible with that modality
+
+### Control Panel → what affects Creation Studio
+
+After **Save**, these settings apply on the next **Create** (no app restart):
+
+| Setting | Effect on Studio |
+| --- | --- |
+| **Provider** | Gemini vs OpenRouter vs Hugging Face — only **Gemini** supports Google Search, Use Tools, and enrichment |
+| **Text / Image / Video models** | Shown on the Studio model field; routing still follows prompt intent (e.g. “generate a video” uses the video model) |
+| **Google Search grounding (text)** | When on, an optional **Search** field appears in tools mode. When off, Search is hidden and no web research pass runs |
+| **Two-pass verify** | Gemini text only, when Google Search is on and tools are off — extract with sources, then verify at temperature 0 |
+| **Use Tools** | Switches Studio from a single **Prompt** to **Tools** + **Tool Use** (and optional **Search**). Text generations only |
+| **OCR search images** | When a Search pass returns cited pages, download and OCR images (diagrams, scanned tables) into the research brief |
+| **YouTube search captions** | When Search cites YouTube URLs, pull captions into the research brief |
+| **Temperature** | Generation temperature for Gemini |
+| **Extra system instructions** | Appended to every generation prompt |
+
+## Gemini Use Tools (optional)
+
+Enable **Control Panel → Use Tools (local file read/write)** and **Save**. Creation Studio then hides the normal prompt and shows:
+
+1. **Search** *(optional)* — what Google should look up for this run. Leave blank for tool-only workflows. Hidden entirely when Google Search is off in Control Panel.
+2. **Tools** — attach one or more built-in tools with **Add Tool…**
+3. **Tool Use** — describe what to do. You must mention at least one attached tool alias (e.g. `execute_powershell`, `write_text`) so the app knows which capabilities you intend.
+
+### Built-in tools
+
+| Alias | What it does |
+| --- | --- |
+| `read_json` | Read a JSON file (absolute path) |
+| `write_json` | Write JSON to a file (overwrites) |
+| `read_text` | Read a text file |
+| `write_text` | Write text to a file (overwrites) |
+| `execute_powershell` | Run a `.ps1` script (Windows only); returns `stdout`, `stderr`, and `exit_code` |
+
+All paths must be **absolute** (e.g. `C:\data\step1.json`). The model infers call order from your Tool Use text once tools are attached.
+
+### Example: PowerShell → text file (no web search)
+
+1. Control Panel: **Use Tools** on, **Google Search** off (or on with blank Search) → **Save**
+2. Studio: attach `execute_powershell` and `write_text`
+3. Tool Use:
+
+   ```
+   execute_powershell on C:\scripts\getdir.ps1, then write_text the stdout to C:\output\dirs.txt
+   ```
+
+4. **Create** — Gemini runs the script, captures output, and writes the file.
+
+### Example: Search + write JSON
+
+1. Control Panel: **Use Tools** on, **Google Search** on → **Save**
+2. Studio: attach `write_json`
+3. Search: `Watch Dogs PS4 DualShock button bindings complete table`
+4. Tool Use: `write_json the findings to C:\output\bindings.json` (mention `write_json`)
+5. **Create** — a dedicated Search pass gathers grounded research (with optional OCR/YouTube enrichment), then the tool loop writes JSON using that brief.
+
+### How the pipeline works
+
+- **Tools only** (no Search text, or Google Search off): one Gemini pass with function calling on your attached tools.
+- **Search + tools**: Search pass first (Google Search + URL context, plus optional image OCR and YouTube captions), then a separate tool pass that uses the research brief. Search and file tools are not combined in a single Gemini call (avoids the model skipping search or inventing file contents).
+- **Image/video prompts** with tools on: tools are dropped for that run; Search and Tool Use text are merged into a normal media prompt instead.
+
+**Security note:** tools read and write files on your machine and `execute_powershell` runs scripts you point at. Only attach tools you trust for the paths you specify.
 
 ## OpenRouter setup
 
@@ -180,6 +246,9 @@ gemini:
   api_key: your_key_here
   google_search: true
   two_pass_verify: true
+  use_tools: false
+  ocr_search_images: true
+  youtube_search_captions: true
   temperature: 0.0
 
 openrouter:

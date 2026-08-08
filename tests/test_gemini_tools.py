@@ -8,6 +8,8 @@ from types import SimpleNamespace
 from typing import Any
 from unittest.mock import MagicMock, patch
 
+import subprocess
+
 from retro_98_ai_creator.config import DEFAULTS
 from retro_98_ai_creator.gemini_tools import (
     MAX_FILE_BYTES,
@@ -28,7 +30,13 @@ def test_use_tools_default_is_false():
 
 def test_catalog_aliases():
     aliases = [t["alias"] for t in list_tool_catalog()]
-    assert aliases == ["read_json", "write_json", "read_text", "write_text"]
+    assert aliases == [
+        "read_json",
+        "write_json",
+        "read_text",
+        "write_text",
+        "execute_powershell",
+    ]
 
 
 def test_normalize_tool_aliases_filters_and_orders():
@@ -105,6 +113,60 @@ def test_unknown_tool():
     result = execute_tool("launch_missiles", {"path": "C:/x"})
     assert result["ok"] is False
     assert "unknown" in result["error"].lower()
+
+
+def test_execute_powershell_returns_stdout(tmp_path: Path):
+    script = tmp_path / "getdir.ps1"
+    script.write_text("Write-Output 'line-one'", encoding="utf-8")
+    fake = subprocess.CompletedProcess(
+        args=["powershell.exe"],
+        returncode=0,
+        stdout=b"line-one\r\n",
+        stderr=b"",
+    )
+    with (
+        patch("retro_98_ai_creator.gemini_tools.sys.platform", "win32"),
+        patch("retro_98_ai_creator.gemini_tools.subprocess.run", return_value=fake),
+    ):
+        result = execute_tool(
+            "execute_powershell",
+            {"path": str(script.resolve())},
+        )
+    assert result["ok"] is True
+    assert result["exit_code"] == 0
+    assert "line-one" in result["stdout"]
+    assert result["stderr"] == ""
+
+
+def test_execute_powershell_nonzero_exit_still_returns_output(tmp_path: Path):
+    script = tmp_path / "fail.ps1"
+    script.write_text("Write-Error 'oops'", encoding="utf-8")
+    fake = subprocess.CompletedProcess(
+        args=["powershell.exe"],
+        returncode=1,
+        stdout=b"",
+        stderr=b"oops\r\n",
+    )
+    with (
+        patch("retro_98_ai_creator.gemini_tools.sys.platform", "win32"),
+        patch("retro_98_ai_creator.gemini_tools.subprocess.run", return_value=fake),
+    ):
+        result = execute_tool(
+            "execute_powershell",
+            {"path": str(script.resolve())},
+        )
+    assert result["ok"] is False
+    assert result["exit_code"] == 1
+    assert "oops" in result["stderr"]
+
+
+def test_execute_powershell_requires_ps1_extension(tmp_path: Path):
+    script = tmp_path / "getdir.bat"
+    script.write_text("@echo off", encoding="utf-8")
+    with patch("retro_98_ai_creator.gemini_tools.sys.platform", "win32"):
+        result = execute_tool("execute_powershell", {"path": str(script.resolve())})
+    assert result["ok"] is False
+    assert ".ps1" in result["error"]
 
 
 def test_function_declarations_build():
@@ -244,6 +306,120 @@ def test_tool_loop_mock(tmp_path: Path):
     assert client.models.generate_content.call_count == 2
 
 
+def test_tools_with_search_uses_search_query_for_research():
+    """Dedicated Search field text drives the research pass, not Tool Use."""
+    from retro_98_ai_creator import gemini_provider as gp
+
+    research = SimpleNamespace(
+        text="Research brief",
+        candidates=[
+            SimpleNamespace(
+                content=SimpleNamespace(
+                    parts=[SimpleNamespace(function_call=None, text="Research brief")]
+                ),
+                grounding_metadata=None,
+            )
+        ],
+    )
+    final = SimpleNamespace(
+        text="Done.",
+        candidates=[
+            SimpleNamespace(
+                content=SimpleNamespace(
+                    parts=[SimpleNamespace(function_call=None, text="Done.")]
+                ),
+                grounding_metadata=None,
+            )
+        ],
+    )
+
+    client = MagicMock()
+    contents_seen: list[Any] = []
+
+    def _side_effect(**kwargs):
+        contents_seen.append(kwargs.get("contents"))
+        if len(contents_seen) == 1:
+            return research
+        return final
+
+    client.models.generate_content.side_effect = _side_effect
+
+    with (
+        patch.object(gp, "resolve_api_key", return_value="fake-key"),
+        patch("google.genai.Client", return_value=client),
+    ):
+        gp._generate_text_with_gemini(
+            "Prompt",
+            "General",
+            "Custom",
+            gemini_cfg={
+                "api_key": "fake-key",
+                "use_tools": True,
+                "google_search": True,
+                "temperature": 0.0,
+            },
+            prompt_text="use write_json to save c:\\out\\result.json",
+            model_name="gemini-pro-latest",
+            tool_aliases=["write_json"],
+            search_query="Watch Dogs PS4 DualShock bindings complete table",
+        )
+
+    research_contents = contents_seen[0]
+    research_text = (
+        research_contents
+        if isinstance(research_contents, str)
+        else str(research_contents)
+    )
+    assert "Watch Dogs PS4 DualShock bindings complete table" in research_text
+    # Tool-loop prompt should still be the Tool Use text
+    tool_contents = contents_seen[1]
+    first_user = tool_contents[0]
+    user_text = first_user.parts[0].text
+    assert "use write_json to save" in user_text
+
+
+def test_tools_with_search_skips_research_when_search_query_empty():
+    """Blank Search skips the research pass; only the tool loop runs."""
+    from retro_98_ai_creator import gemini_provider as gp
+
+    final = SimpleNamespace(
+        text="Done.",
+        candidates=[
+            SimpleNamespace(
+                content=SimpleNamespace(
+                    parts=[SimpleNamespace(function_call=None, text="Done.")]
+                ),
+                grounding_metadata=None,
+            )
+        ],
+    )
+
+    client = MagicMock()
+    client.models.generate_content.return_value = final
+
+    with (
+        patch.object(gp, "resolve_api_key", return_value="fake-key"),
+        patch("google.genai.Client", return_value=client),
+    ):
+        gp._generate_text_with_gemini(
+            "Prompt",
+            "General",
+            "Custom",
+            gemini_cfg={
+                "api_key": "fake-key",
+                "use_tools": True,
+                "google_search": True,
+                "temperature": 0.0,
+            },
+            prompt_text="use write_json to save c:\\out\\result.json",
+            model_name="gemini-pro-latest",
+            tool_aliases=["write_json"],
+            search_query="",
+        )
+
+    assert client.models.generate_content.call_count == 1
+
+
 def test_tools_with_search_runs_research_first():
     """Search+tools: dedicated Google Search research pass, then file-tool loop."""
     from retro_98_ai_creator import gemini_provider as gp
@@ -318,9 +494,10 @@ def test_tools_with_search_runs_research_first():
                 "google_search": True,
                 "temperature": 0.0,
             },
-            prompt_text="Search the web for Watch Dogs PS4 bindings and write_json.",
+            prompt_text="use write_json to save research to c:\\out\\step1.json",
             model_name="gemini-pro-latest",
             tool_aliases=["write_json"],
+            search_query="Watch Dogs PS4 bindings complete table",
         )
 
     assert client.models.generate_content.call_count >= 2
