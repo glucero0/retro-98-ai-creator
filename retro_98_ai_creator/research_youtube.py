@@ -49,7 +49,7 @@ def extract_youtube_video_id(url: str) -> str | None:
     if host == "youtu.be":
         vid = parsed.path.lstrip("/").split("/")[0].strip()
         return vid or None
-    if "youtube.com" in host:
+    if host == "youtube.com" or host.endswith(".youtube.com"):
         if parsed.path == "/watch":
             ids = parse_qs(parsed.query).get("v") or []
             return (ids[0] or "").strip() or None
