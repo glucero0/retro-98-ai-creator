@@ -1,15 +1,19 @@
-"""Built-in Gemini function-calling tools (local file read/write)."""
+"""Built-in Gemini function-calling tools (local file read/write and PowerShell)."""
 
 from __future__ import annotations
 
 import json
 import logging
+import subprocess
+import sys
 from pathlib import Path
 from typing import Any
 
 logger = logging.getLogger(__name__)
 
 MAX_FILE_BYTES = 2 * 1024 * 1024  # 2 MiB
+MAX_POWERSHELL_OUTPUT_BYTES = 2 * 1024 * 1024
+POWERSHELL_TIMEOUT_SEC = 120
 MAX_TOOL_ITERATIONS = 16
 
 # Catalog: fixed aliases declared to Gemini when the user attaches them in Creator.
@@ -33,6 +37,11 @@ TOOL_CATALOG: list[dict[str, str]] = [
         "alias": "write_text",
         "display_name": "Write text",
         "summary": "Write text to a file at an absolute path (overwrites)",
+    },
+    {
+        "alias": "execute_powershell",
+        "display_name": "Execute PowerShell",
+        "summary": "Run a .ps1 script at an absolute path; returns stdout, stderr, and exit code",
     },
 ]
 
@@ -94,6 +103,88 @@ def _write_bytes(path: Path, data: bytes) -> None:
     path.write_bytes(data)
 
 
+def _decode_output(raw: bytes) -> str:
+    if not raw:
+        return ""
+    try:
+        return raw.decode("utf-8")
+    except UnicodeDecodeError:
+        return raw.decode("utf-8", errors="replace")
+
+
+def _truncate_output(text: str, *, max_bytes: int) -> str:
+    encoded = text.encode("utf-8")
+    if len(encoded) <= max_bytes:
+        return text
+    trimmed = encoded[:max_bytes].decode("utf-8", errors="ignore")
+    return trimmed + "\n…[output truncated]"
+
+
+def _execute_powershell_script(
+    script_path: Path,
+    arguments: list[str] | None = None,
+) -> dict[str, Any]:
+    if sys.platform != "win32":
+        return {
+            "ok": False,
+            "error": "execute_powershell is only available on Windows",
+        }
+    if script_path.suffix.lower() != ".ps1":
+        return {
+            "ok": False,
+            "error": f"script must be a .ps1 file (got {script_path.name!r})",
+        }
+    if not script_path.is_file():
+        return {"ok": False, "error": f"script not found: {script_path}"}
+
+    args = [str(a) for a in (arguments or []) if str(a).strip()]
+    cmd = [
+        "powershell.exe",
+        "-NoProfile",
+        "-NonInteractive",
+        "-ExecutionPolicy",
+        "Bypass",
+        "-File",
+        str(script_path),
+        *args,
+    ]
+    try:
+        completed = subprocess.run(
+            cmd,
+            capture_output=True,
+            timeout=POWERSHELL_TIMEOUT_SEC,
+            check=False,
+        )
+    except subprocess.TimeoutExpired:
+        return {
+            "ok": False,
+            "path": str(script_path),
+            "error": f"script timed out after {POWERSHELL_TIMEOUT_SEC} seconds",
+        }
+    except OSError as exc:
+        return {"ok": False, "error": f"failed to start PowerShell: {exc}"}
+
+    stdout = _truncate_output(
+        _decode_output(completed.stdout or b""),
+        max_bytes=MAX_POWERSHELL_OUTPUT_BYTES,
+    )
+    stderr = _truncate_output(
+        _decode_output(completed.stderr or b""),
+        max_bytes=MAX_POWERSHELL_OUTPUT_BYTES,
+    )
+    exit_code = int(completed.returncode)
+    result: dict[str, Any] = {
+        "ok": exit_code == 0,
+        "path": str(script_path),
+        "exit_code": exit_code,
+        "stdout": stdout,
+        "stderr": stderr,
+    }
+    if exit_code != 0:
+        result["error"] = f"script exited with code {exit_code}"
+    return result
+
+
 def execute_tool(name: str, args: dict[str, Any] | None) -> dict[str, Any]:
     """Run a built-in tool; always returns a JSON-serializable result dict."""
     alias = (name or "").strip()
@@ -143,6 +234,15 @@ def execute_tool(name: str, args: dict[str, Any] | None) -> dict[str, Any]:
             encoded = text.encode("utf-8")
             _write_bytes(path, encoded)
             return {"ok": True, "path": str(path), "bytes_written": len(encoded)}
+        if alias == "execute_powershell":
+            path = _require_absolute_path(str(params.get("path") or ""))
+            raw_args = params.get("arguments")
+            arguments: list[str] = []
+            if raw_args is not None:
+                if not isinstance(raw_args, list):
+                    return {"ok": False, "error": "arguments must be an array of strings"}
+                arguments = [str(a) for a in raw_args]
+            return _execute_powershell_script(path, arguments)
         return {"ok": False, "error": f"unhandled tool: {alias!r}"}
     except Exception as exc:  # noqa: BLE001
         logger.info("Tool %s failed: %s", alias, exc)
@@ -239,6 +339,32 @@ def function_declarations_for(aliases: list[str] | None) -> list[Any]:
                             },
                         },
                         "required": ["path", "text"],
+                    },
+                )
+            )
+        elif alias == "execute_powershell":
+            decls.append(
+                types.FunctionDeclaration(
+                    name="execute_powershell",
+                    description=(
+                        "Run a PowerShell script (.ps1) at an absolute filesystem path. "
+                        "Returns stdout, stderr, and exit_code in the tool response — "
+                        "use stdout with write_text when saving script output to a file."
+                    ),
+                    parameters_json_schema={
+                        "type": "object",
+                        "properties": {
+                            "path": {
+                                "type": "string",
+                                "description": "Absolute path to a .ps1 script file",
+                            },
+                            "arguments": {
+                                "type": "array",
+                                "items": {"type": "string"},
+                                "description": "Optional arguments passed to the script",
+                            },
+                        },
+                        "required": ["path"],
                     },
                 )
             )

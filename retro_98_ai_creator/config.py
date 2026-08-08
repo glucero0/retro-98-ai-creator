@@ -40,6 +40,9 @@ DEFAULTS: dict[str, Any] = {
         "two_pass_verify": True,
         # Local file tools via Gemini function calling (can combine with google_search)
         "use_tools": False,
+        # When google_search is on: OCR images / YouTube captions from cited search results
+        "ocr_search_images": True,
+        "youtube_search_captions": True,
         "temperature": 0.0,
         # Runtime-learned: { "old-model-id": "replacement-id" } merged with built-ins
         "retired_model_aliases": {},

@@ -1280,6 +1280,12 @@
     return backend === "gemini" && !!gemini.use_tools;
   }
 
+  function studioGoogleSearchEnabled() {
+    const cfg = state.config || {};
+    const gemini = cfg.gemini || {};
+    return gemini.google_search !== false;
+  }
+
   function getGeminiToolsCatalog() {
     if (Array.isArray(state.geminiToolsCatalog) && state.geminiToolsCatalog.length) {
       return state.geminiToolsCatalog;
@@ -1305,6 +1311,11 @@
         display_name: "Write text",
         summary: "Write text to a file at an absolute path (overwrites)",
       },
+      {
+        alias: "execute_powershell",
+        display_name: "Execute PowerShell",
+        summary: "Run a .ps1 script at an absolute path; returns stdout, stderr, and exit code",
+      },
     ];
   }
 
@@ -1314,10 +1325,34 @@
   }
 
   function syncStudioToolsPanel() {
+    const form = $("#create-form");
     const panel = $("#studio-tools-panel");
-    if (!panel) return;
+    const promptWrap = $("#studio-prompt-wrap");
+    const searchWrap = $("#studio-search-wrap");
+    const toolUseWrap = $("#studio-tool-use-wrap");
+    const loadHint = $("#studio-load-hint");
     const enabled = studioToolsEnabled();
-    panel.hidden = !enabled;
+    const searchOn = studioGoogleSearchEnabled();
+
+    if (form) {
+      form.classList.toggle("studio-tools-mode", !!enabled);
+    }
+    if (panel) panel.hidden = !enabled;
+    if (promptWrap) promptWrap.hidden = !!enabled;
+    if (searchWrap) searchWrap.hidden = !enabled || !searchOn;
+    if (toolUseWrap) toolUseWrap.hidden = !enabled;
+    if (loadHint) {
+      if (!enabled) {
+        loadHint.textContent =
+          "Load Text into the prompt. Load Image / Video sets a media basis shown on the right — then describe the change and CREATE. To reuse something already in Archives, open it in the Viewer and choose Use as Basis.";
+      } else if (searchOn) {
+        loadHint.textContent =
+          "Load Text into Search (optional). Load Image / Video sets a media basis shown on the right — then describe the change and CREATE. To reuse something already in Archives, open it in the Viewer and choose Use as Basis.";
+      } else {
+        loadHint.textContent =
+          "Google Search is off — only Tool Use runs. Load Image / Video sets a media basis shown on the right — then describe the change and CREATE. To reuse something already in Archives, open it in the Viewer and choose Use as Basis.";
+      }
+    }
     if (!enabled) {
       state.studioTools = [];
     }
@@ -1340,7 +1375,7 @@
       insertBtn.type = "button";
       insertBtn.className = "studio-tool-insert";
       insertBtn.textContent = "Insert";
-      insertBtn.title = "Insert alias into prompt";
+      insertBtn.title = "Insert alias into Tool Use";
       insertBtn.addEventListener("click", () => insertStudioToolAlias(alias));
       li.appendChild(insertBtn);
       const removeBtn = document.createElement("button");
@@ -1358,7 +1393,7 @@
   }
 
   function insertStudioToolAlias(alias) {
-    const ta = $("#studio-prompt");
+    const ta = $("#studio-tool-use") || $("#studio-prompt");
     if (!ta) return;
     const text = String(alias || "");
     const start = ta.selectionStart != null ? ta.selectionStart : ta.value.length;
@@ -1544,6 +1579,7 @@
       }
       if ($("#gemini-key")) $("#gemini-key").value = "";
       if ($("#openrouter-key")) $("#openrouter-key").value = "";
+      syncStudioToolsPanel();
     }
 
     // Always close Control Panel after a successful Save.
@@ -1729,6 +1765,58 @@
     if (field) field.value = text || "";
   }
 
+  function getStudioSearch() {
+    const field = $("#studio-search");
+    return field ? field.value : "";
+  }
+
+  function setStudioSearch(text) {
+    const field = $("#studio-search");
+    if (field) field.value = text || "";
+  }
+
+  function getStudioToolUse() {
+    const field = $("#studio-tool-use");
+    return field ? field.value : "";
+  }
+
+  function setStudioToolUse(text) {
+    const field = $("#studio-tool-use");
+    if (field) field.value = text || "";
+  }
+
+  /** When Use Tools is on, Search + Tool Use replace the single Prompt field. */
+  function getStudioCreateTexts() {
+    if (studioToolsEnabled()) {
+      return {
+        toolsMode: true,
+        search: getStudioSearch(),
+        toolUse: getStudioToolUse(),
+        prompt: getStudioToolUse(),
+      };
+    }
+    return {
+      toolsMode: false,
+      search: "",
+      toolUse: "",
+      prompt: getStudioPrompt(),
+    };
+  }
+
+  function toolAliasesReferencedInText(text, aliases) {
+    const body = String(text || "");
+    const list = Array.isArray(aliases) ? aliases : [];
+    return list.filter((alias) => {
+      const name = String(alias || "").trim();
+      if (!name) return false;
+      // Word-ish boundary so "read_json" matches but not as a substring of nonsense.
+      const re = new RegExp(
+        "(^|[^A-Za-z0-9_])" + name.replace(/[.*+?^${}()|[\]\\]/g, "\\$&") + "([^A-Za-z0-9_]|$)"
+      );
+      return re.test(body);
+    });
+  }
+
   function extractCreationTextBody(creation) {
     if (!creation) return "";
     const parts = [];
@@ -1784,6 +1872,10 @@
       }
       clearStudioBasis();
       setStudioPrompt(seeded);
+      if (studioToolsEnabled()) {
+        setStudioSearch(seeded);
+        setStudioToolUse("");
+      }
       openWindow("form");
       showToast("Text loaded into Studio as basis — edit the prompt, then CREATE.");
       return;
@@ -1887,6 +1979,13 @@
     if (!(getStudioPrompt() || "").trim() && (creation.prompt || "").trim()) {
       setStudioPrompt(creation.prompt.trim());
     }
+    if (
+      studioToolsEnabled() &&
+      !(getStudioSearch() || "").trim() &&
+      (creation.prompt || "").trim()
+    ) {
+      setStudioSearch(creation.prompt.trim());
+    }
     renderStudioBasisPanel();
     return true;
   }
@@ -1903,8 +2002,15 @@
       }
       clearStudioBasis();
       setStudioPrompt(res.text || "");
+      if (studioToolsEnabled()) {
+        setStudioSearch(res.text || "");
+      }
       openWindow("form");
-      showToast("Text loaded into Studio prompt — edit and CREATE when ready.");
+      showToast(
+        studioToolsEnabled()
+          ? "Text loaded into Search — edit Search / Tool Use and CREATE when ready."
+          : "Text loaded into Studio prompt — edit and CREATE when ready."
+      );
     } catch (err) {
       showToast("Load failed: " + err);
     }
@@ -2023,6 +2129,9 @@
     }
     if (id === "video-edit" && !videoEdit.creationId) {
       prepareEmptyVideoEditor();
+    }
+    if (id === "form") {
+      syncStudioToolsPanel();
     }
   }
 
@@ -3671,7 +3780,23 @@
   function syncGeminiToolsAvailability() {
     // Tools may be combined with Search; only refresh Studio strip + two-pass (search-gated).
     syncGeminiTwoPassAvailability();
+    syncGeminiSearchEnrichmentAvailability();
     syncStudioToolsPanel();
+  }
+
+  function syncGeminiSearchEnrichmentAvailability() {
+    const search = $("#gemini-search");
+    const ocr = $("#gemini-ocr-search-images");
+    const ocrHint = $("#gemini-ocr-search-images-hint");
+    const yt = $("#gemini-youtube-search-captions");
+    const ytHint = $("#gemini-youtube-search-captions-hint");
+    const searchOn = !search || search.checked;
+    [ocr, yt].forEach((el) => {
+      if (el) el.disabled = !searchOn;
+    });
+    [ocrHint, ytHint].forEach((hint) => {
+      if (hint) hint.classList.toggle("muted", !searchOn);
+    });
   }
 
   function modelOptionLabel(m, maxLen) {
@@ -3974,6 +4099,13 @@
     }
     if ($("#gemini-use-tools")) {
       $("#gemini-use-tools").checked = !!gemini.use_tools;
+    }
+    if ($("#gemini-ocr-search-images")) {
+      $("#gemini-ocr-search-images").checked = gemini.ocr_search_images !== false;
+    }
+    if ($("#gemini-youtube-search-captions")) {
+      $("#gemini-youtube-search-captions").checked =
+        gemini.youtube_search_captions !== false;
     }
     syncGeminiToolsAvailability();
 
@@ -4374,6 +4506,12 @@
         google_search: $("#gemini-search") ? $("#gemini-search").checked : true,
         two_pass_verify: $("#gemini-two-pass") ? $("#gemini-two-pass").checked : true,
         use_tools: $("#gemini-use-tools") ? $("#gemini-use-tools").checked : false,
+        ocr_search_images: $("#gemini-ocr-search-images")
+          ? $("#gemini-ocr-search-images").checked
+          : true,
+        youtube_search_captions: $("#gemini-youtube-search-captions")
+          ? $("#gemini-youtube-search-captions").checked
+          : true,
         temperature: $("#gemini-temp") ? Number($("#gemini-temp").value) || 0 : 0,
       },
       openrouter: {
@@ -4812,7 +4950,9 @@
       return;
     }
 
-    const gameInput = $("#studio-prompt");
+    const gameInput = studioToolsEnabled()
+      ? $("#studio-search") || $("#studio-prompt")
+      : $("#studio-prompt");
     if (gameInput && picked.game && !gameInput.value.trim()) {
       gameInput.value = picked.game;
     }
@@ -4966,14 +5106,42 @@
         return;
       }
 
-      const prompt = getStudioPrompt().trim();
-      if (!prompt) {
+      const texts = getStudioCreateTexts();
+      const toolsOn = texts.toolsMode;
+      let toolAliases = toolsOn ? (state.studioTools || []).slice() : [];
+      let searchQuery = "";
+      let prompt = (texts.prompt || "").trim();
+
+      if (toolsOn) {
+        const search = (texts.search || "").trim();
+        const toolUse = (texts.toolUse || "").trim();
+        if (!toolUse) {
+          showToast(
+            "Cannot create — fill in Tool Use (describe the tool steps and reference attached aliases)."
+          );
+          return;
+        }
+        if (!toolAliases.length) {
+          showToast(
+            "Cannot create — Use Tools is on, so attach at least one tool with Add Tool…"
+          );
+          return;
+        }
+        const referenced = toolAliasesReferencedInText(toolUse, toolAliases);
+        if (!referenced.length) {
+          showToast(
+            "Cannot create — Tool Use must reference attached tools (e.g. " +
+              toolAliases.slice(0, 3).join(", ") +
+              ")."
+          );
+          return;
+        }
+        searchQuery = search;
+        prompt = toolUse;
+      } else if (!prompt) {
         showToast("Enter a prompt to create.");
         return;
       }
-
-      const toolsOn = studioToolsEnabled();
-      let toolAliases = toolsOn ? (state.studioTools || []).slice() : [];
 
       const basisId =
         (state.studioBasis && state.studioBasis.creationId) || "";
@@ -5035,9 +5203,11 @@
           showToast("Tools apply to text only — generating without tools.");
         }
         toolAliases = [];
-      } else if (toolsOn && !toolAliases.length) {
-        showToast("Use Tools is on — attach at least one tool with Add Tool…");
-        return;
+        searchQuery = "";
+        // Media path uses Search + Tool Use as the combined prompt.
+        const search = (texts.search || "").trim();
+        const toolUse = (texts.toolUse || "").trim();
+        prompt = [search, toolUse].filter(Boolean).join("\n\n") || prompt;
       }
 
       const game = ((opts && opts.game) || "Prompt").trim() || "Prompt";
@@ -5070,7 +5240,8 @@
           true,
           creationDescription,
           basisId,
-          toolAliases
+          toolAliases,
+          searchQuery
         );
       } catch (err) {
         applyGenerationError(err);
@@ -7392,6 +7563,8 @@
     if ($("#gemini-search")) {
       $("#gemini-search").addEventListener("change", () => {
         syncGeminiTwoPassAvailability();
+        syncGeminiSearchEnrichmentAvailability();
+        syncStudioToolsPanel();
       });
     }
 
