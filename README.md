@@ -10,7 +10,7 @@ A Windows 98–themed desktop studio for general-purpose AI creation: **text**, 
 
 - Win98 desktop UI (98.css) with draggable/minimizable windows, a taskbar, and a Start menu
 - **Creation Studio** — one freeform prompt box; the app infers text/image/video from your prompt and generation intent. With **Gemini Use Tools** enabled, Studio switches to **Search** (optional) + **Tool Use** for local file and PowerShell automation.
-- **Gemini Use Tools** (optional) — attach built-in tools (`read_json`, `write_json`, `read_text`, `write_text`, `execute_powershell`) and describe steps in natural language; Gemini calls them via function calling (text generations only, Windows for PowerShell)
+- **Gemini Use Tools** (optional) — attach built-in tools (`read_json`, `write_json`, `read_text`, `write_text`, `execute_powershell`, `search_gmail`) and describe steps in natural language; Gemini calls them via function calling (text generations only, Windows for PowerShell)
 - **Google Search enrichment** (optional, Gemini text) — when Search runs, the app can OCR images and pull YouTube captions from cited results before the tool or document pass
 - **Gemini** text, image, and video generation with separate model pickers per modality
 - **OpenRouter** — text, image, and video slots (Studio routes by prompt intent)
@@ -164,8 +164,20 @@ Enable **Control Panel → Use Tools (local file read/write)** and **Save**. Cre
 | `read_text` | Read a text file |
 | `write_text` | Write text to a file (overwrites) |
 | `execute_powershell` | Run a `.ps1` script (Windows only); returns `stdout`, `stderr`, and `exit_code` |
+| `search_gmail` | Search your Gmail inbox (read-only) using Gmail query syntax |
 
-All paths must be **absolute** (e.g. `C:\data\step1.json`). The model infers call order from your Tool Use text once tools are attached.
+### Gmail setup (`search_gmail`)
+
+1. In [Google Cloud Console](https://console.cloud.google.com/), create a project, enable the **Gmail API**, and create an OAuth client (**Desktop application**).
+2. Download the client JSON file.
+3. Control Panel → **Gemini** → **Gmail**: **Pick OAuth JSON…**, **Save**, then **Connect Gmail…** (one-time browser sign-in).
+4. In Creation Studio, attach `search_gmail` and describe what to check in **Tool Use** (e.g. unread mail, shipment tracking, a specific sender).
+
+Example queries the model may build: `is:unread in:inbox`, `category:purchases`, `subject:tracking newer_than:7d`, `from:amazon.com`.
+
+**Security note:** `search_gmail` is read-only (`gmail.readonly` scope). The OAuth token is stored under `.retro-98-ai-creator/` (gitignored).
+
+All paths for file tools must be **absolute** (e.g. `C:\data\step1.json`). The model infers call order from your Tool Use text once tools are attached.
 
 ### Example: PowerShell → text file (no web search)
 
@@ -193,7 +205,7 @@ All paths must be **absolute** (e.g. `C:\data\step1.json`). The model infers cal
 - **Search + tools**: Search pass first (Google Search + URL context, plus optional image OCR and YouTube captions), then a separate tool pass that uses the research brief. Search and file tools are not combined in a single Gemini call (avoids the model skipping search or inventing file contents).
 - **Image/video prompts** with tools on: tools are dropped for that run; Search and Tool Use text are merged into a normal media prompt instead.
 
-**Security note:** tools read and write files on your machine and `execute_powershell` runs scripts you point at. Only attach tools you trust for the paths you specify.
+**Security note:** tools read and write files on your machine, `execute_powershell` runs scripts you point at, and `search_gmail` reads your inbox when connected. Only attach tools you trust.
 
 ## OpenRouter setup
 

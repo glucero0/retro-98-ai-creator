@@ -30,6 +30,10 @@ archives.json
 media/
 .retro-98-ai-creator/
 
+# Google OAuth client secrets (Gmail search_gmail — never commit)
+client_secret*.json
+*credentials.json
+
 # Hugging Face / torch caches (never commit weights)
 .cache/
 *.bin

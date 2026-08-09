@@ -181,6 +181,36 @@ class Api:
         """Built-in Gemini file tools available when Use Tools is enabled."""
         return {"ok": True, "tools": self._gemini_tools_catalog()}
 
+    def get_gmail_auth_status(self) -> dict[str, Any]:
+        """Whether Gmail OAuth client + token are configured for search_gmail."""
+        from .gmail_client import gmail_auth_status
+
+        return gmail_auth_status(self.config)
+
+    def authorize_gmail(self) -> dict[str, Any]:
+        """Run desktop OAuth for Gmail read-only access (opens browser)."""
+        from .gmail_client import authorize_gmail
+
+        return authorize_gmail(self.config)
+
+    def pick_gmail_credentials(self) -> dict[str, Any]:
+        """Pick a Google OAuth client JSON file for Gmail."""
+        import webview
+
+        if self._window is None:
+            return {"ok": False, "error": "No window"}
+        result = self._window.create_file_dialog(
+            _file_dialog("open"),
+            allow_multiple=False,
+            file_types=("JSON (*.json)", "All Files (*.*)"),
+        )
+        if not result:
+            return {"ok": False, "cancelled": True}
+        path = Path(result if isinstance(result, str) else result[0])
+        if not path.is_file():
+            return {"ok": False, "error": f"File not found: {path}"}
+        return {"ok": True, "path": str(path.resolve())}
+
     def _public_config(self) -> dict[str, Any]:
         cfg = self.config
         gemini = dict(cfg.get("gemini") or {})
@@ -205,6 +235,7 @@ class Api:
             "openrouter": openrouter,
             "huggingface": dict(cfg.get("huggingface") or {}),
             "prompt": dict(cfg.get("prompt") or {}),
+            "gmail": dict(cfg.get("gmail") or {}),
             "ui": dict(cfg.get("ui") or {}),
             "paths": dict(cfg.get("paths") or {}),
         }

@@ -4109,6 +4109,12 @@
     }
     syncGeminiToolsAvailability();
 
+    const gmailCfg = (boot.config && boot.config.gmail) || {};
+    if ($("#gmail-credentials-path")) {
+      $("#gmail-credentials-path").value = gmailCfg.credentials_path || "";
+    }
+    void refreshGmailAuthStatus();
+
     const suggested = boot.suggestedGeminiModels || [];
     fillGeminiModalitySelect(
       $("#gemini-text-model"),
@@ -4399,6 +4405,56 @@
     }
   }
 
+  function updateGmailAuthIndicators(status) {
+    const pathInput = $("#gmail-credentials-path");
+    const configured = !!(pathInput && pathInput.value.trim());
+    const badge = $("#gmail-auth-badge");
+    const statusEl = $("#gmail-auth-status");
+    const authorized = !!(status && status.authorized);
+
+    if (badge) {
+      if (authorized) {
+        badge.textContent = "Connected";
+        badge.classList.add("key-badge-set");
+        badge.classList.remove("key-badge-missing");
+      } else if (configured) {
+        badge.textContent = "Not connected";
+        badge.classList.remove("key-badge-set");
+        badge.classList.add("key-badge-missing");
+      } else {
+        badge.textContent = "Not configured";
+        badge.classList.remove("key-badge-set");
+        badge.classList.add("key-badge-missing");
+      }
+    }
+    if (statusEl) {
+      if (authorized) {
+        statusEl.textContent =
+          "Gmail is connected. Attach search_gmail in Studio to query your inbox.";
+      } else if (configured) {
+        statusEl.textContent =
+          "OAuth client JSON selected. Save settings, then click Connect Gmail.";
+      } else {
+        statusEl.textContent =
+          "Pick an OAuth client JSON, Save, then Connect Gmail.";
+      }
+    }
+  }
+
+  async function refreshGmailAuthStatus() {
+    try {
+      const a = api();
+      if (!a) {
+        updateGmailAuthIndicators();
+        return;
+      }
+      const res = await a.get_gmail_auth_status();
+      updateGmailAuthIndicators(res);
+    } catch (_err) {
+      updateGmailAuthIndicators();
+    }
+  }
+
   function providerApiKeyReady(provider) {
     if (provider === "huggingface") return true;
 
@@ -4547,6 +4603,12 @@
       },
       prompt: {
         extra_instructions: ($("#system-extra") && $("#system-extra").value) || "",
+      },
+      gmail: {
+        credentials_path:
+          ($("#gmail-credentials-path") && $("#gmail-credentials-path").value.trim()) ||
+          null,
+        token_path: ".retro-98-ai-creator/gmail_token.json",
       },
       ui: {
         sound_enabled: $("#opt-sound").checked,
@@ -7608,6 +7670,59 @@
     if ($("#btn-gemini-refresh-models")) {
       $("#btn-gemini-refresh-models").addEventListener("click", () => {
         void refreshGeminiModelsForControlPanel();
+      });
+    }
+
+    if ($("#btn-gmail-pick-credentials")) {
+      $("#btn-gmail-pick-credentials").addEventListener("click", async () => {
+        const a = api();
+        if (!a) {
+          showToast("Python bridge not ready.");
+          return;
+        }
+        const res = await a.pick_gmail_credentials();
+        if (res.cancelled) return;
+        if (!res.ok) {
+          showToast(res.error || "Could not pick OAuth client JSON");
+          return;
+        }
+        if ($("#gmail-credentials-path")) {
+          $("#gmail-credentials-path").value = res.path || "";
+        }
+        updateGmailAuthIndicators();
+      });
+    }
+
+    if ($("#btn-gmail-connect")) {
+      $("#btn-gmail-connect").addEventListener("click", async () => {
+        const a = api();
+        if (!a) {
+          showToast("Python bridge not ready.");
+          return;
+        }
+        const path =
+          ($("#gmail-credentials-path") && $("#gmail-credentials-path").value.trim()) ||
+          "";
+        if (!path) {
+          showToast("Pick OAuth client JSON before connecting.");
+          return;
+        }
+        const saved =
+          (state.config &&
+            state.config.gmail &&
+            state.config.gmail.credentials_path) ||
+          "";
+        if (saved !== path) {
+          showToast("Save settings first so the OAuth JSON path is stored.");
+          return;
+        }
+        const res = await a.authorize_gmail();
+        if (!res.ok) {
+          showToast(res.error || "Gmail authorization failed");
+          return;
+        }
+        showToast(res.message || "Gmail connected.");
+        await refreshGmailAuthStatus();
       });
     }
 

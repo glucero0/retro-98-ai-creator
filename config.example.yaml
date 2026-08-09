@@ -67,5 +67,10 @@ paths:
   archives: archives.json
   media: media
 
+gmail:
+  # OAuth client JSON from Google Cloud Console (Desktop application type)
+  credentials_path: null
+  token_path: .retro-98-ai-creator/gmail_token.json
+
 # Video Edit (Viewer → Edit on a video) requires ffmpeg + ffprobe on PATH
 # (or a common Windows install location). Install from https://ffmpeg.org/

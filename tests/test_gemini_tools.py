@@ -36,6 +36,7 @@ def test_catalog_aliases():
         "read_text",
         "write_text",
         "execute_powershell",
+        "search_gmail",
     ]
 
 
@@ -113,6 +114,20 @@ def test_unknown_tool():
     result = execute_tool("launch_missiles", {"path": "C:/x"})
     assert result["ok"] is False
     assert "unknown" in result["error"].lower()
+
+
+def test_execute_search_gmail_delegates():
+    with patch(
+        "retro_98_ai_creator.gmail_client.search_gmail",
+        return_value={"ok": True, "query": "is:unread", "count": 0, "messages": []},
+    ) as mock_search:
+        result = execute_tool("search_gmail", {"query": "is:unread"})
+    mock_search.assert_called_once_with(
+        "is:unread",
+        max_results=None,
+        include_body=False,
+    )
+    assert result["ok"] is True
 
 
 def test_execute_powershell_returns_stdout(tmp_path: Path):

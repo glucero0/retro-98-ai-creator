@@ -43,6 +43,11 @@ TOOL_CATALOG: list[dict[str, str]] = [
         "display_name": "Execute PowerShell",
         "summary": "Run a .ps1 script at an absolute path; returns stdout, stderr, and exit code",
     },
+    {
+        "alias": "search_gmail",
+        "display_name": "Search Gmail",
+        "summary": "Search Gmail with query syntax (unread, shipments, specific senders, etc.)",
+    },
 ]
 
 _ALIAS_SET = {t["alias"] for t in TOOL_CATALOG}
@@ -243,6 +248,23 @@ def execute_tool(name: str, args: dict[str, Any] | None) -> dict[str, Any]:
                     return {"ok": False, "error": "arguments must be an array of strings"}
                 arguments = [str(a) for a in raw_args]
             return _execute_powershell_script(path, arguments)
+        if alias == "search_gmail":
+            from .gmail_client import search_gmail as gmail_search
+
+            query = str(params.get("query") or "").strip()
+            raw_max = params.get("max_results")
+            max_results: int | None = None
+            if raw_max is not None:
+                try:
+                    max_results = int(raw_max)
+                except (TypeError, ValueError):
+                    return {"ok": False, "error": "max_results must be an integer"}
+            include_body = bool(params.get("include_body"))
+            return gmail_search(
+                query,
+                max_results=max_results,
+                include_body=include_body,
+            )
         return {"ok": False, "error": f"unhandled tool: {alias!r}"}
     except Exception as exc:  # noqa: BLE001
         logger.info("Tool %s failed: %s", alias, exc)
@@ -365,6 +387,43 @@ def function_declarations_for(aliases: list[str] | None) -> list[Any]:
                             },
                         },
                         "required": ["path"],
+                    },
+                )
+            )
+        elif alias == "search_gmail":
+            decls.append(
+                types.FunctionDeclaration(
+                    name="search_gmail",
+                    description=(
+                        "Search the user's Gmail inbox using Gmail search syntax. "
+                        "Examples: is:unread in:inbox; category:purchases; "
+                        "subject:tracking; from:amazon.com newer_than:7d; "
+                        "is:unread to:me -from:noreply. "
+                        "Returns message metadata (from, subject, date, snippet, labels) "
+                        "and optional full plain-text bodies. Read-only."
+                    ),
+                    parameters_json_schema={
+                        "type": "object",
+                        "properties": {
+                            "query": {
+                                "type": "string",
+                                "description": "Gmail search query (same syntax as Gmail search box)",
+                            },
+                            "max_results": {
+                                "type": "integer",
+                                "description": (
+                                    "Maximum messages to return (default 20, max 50)"
+                                ),
+                            },
+                            "include_body": {
+                                "type": "boolean",
+                                "description": (
+                                    "When true, fetch plain-text body for each message "
+                                    "(larger response; use for detailed analysis)"
+                                ),
+                            },
+                        },
+                        "required": ["query"],
                     },
                 )
             )
