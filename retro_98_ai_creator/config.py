@@ -98,6 +98,12 @@ DEFAULTS: dict[str, Any] = {
         "archives": "archives.json",
         "media": "media",
     },
+    "gmail": {
+        # OAuth client JSON from Google Cloud (Desktop app) — set via Control Panel
+        "credentials_path": None,
+        # Authorized-user token (gitignored under .retro-98-ai-creator/)
+        "token_path": ".retro-98-ai-creator/gmail_token.json",
+    },
 }
 
 
@@ -245,6 +251,8 @@ def save_config(updates: dict[str, Any], existing: dict[str, Any] | None = None)
     huggingface_out = normalize_huggingface_cfg(merged.get("huggingface") or {})
     prompt_out = dict(merged.get("prompt") or {})
     prompt_out.setdefault("extra_instructions", "")
+    gmail_out = dict(merged.get("gmail") or {})
+    gmail_out.setdefault("token_path", DEFAULTS["gmail"]["token_path"])
 
     to_write = {
         "backend": merged.get("backend", {}),
@@ -252,6 +260,7 @@ def save_config(updates: dict[str, Any], existing: dict[str, Any] | None = None)
         "openrouter": openrouter_out,
         "huggingface": huggingface_out,
         "prompt": prompt_out,
+        "gmail": gmail_out,
         "ui": ui_out,
         "paths": {
             "archives": paths.get("archives") or DEFAULTS["paths"]["archives"],
@@ -264,6 +273,7 @@ def save_config(updates: dict[str, Any], existing: dict[str, Any] | None = None)
     merged["openrouter"] = openrouter_out
     merged["huggingface"] = huggingface_out
     merged["prompt"] = prompt_out
+    merged["gmail"] = gmail_out
     merged["ui"] = ui_out
     return merged
 

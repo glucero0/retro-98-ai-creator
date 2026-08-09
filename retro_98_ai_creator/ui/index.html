@@ -319,11 +319,38 @@
                     <label for="gemini-use-tools">Use Tools (local file read/write)</label>
                   </div>
                   <p class="hint" id="gemini-use-tools-hint">
-                    Enables built-in file tools in Creator (read_json, write_json, read_text,
-                    write_text, execute_powershell) via Gemini function calling. Absolute paths
-                    only; overwrites allowed. Google Search is optional: when on, Creator can run a deep Search (+ URL context) research pass
+                    Enables built-in tools in Creator (read_json, write_json, read_text,
+                    write_text, execute_powershell, search_gmail) via Gemini function calling.
+                    Absolute paths only for file tools; overwrites allowed. Google Search is optional:
+                    when on, Creator can run a deep Search (+ URL context) research pass
                     before file tools; when off, only Tool Use runs. Text prompts only.
                   </p>
+                  <fieldset id="gmail-settings">
+                    <legend>Gmail (search_gmail tool)</legend>
+                    <p class="hint">
+                      Read-only inbox search for the <code>search_gmail</code> tool.
+                      Create a Google Cloud project, enable the Gmail API, and download an
+                      OAuth client JSON (<strong>Desktop application</strong> type). Pick it
+                      below, Save, then Connect Gmail once.
+                    </p>
+                    <div class="field-row-stacked">
+                      <label for="gmail-credentials-path">
+                        <span>OAuth client JSON</span>
+                        <span class="label-hint" id="gmail-auth-badge">Not configured</span>
+                      </label>
+                      <input
+                        id="gmail-credentials-path"
+                        type="text"
+                        readonly
+                        placeholder="Pick OAuth client JSON…"
+                      />
+                    </div>
+                    <div class="form-actions">
+                      <button type="button" id="btn-gmail-pick-credentials">Pick OAuth JSON…</button>
+                      <button type="button" id="btn-gmail-connect">Connect Gmail…</button>
+                    </div>
+                    <p class="hint" id="gmail-auth-status"></p>
+                  </fieldset>
                   <div class="field-row">
                     <input type="checkbox" id="gemini-ocr-search-images" checked />
                     <label for="gemini-ocr-search-images">OCR images from search</label>
