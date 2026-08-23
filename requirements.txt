@@ -12,9 +12,9 @@ clr_loader==0.3.1; sys_platform == "win32"
 colorama==0.4.6
 cryptography==50.0.0
 distro==1.9.0
-google-auth==2.56.2
+google-auth==2.56.3
 google-auth-oauthlib==1.4.0
-google-genai==2.16.0
+google-genai==2.17.0
 google-api-core==2.34.0
 google-api-python-client==2.198.0
 google-auth-httplib2==0.4.1
@@ -31,14 +31,14 @@ httpcore==1.0.9
 httpx==0.28.1
 idna==3.18
 iniconfig==2.3.0
-packaging==26.2
+packaging==26.3
 pluggy==1.6.0
 proxy_tools==0.1.0
 pyasn1==0.6.4
 pyasn1_modules==0.4.2
 pycparser==3.0
 pydantic==2.13.4
-pydantic_core==2.46.4
+pydantic_core==2.48.0
 Pygments==2.20.0
 pytest==9.1.1
 pythonnet==3.1.0; sys_platform == "win32"
