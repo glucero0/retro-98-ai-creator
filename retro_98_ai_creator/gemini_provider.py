@@ -687,8 +687,7 @@ def _generate_text_with_gemini(
 
     from .gemini_tools import normalize_tool_aliases
 
-    use_tools_cfg = bool(gemini_cfg.get("use_tools"))
-    selected_tools = normalize_tool_aliases(tool_aliases) if use_tools_cfg else []
+    selected_tools = normalize_tool_aliases(tool_aliases)
     use_tools = bool(selected_tools)
 
     use_search = bool(gemini_cfg.get("google_search", True))

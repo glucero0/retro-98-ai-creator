@@ -33,6 +33,7 @@
     studioTools: [], // selected Gemini tool aliases for this session
     geminiToolsCatalog: null, // from bootstrap / list_gemini_tools
     studioAddToolOpen: false,
+    studioEnableTools: false,
     appTheme: "light",
     customTheme: {
       desktopColor: "#008080",
@@ -1273,11 +1274,30 @@
     });
   }
 
-  function studioToolsEnabled() {
+  function studioGeminiBackend() {
     const cfg = state.config || {};
     const backend = (cfg.backend && cfg.backend.provider) || "gemini";
+    return backend === "gemini";
+  }
+
+  function studioToolsEnabled() {
+    if (!studioGeminiBackend()) return false;
+    const box = $("#studio-enable-tools");
+    if (box) return !!box.checked;
+    return !!state.studioEnableTools;
+  }
+
+  function applyStudioEnableToolsFromConfig() {
+    const cfg = state.config || {};
     const gemini = cfg.gemini || {};
-    return backend === "gemini" && !!gemini.use_tools;
+    const available = studioGeminiBackend();
+    const on = available && !!gemini.use_tools;
+    state.studioEnableTools = on;
+    const box = $("#studio-enable-tools");
+    if (box) {
+      box.checked = on;
+      box.disabled = !available;
+    }
   }
 
   function studioGoogleSearchEnabled() {
@@ -1316,6 +1336,16 @@
         display_name: "Execute PowerShell",
         summary: "Run a .ps1 script at an absolute path; returns stdout, stderr, and exit code",
       },
+      {
+        alias: "search_gmail",
+        display_name: "Search Gmail",
+        summary: "Search Gmail with query syntax (unread, shipments, specific senders, etc.)",
+      },
+      {
+        alias: "browse_web",
+        display_name: "Browse Web",
+        summary: "Open an http(s) URL, read the page, and follow its links",
+      },
     ];
   }
 
@@ -1331,8 +1361,22 @@
     const searchWrap = $("#studio-search-wrap");
     const toolUseWrap = $("#studio-tool-use-wrap");
     const loadHint = $("#studio-load-hint");
+    const available = studioGeminiBackend();
     const enabled = studioToolsEnabled();
     const searchOn = studioGoogleSearchEnabled();
+    const box = $("#studio-enable-tools");
+    const hint = $("#studio-enable-tools-hint");
+
+    if (box) {
+      box.disabled = !available;
+      state.studioEnableTools = !!box.checked && available;
+    }
+    if (hint) {
+      hint.textContent = available
+        ? "Toggle tools for this Studio session without opening Control Panel. Control Panel → Use Tools is the default on launch."
+        : "Tools require the Gemini backend. Switch provider in Control Panel, then Save.";
+      hint.classList.toggle("muted", !available);
+    }
 
     if (form) {
       form.classList.toggle("studio-tools-mode", !!enabled);
@@ -1352,9 +1396,6 @@
         loadHint.textContent =
           "Google Search is off — only Tool Use runs. Load Image / Video sets a media basis shown on the right — then describe the change and CREATE. To reuse something already in Archives, open it in the Viewer and choose Use as Basis.";
       }
-    }
-    if (!enabled) {
-      state.studioTools = [];
     }
     renderStudioToolsList();
   }
@@ -2740,8 +2781,13 @@
       // clientWidth is in the same CSS-px space as offsetWidth under document zoom
       const deskW = layer ? layer.clientWidth : window.innerWidth;
       const deskH = layer ? layer.clientHeight : window.innerHeight;
-      const minW = 320;
-      const minH = 180;
+      const minW =
+        resizeState.win.id === "win-form"
+          ? resizeState.win.classList.contains("has-studio-basis")
+            ? 720
+            : 400
+          : 320;
+      const minH = resizeState.win.id === "win-form" ? 400 : 180;
       let nextW = resizeState.origW + (e.clientX - resizeState.startX) / scale;
       let nextH = resizeState.origH + (e.clientY - resizeState.startY) / scale;
       nextW = Math.max(minW, Math.min(nextW, deskW - resizeState.origLeft - 8));
@@ -4100,6 +4146,7 @@
     if ($("#gemini-use-tools")) {
       $("#gemini-use-tools").checked = !!gemini.use_tools;
     }
+    applyStudioEnableToolsFromConfig();
     if ($("#gemini-ocr-search-images")) {
       $("#gemini-ocr-search-images").checked = gemini.ocr_search_images !== false;
     }
@@ -4429,8 +4476,9 @@
     }
     if (statusEl) {
       if (authorized) {
-        statusEl.textContent =
-          "Gmail is connected. Attach search_gmail in Studio to query your inbox.";
+        statusEl.textContent = status && status.has_refresh_token === false
+          ? "Gmail is connected, but Google did not issue a refresh token. Click Connect Gmail again so the session can renew after the hourly access token expires."
+          : "Gmail is connected. Attach search_gmail in Studio to query your inbox.";
       } else if (configured) {
         statusEl.textContent =
           "OAuth client JSON selected. Save settings, then click Connect Gmail.";
@@ -7636,10 +7684,28 @@
       });
     }
 
+    if ($("#studio-enable-tools")) {
+      $("#studio-enable-tools").addEventListener("change", () => {
+        const enabled = studioToolsEnabled();
+        if (enabled) {
+          const prompt = getStudioPrompt();
+          if (prompt && !getStudioToolUse()) {
+            setStudioToolUse(prompt);
+          }
+        } else {
+          const toolUse = getStudioToolUse();
+          if (toolUse && !getStudioPrompt()) {
+            setStudioPrompt(toolUse);
+          }
+        }
+        syncStudioToolsPanel();
+      });
+    }
+
     if ($("#btn-studio-add-tool")) {
       $("#btn-studio-add-tool").addEventListener("click", async () => {
         if (!studioToolsEnabled()) {
-          showToast("Enable Use Tools in Control Panel → Gemini, then Save.");
+          showToast("Turn on Enable Tools in Creation Studio first.");
           return;
         }
         const alias = await showAddToolDialog();

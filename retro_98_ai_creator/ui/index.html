@@ -66,6 +66,14 @@
           <div class="studio-layout" id="studio-layout">
             <div class="studio-main">
               <form id="create-form">
+                <div class="field-row" id="studio-enable-tools-row">
+                  <input type="checkbox" id="studio-enable-tools" />
+                  <label for="studio-enable-tools">Enable Tools</label>
+                </div>
+                <p class="hint" id="studio-enable-tools-hint">
+                  Toggle tools for this Studio session without opening Control Panel.
+                  Requires Gemini. Control Panel → Use Tools is the default on launch.
+                </p>
                 <div id="studio-prompt-wrap" class="field-row-stacked">
                   <label for="studio-prompt">Prompt</label>
                   <textarea
@@ -95,10 +103,10 @@
                     <ul id="studio-tools-list" class="studio-tools-list" aria-label="Attached tools"></ul>
                     <p class="hint" id="studio-tools-hint">
                       Attach tools for this run, then reference them by alias in Tool Use
-                      (for example: use <code>execute_powershell</code> on
-                      <code>c:\scripts\getdir.ps1</code>, then <code>write_text</code> the
-                      returned stdout to <code>c:\output\dirs.txt</code>).
-                      Absolute paths only. Tools apply to text generations.
+                      (for example: use <code>browse_web</code> on a URL, or
+                      <code>execute_powershell</code> on <code>c:\scripts\getdir.ps1</code>
+                      then <code>write_text</code> the stdout). File tools need absolute
+                      paths. Tools apply to text generations.
                     </p>
                   </fieldset>
                 </div>
@@ -319,8 +327,9 @@
                     <label for="gemini-use-tools">Use Tools (local file read/write)</label>
                   </div>
                   <p class="hint" id="gemini-use-tools-hint">
-                    Enables built-in tools in Creator (read_json, write_json, read_text,
-                    write_text, execute_powershell, search_gmail) via Gemini function calling.
+                    Default for Creation Studio’s Enable Tools toggle (Studio can still
+                    override per session). Enables built-in tools (read_json, write_json, read_text,
+                    write_text, execute_powershell, search_gmail, browse_web) via Gemini function calling.
                     Absolute paths only for file tools; overwrites allowed. Google Search is optional:
                     when on, Creator can run a deep Search (+ URL context) research pass
                     before file tools; when off, only Tool Use runs. Text prompts only.
@@ -331,7 +340,10 @@
                       Read-only inbox search for the <code>search_gmail</code> tool.
                       Create a Google Cloud project, enable the Gmail API, and download an
                       OAuth client JSON (<strong>Desktop application</strong> type). Pick it
-                      below, Save, then Connect Gmail once.
+                      below, Save, then Connect Gmail once. Google access tokens last about
+                      an hour; Creator refreshes them automatically. If you have to reconnect
+                      every week, publish the OAuth consent screen (Testing → In production)
+                      in Google Cloud Console, then Connect Gmail again.
                     </p>
                     <div class="field-row-stacked">
                       <label for="gmail-credentials-path">

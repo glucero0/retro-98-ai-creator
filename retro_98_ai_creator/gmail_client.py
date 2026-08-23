@@ -88,7 +88,14 @@ def get_gmail_credentials(cfg: dict[str, Any] | None = None) -> Any | None:
     if not creds:
         return None
     if not creds.valid:
-        creds = _refresh_credentials(creds)
+        if not getattr(creds, "refresh_token", None):
+            logger.info("Gmail token expired and no refresh token is stored.")
+            return None
+        try:
+            creds = _refresh_credentials(creds)
+        except Exception as exc:  # noqa: BLE001
+            logger.info("Gmail token refresh failed: %s", exc)
+            return None
         if creds and creds.valid:
             _save_credentials(creds, token_path)
     return creds if creds and creds.valid else None
@@ -99,11 +106,13 @@ def gmail_auth_status(cfg: dict[str, Any] | None = None) -> dict[str, Any]:
     cfg = cfg or load_config()
     creds_path = _credentials_path(cfg)
     token_path = _token_path(cfg)
+    stored = _load_stored_credentials(token_path)
     creds = get_gmail_credentials(cfg)
     return {
         "ok": True,
         "configured": creds_path is not None and creds_path.is_file(),
         "authorized": creds is not None,
+        "has_refresh_token": bool(stored and getattr(stored, "refresh_token", None)),
         "credentials_path": str(creds_path) if creds_path else "",
         "token_path": str(token_path),
     }
@@ -145,7 +154,14 @@ def authorize_gmail(cfg: dict[str, Any] | None = None) -> dict[str, Any]:
     token_path = _token_path(cfg)
     try:
         flow = InstalledAppFlow.from_client_secrets_file(str(creds_path), GMAIL_SCOPES)
-        creds = flow.run_local_server(port=0, open_browser=True)
+        creds = flow.run_local_server(
+            port=0,
+            open_browser=True,
+            access_type="offline",
+            prompt="consent",
+        )
+        if not getattr(creds, "refresh_token", None):
+            logger.warning("Gmail authorization did not return a refresh token.")
         _save_credentials(creds, token_path)
     except Exception as exc:  # noqa: BLE001
         logger.warning("Gmail authorization failed: %s", exc)
