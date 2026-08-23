@@ -889,6 +889,18 @@ ul[role="tablist"] li[role="tab"] a:focus {
   margin-top: 6px;
 }
 
+#studio-enable-tools-row {
+  margin: 0 0 4px;
+}
+
+#studio-enable-tools-hint {
+  margin: 0 0 8px;
+}
+
+#studio-enable-tools-hint.muted {
+  opacity: 0.7;
+}
+
 .studio-tools-panel {
   margin-top: 8px;
 }
@@ -940,13 +952,100 @@ ul[role="tablist"] li[role="tab"] a:focus {
 .studio-layout {
   display: flex;
   gap: 10px;
-  align-items: flex-start;
+  align-items: stretch;
   min-width: 0;
 }
 
 .studio-main {
   flex: 1 1 auto;
   min-width: 0;
+}
+
+/* Fill the Studio window: prompt (or Search / Tool Use) grows with the dialog. */
+#win-form {
+  min-width: 400px;
+  min-height: 400px;
+}
+
+#win-form > .window-body {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  overflow: auto;
+}
+
+#win-form .mission-banner,
+#win-form #studio-enable-tools-row,
+#win-form #studio-enable-tools-hint,
+#win-form #studio-tools-panel,
+#win-form #studio-tools-hint,
+#win-form .form-actions,
+#win-form #studio-load-hint,
+#win-form #studio-status-bar {
+  flex-shrink: 0;
+}
+
+#win-form #studio-layout {
+  flex: 1 1 auto;
+  min-height: 0;
+}
+
+#win-form .studio-main,
+#win-form #create-form {
+  display: flex;
+  flex-direction: column;
+  flex: 1 1 auto;
+  min-height: 0;
+  min-width: 0;
+}
+
+#win-form #studio-prompt-wrap,
+#win-form #create-form.studio-tools-mode #studio-search-wrap,
+#win-form #create-form.studio-tools-mode #studio-tool-use-wrap {
+  display: flex;
+  flex-direction: column;
+  flex: 1 1 auto;
+  min-height: 0;
+}
+
+#win-form #create-form.studio-tools-mode #studio-tool-use-wrap {
+  flex: 1.35 1 auto;
+}
+
+#win-form #studio-prompt,
+#win-form #studio-search,
+#win-form #studio-tool-use {
+  flex: 1 1 auto;
+  width: 100%;
+  min-height: 5em;
+  max-height: none;
+  height: auto;
+  resize: none;
+}
+
+#win-form.has-studio-basis .studio-basis-panel {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  align-self: stretch;
+}
+
+#win-form.has-studio-basis .studio-basis-panel fieldset {
+  display: flex;
+  flex-direction: column;
+  flex: 1 1 auto;
+  min-height: 0;
+}
+
+#win-form.has-studio-basis .studio-basis-preview {
+  flex: 1 1 auto;
+  min-height: 120px;
+  max-height: none;
+}
+
+#win-form.has-studio-basis .studio-basis-preview img,
+#win-form.has-studio-basis .studio-basis-preview video {
+  max-height: 100%;
 }
 
 .studio-basis-panel {

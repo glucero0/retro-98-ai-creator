@@ -237,8 +237,10 @@ def build_general_text_prompt(
             "\n\nAVAILABLE TOOLS:\n"
             f"You may call these tools by name when the user prompt requires them: {names}.\n"
             "Use absolute filesystem paths from the user prompt as tool arguments.\n"
-            "Call tools as needed (for example execute_powershell then write_text, or "
-            "read_json then write_json), then give a brief "
+            "For browse_web, pass a full http(s) URL (you may construct query URLs) "
+            "and follow returned links with more browse_web calls to traverse a site.\n"
+            "Call tools as needed (for example execute_powershell then write_text, "
+            "read_json then write_json, or browse_web then write_text), then give a brief "
             "final text summary of what you did.\n"
         )
         if with_search and not (research_context or "").strip():

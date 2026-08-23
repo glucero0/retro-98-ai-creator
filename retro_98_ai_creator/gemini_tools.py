@@ -48,6 +48,11 @@ TOOL_CATALOG: list[dict[str, str]] = [
         "display_name": "Search Gmail",
         "summary": "Search Gmail with query syntax (unread, shipments, specific senders, etc.)",
     },
+    {
+        "alias": "browse_web",
+        "display_name": "Browse Web",
+        "summary": "Open an http(s) URL, read the page, and follow its links",
+    },
 ]
 
 _ALIAS_SET = {t["alias"] for t in TOOL_CATALOG}
@@ -265,6 +270,25 @@ def execute_tool(name: str, args: dict[str, Any] | None) -> dict[str, Any]:
                 max_results=max_results,
                 include_body=include_body,
             )
+        if alias == "browse_web":
+            from .web_browse import browse_web as web_browse
+
+            page_url = str(params.get("url") or "").strip()
+            raw_max = params.get("max_chars")
+            max_chars: int | None = None
+            if raw_max is not None:
+                try:
+                    max_chars = int(raw_max)
+                except (TypeError, ValueError):
+                    return {"ok": False, "error": "max_chars must be an integer"}
+            include_links = True
+            if "include_links" in params:
+                include_links = bool(params.get("include_links"))
+            return web_browse(
+                page_url,
+                include_links=include_links,
+                max_chars=max_chars,
+            )
         return {"ok": False, "error": f"unhandled tool: {alias!r}"}
     except Exception as exc:  # noqa: BLE001
         logger.info("Tool %s failed: %s", alias, exc)
@@ -424,6 +448,46 @@ def function_declarations_for(aliases: list[str] | None) -> list[Any]:
                             },
                         },
                         "required": ["query"],
+                    },
+                )
+            )
+        elif alias == "browse_web":
+            decls.append(
+                types.FunctionDeclaration(
+                    name="browse_web",
+                    description=(
+                        "Fetch an http(s) URL and return readable page text plus outbound "
+                        "links so you can traverse the web. You may construct the URL "
+                        "(including query strings and paths) before calling. After a page "
+                        "loads, pick a returned link and call browse_web again to follow it. "
+                        "Use this for a specific page; use Google Search when you need to "
+                        "discover URLs first. Do not use file:// or local filesystem paths."
+                    ),
+                    parameters_json_schema={
+                        "type": "object",
+                        "properties": {
+                            "url": {
+                                "type": "string",
+                                "description": (
+                                    "http(s) URL to open. May be constructed "
+                                    "(for example https://example.com/search?q=term)."
+                                ),
+                            },
+                            "include_links": {
+                                "type": "boolean",
+                                "description": (
+                                    "When true (default), include outbound links for traversal"
+                                ),
+                            },
+                            "max_chars": {
+                                "type": "integer",
+                                "description": (
+                                    "Maximum extracted text characters to return "
+                                    "(default 24000, max 48000)"
+                                ),
+                            },
+                        },
+                        "required": ["url"],
                     },
                 )
             )

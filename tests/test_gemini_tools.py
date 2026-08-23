@@ -37,6 +37,7 @@ def test_catalog_aliases():
         "write_text",
         "execute_powershell",
         "search_gmail",
+        "browse_web",
     ]
 
 
@@ -126,6 +127,23 @@ def test_execute_search_gmail_delegates():
         "is:unread",
         max_results=None,
         include_body=False,
+    )
+    assert result["ok"] is True
+
+
+def test_execute_browse_web_delegates():
+    with patch(
+        "retro_98_ai_creator.web_browse.browse_web",
+        return_value={"ok": True, "url": "https://example.com/", "text": "Hello", "links": []},
+    ) as mock_browse:
+        result = execute_tool(
+            "browse_web",
+            {"url": "https://example.com/", "include_links": True, "max_chars": 1000},
+        )
+    mock_browse.assert_called_once_with(
+        "https://example.com/",
+        include_links=True,
+        max_chars=1000,
     )
     assert result["ok"] is True
 
@@ -318,6 +336,61 @@ def test_tool_loop_mock(tmp_path: Path):
     assert result["sections"][0]["content"] == "Loaded JSON and ready."
     assert (result.get("_model") or {}).get("use_tools") is True
     assert (result.get("_model") or {}).get("tools") == ["read_json", "write_json"]
+    assert client.models.generate_content.call_count == 2
+
+
+def test_tool_loop_runs_when_aliases_sent_even_if_config_use_tools_false(tmp_path: Path):
+    """Studio Enable Tools override sends aliases without Control Panel use_tools."""
+    from retro_98_ai_creator import gemini_provider as gp
+
+    src = tmp_path / "step1.json"
+    src.write_text(json.dumps({"ok": True}), encoding="utf-8")
+
+    fc_part = SimpleNamespace(
+        function_call=SimpleNamespace(
+            name="read_json",
+            args={"path": str(src.resolve())},
+        ),
+        text=None,
+    )
+    first = SimpleNamespace(
+        text=None,
+        candidates=[SimpleNamespace(content=SimpleNamespace(role="model", parts=[fc_part]))],
+    )
+    second = SimpleNamespace(
+        text="Done.",
+        candidates=[
+            SimpleNamespace(
+                content=SimpleNamespace(
+                    parts=[SimpleNamespace(function_call=None, text="Done.")]
+                )
+            )
+        ],
+    )
+    client = MagicMock()
+    client.models.generate_content.side_effect = [first, second]
+
+    with (
+        patch.object(gp, "resolve_api_key", return_value="fake-key"),
+        patch("google.genai.Client", return_value=client),
+    ):
+        result = gp._generate_text_with_gemini(
+            "Prompt",
+            "General",
+            "Custom",
+            gemini_cfg={
+                "api_key": "fake-key",
+                "use_tools": False,
+                "google_search": False,
+                "temperature": 0.0,
+            },
+            prompt_text=f"Use read_json on {src.resolve()}",
+            model_name="gemini-2.5-flash",
+            tool_aliases=["read_json"],
+        )
+
+    assert (result.get("_model") or {}).get("use_tools") is True
+    assert (result.get("_model") or {}).get("tools") == ["read_json"]
     assert client.models.generate_content.call_count == 2
 
 
