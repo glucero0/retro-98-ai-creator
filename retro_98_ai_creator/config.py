@@ -214,6 +214,11 @@ def load_config() -> dict[str, Any]:
     return cfg
 
 
+def is_legacy_gmail_token_path(rel: str) -> bool:
+    """True for gmail_token.json even when the path uses Windows backslashes."""
+    return Path(str(rel).replace("\\", "/")).name == "gmail_token.json"
+
+
 def normalize_google_workspace_cfg(cfg: dict[str, Any] | None) -> dict[str, Any]:
     """Prefer google_workspace; copy leftover gmail: keys if needed."""
     cfg = cfg or {}
@@ -231,7 +236,7 @@ def normalize_google_workspace_cfg(cfg: dict[str, Any] | None) -> dict[str, Any]
         "token_path", DEFAULTS["google_workspace"]["token_path"]
     )
     token_rel = str(workspace.get("token_path") or "")
-    if Path(token_rel).name == "gmail_token.json":
+    if is_legacy_gmail_token_path(token_rel):
         workspace["token_path"] = DEFAULTS["google_workspace"]["token_path"]
     if workspace.get("credentials_path") == "":
         workspace["credentials_path"] = None

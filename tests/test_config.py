@@ -8,6 +8,7 @@ from retro_98_ai_creator.config import (
     PROJECT_ROOT,
     archives_path,
     expand_path,
+    is_legacy_gmail_token_path,
     load_config,
     normalize_google_workspace_cfg,
     normalize_huggingface_cfg,
@@ -48,6 +49,14 @@ def test_load_config_has_sections():
     assert "prompt" in cfg
     assert "google_workspace" in cfg
     assert "extra_instructions" in (cfg.get("prompt") or {})
+
+
+def test_is_legacy_gmail_token_path_accepts_windows_separators():
+    assert is_legacy_gmail_token_path(r"C:\data\gmail_token.json") is True
+    assert is_legacy_gmail_token_path(".retro-98-ai-creator/gmail_token.json") is True
+    assert is_legacy_gmail_token_path(
+        ".retro-98-ai-creator/google_workspace_token.json"
+    ) is False
 
 
 def test_normalize_google_workspace_reads_legacy_gmail():

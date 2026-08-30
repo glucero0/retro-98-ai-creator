@@ -6,7 +6,12 @@ import logging
 from pathlib import Path
 from typing import Any
 
-from .config import expand_path, load_config, normalize_google_workspace_cfg
+from .config import (
+    expand_path,
+    is_legacy_gmail_token_path,
+    load_config,
+    normalize_google_workspace_cfg,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -64,7 +69,7 @@ def _google_section(cfg: dict[str, Any] | None = None) -> dict[str, Any]:
 def token_path(cfg: dict[str, Any] | None = None) -> Path:
     section = _google_section(cfg)
     rel = (section.get("token_path") or DEFAULT_TOKEN_REL).strip() or DEFAULT_TOKEN_REL
-    if Path(rel).name == "gmail_token.json":
+    if is_legacy_gmail_token_path(rel):
         rel = DEFAULT_TOKEN_REL
     return expand_path(rel)
 
