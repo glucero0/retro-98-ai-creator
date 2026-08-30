@@ -37,6 +37,14 @@ def test_catalog_aliases():
         "write_text",
         "execute_powershell",
         "search_gmail",
+        "search_drive",
+        "create_drive_file",
+        "read_google_doc",
+        "create_google_doc",
+        "edit_google_doc",
+        "list_calendar_events",
+        "create_calendar_event",
+        "edit_calendar_event",
         "browse_web",
     ]
 
@@ -127,6 +135,51 @@ def test_execute_search_gmail_delegates():
         "is:unread",
         max_results=None,
         include_body=False,
+    )
+    assert result["ok"] is True
+
+
+def test_execute_search_drive_delegates():
+    with patch(
+        "retro_98_ai_creator.drive_client.search_drive",
+        return_value={"ok": True, "query": "name contains 'x'", "count": 0, "files": []},
+    ) as mock_search:
+        result = execute_tool("search_drive", {"query": "name contains 'x'"})
+    mock_search.assert_called_once_with(
+        "name contains 'x'",
+        max_results=None,
+        mime_type=None,
+    )
+    assert result["ok"] is True
+
+
+def test_execute_create_google_doc_delegates():
+    with patch(
+        "retro_98_ai_creator.docs_client.create_google_doc",
+        return_value={"ok": True, "document_id": "d1", "title": "Notes"},
+    ) as mock_create:
+        result = execute_tool(
+            "create_google_doc", {"title": "Notes", "text": "hello"}
+        )
+    mock_create.assert_called_once_with("Notes", text="hello")
+    assert result["ok"] is True
+
+
+def test_execute_list_calendar_events_delegates():
+    with patch(
+        "retro_98_ai_creator.calendar_client.list_calendar_events",
+        return_value={"ok": True, "count": 0, "events": []},
+    ) as mock_list:
+        result = execute_tool(
+            "list_calendar_events",
+            {"time_min": "2026-08-30T00:00:00Z", "max_results": 5},
+        )
+    mock_list.assert_called_once_with(
+        time_min="2026-08-30T00:00:00Z",
+        time_max=None,
+        max_results=5,
+        calendar_id=None,
+        query=None,
     )
     assert result["ok"] is True
 

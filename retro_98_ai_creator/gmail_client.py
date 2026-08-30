@@ -1,21 +1,31 @@
-"""Gmail read-only access for the search_gmail Gemini tool."""
+"""Gmail search for the search_gmail Gemini tool."""
 
 from __future__ import annotations
 
 import base64
 import logging
-from pathlib import Path
 from typing import Any
 
-from .config import expand_path, load_config
+from .google_auth import (
+    GMAIL_READONLY,
+    authorize_gmail,
+    build_google_service,
+    get_gmail_credentials,
+    gmail_auth_status,
+)
 
 logger = logging.getLogger(__name__)
 
-GMAIL_SCOPES = ["https://www.googleapis.com/auth/gmail.readonly"]
-DEFAULT_TOKEN_REL = ".retro-98-ai-creator/gmail_token.json"
 DEFAULT_MAX_RESULTS = 20
 MAX_RESULTS_CAP = 50
 MAX_BODY_BYTES = 32 * 1024  # per message when include_body is true
+
+__all__ = [
+    "authorize_gmail",
+    "get_gmail_credentials",
+    "gmail_auth_status",
+    "search_gmail",
+]
 
 
 def _decode_base64url(data: str) -> str:
@@ -35,162 +45,13 @@ def _truncate_text(text: str, max_bytes: int) -> str:
     return trimmed + "\n…[body truncated]"
 
 
-def _gmail_section(cfg: dict[str, Any] | None = None) -> dict[str, Any]:
-    cfg = cfg or load_config()
-    section = cfg.get("gmail")
-    return dict(section or {})
-
-
-def _token_path(cfg: dict[str, Any] | None = None) -> Path:
-    section = _gmail_section(cfg)
-    rel = (section.get("token_path") or DEFAULT_TOKEN_REL).strip() or DEFAULT_TOKEN_REL
-    return expand_path(rel)
-
-
-def _credentials_path(cfg: dict[str, Any] | None = None) -> Path | None:
-    section = _gmail_section(cfg)
-    raw = (section.get("credentials_path") or "").strip()
-    if not raw:
-        return None
-    return expand_path(raw)
-
-
-def _load_stored_credentials(token_path: Path) -> Any | None:
-    if not token_path.is_file():
-        return None
-    try:
-        from google.oauth2.credentials import Credentials
-
-        return Credentials.from_authorized_user_file(str(token_path), GMAIL_SCOPES)
-    except Exception as exc:  # noqa: BLE001
-        logger.info("Could not load Gmail token: %s", exc)
-        return None
-
-
-def _save_credentials(creds: Any, token_path: Path) -> None:
-    token_path.parent.mkdir(parents=True, exist_ok=True)
-    token_path.write_text(creds.to_json(), encoding="utf-8")
-
-
-def _refresh_credentials(creds: Any) -> Any:
-    from google.auth.transport.requests import Request
-
-    if creds and creds.expired and creds.refresh_token:
-        creds.refresh(Request())
-    return creds
-
-
-def get_gmail_credentials(cfg: dict[str, Any] | None = None) -> Any | None:
-    """Return valid Gmail credentials, refreshing the token file when needed."""
-    cfg = cfg or load_config()
-    token_path = _token_path(cfg)
-    creds = _load_stored_credentials(token_path)
-    if not creds:
-        return None
-    if not creds.valid:
-        if not getattr(creds, "refresh_token", None):
-            logger.info("Gmail token expired and no refresh token is stored.")
-            return None
-        try:
-            creds = _refresh_credentials(creds)
-        except Exception as exc:  # noqa: BLE001
-            logger.info("Gmail token refresh failed: %s", exc)
-            return None
-        if creds and creds.valid:
-            _save_credentials(creds, token_path)
-    return creds if creds and creds.valid else None
-
-
-def gmail_auth_status(cfg: dict[str, Any] | None = None) -> dict[str, Any]:
-    """Report whether Gmail OAuth is configured and authorized."""
-    cfg = cfg or load_config()
-    creds_path = _credentials_path(cfg)
-    token_path = _token_path(cfg)
-    stored = _load_stored_credentials(token_path)
-    creds = get_gmail_credentials(cfg)
-    return {
-        "ok": True,
-        "configured": creds_path is not None and creds_path.is_file(),
-        "authorized": creds is not None,
-        "has_refresh_token": bool(stored and getattr(stored, "refresh_token", None)),
-        "credentials_path": str(creds_path) if creds_path else "",
-        "token_path": str(token_path),
-    }
-
-
-def authorize_gmail(cfg: dict[str, Any] | None = None) -> dict[str, Any]:
-    """
-    Run the desktop OAuth flow (opens the system browser).
-
-    Requires credentials_path in config pointing to a Google OAuth client JSON file.
-    """
-    cfg = cfg or load_config()
-    creds_path = _credentials_path(cfg)
-    if creds_path is None:
-        return {
-            "ok": False,
-            "error": (
-                "Gmail OAuth client JSON path is not set. Pick credentials in "
-                "Control Panel → Gmail, then Save."
-            ),
-        }
-    if not creds_path.is_file():
-        return {
-            "ok": False,
-            "error": f"Gmail credentials file not found: {creds_path}",
-        }
-
-    try:
-        from google_auth_oauthlib.flow import InstalledAppFlow
-    except ImportError:
-        return {
-            "ok": False,
-            "error": (
-                "google-auth-oauthlib is not installed. "
-                "Run: pip install google-api-python-client google-auth-oauthlib"
-            ),
-        }
-
-    token_path = _token_path(cfg)
-    try:
-        flow = InstalledAppFlow.from_client_secrets_file(str(creds_path), GMAIL_SCOPES)
-        creds = flow.run_local_server(
-            port=0,
-            open_browser=True,
-            access_type="offline",
-            prompt="consent",
-        )
-        if not getattr(creds, "refresh_token", None):
-            logger.warning("Gmail authorization did not return a refresh token.")
-        _save_credentials(creds, token_path)
-    except Exception as exc:  # noqa: BLE001
-        logger.warning("Gmail authorization failed: %s", exc)
-        return {"ok": False, "error": str(exc)}
-
-    return {
-        "ok": True,
-        "authorized": True,
-        "token_path": str(token_path),
-        "message": "Gmail authorized successfully.",
-    }
-
-
 def _build_gmail_service(cfg: dict[str, Any] | None = None) -> Any:
-    try:
-        from googleapiclient.discovery import build
-    except ImportError as exc:
-        raise RuntimeError(
-            "google-api-python-client is not installed. "
-            "Run: pip install google-api-python-client google-auth-oauthlib"
-        ) from exc
-
-    creds = get_gmail_credentials(cfg)
-    if creds is None:
-        raise RuntimeError(
-            "Gmail is not authorized. Open Control Panel → Gmail and click "
-            "Connect Gmail after saving your OAuth client JSON path."
-        )
-    return build("gmail", "v1", credentials=creds, cache_discovery=False)
+    return build_google_service(
+        "gmail",
+        "v1",
+        cfg,
+        required_scopes=[GMAIL_READONLY],
+    )
 
 
 def _header_value(headers: list[dict[str, str]] | None, name: str) -> str:

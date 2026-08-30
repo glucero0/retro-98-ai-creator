@@ -30,7 +30,7 @@ archives.json
 media/
 .retro-98-ai-creator/
 
-# Google OAuth client secrets (Gmail search_gmail — never commit)
+# Google OAuth client secrets (Google Workspace tools — never commit)
 client_secret*.json
 *credentials.json
 

@@ -49,6 +49,46 @@ TOOL_CATALOG: list[dict[str, str]] = [
         "summary": "Search Gmail with query syntax (unread, shipments, specific senders, etc.)",
     },
     {
+        "alias": "search_drive",
+        "display_name": "Search Drive",
+        "summary": "Search Google Drive files by name, type, or Drive query syntax",
+    },
+    {
+        "alias": "create_drive_file",
+        "display_name": "Create Drive file",
+        "summary": "Create a Google Drive file (text/plain by default)",
+    },
+    {
+        "alias": "read_google_doc",
+        "display_name": "Read Google Doc",
+        "summary": "Read the text of a Google Doc by document ID",
+    },
+    {
+        "alias": "create_google_doc",
+        "display_name": "Create Google Doc",
+        "summary": "Create a Google Doc with an optional initial body",
+    },
+    {
+        "alias": "edit_google_doc",
+        "display_name": "Edit Google Doc",
+        "summary": "Replace or append text in a Google Doc",
+    },
+    {
+        "alias": "list_calendar_events",
+        "display_name": "List Calendar events",
+        "summary": "List Google Calendar events in a time range",
+    },
+    {
+        "alias": "create_calendar_event",
+        "display_name": "Create Calendar event",
+        "summary": "Create a Google Calendar event",
+    },
+    {
+        "alias": "edit_calendar_event",
+        "display_name": "Edit Calendar event",
+        "summary": "Update an existing Google Calendar event",
+    },
+    {
         "alias": "browse_web",
         "display_name": "Browse Web",
         "summary": "Open an http(s) URL, read the page, and follow its links",
@@ -270,6 +310,113 @@ def execute_tool(name: str, args: dict[str, Any] | None) -> dict[str, Any]:
                 max_results=max_results,
                 include_body=include_body,
             )
+        if alias == "search_drive":
+            from .drive_client import search_drive as drive_search
+
+            query = str(params.get("query") or "").strip()
+            raw_max = params.get("max_results")
+            max_results: int | None = None
+            if raw_max is not None:
+                try:
+                    max_results = int(raw_max)
+                except (TypeError, ValueError):
+                    return {"ok": False, "error": "max_results must be an integer"}
+            mime_type = str(params.get("mime_type") or "").strip() or None
+            return drive_search(
+                query,
+                max_results=max_results,
+                mime_type=mime_type,
+            )
+        if alias == "create_drive_file":
+            from .drive_client import create_drive_file as drive_create
+
+            name = str(params.get("name") or "").strip()
+            content = params.get("content")
+            if content is not None and not isinstance(content, str):
+                content = str(content)
+            mime_type = str(params.get("mime_type") or "").strip() or None
+            return drive_create(name, content=content, mime_type=mime_type)
+        if alias == "read_google_doc":
+            from .docs_client import read_google_doc as docs_read
+
+            return docs_read(str(params.get("document_id") or ""))
+        if alias == "create_google_doc":
+            from .docs_client import create_google_doc as docs_create
+
+            title = str(params.get("title") or "").strip()
+            text = params.get("text")
+            if text is not None and not isinstance(text, str):
+                text = str(text)
+            return docs_create(title, text=text)
+        if alias == "edit_google_doc":
+            from .docs_client import edit_google_doc as docs_edit
+
+            if "text" not in params:
+                return {"ok": False, "error": "text is required"}
+            text = params.get("text")
+            if not isinstance(text, str):
+                text = str(text)
+            mode = str(params.get("mode") or "replace")
+            return docs_edit(
+                str(params.get("document_id") or ""),
+                text=text,
+                mode=mode,
+            )
+        if alias == "list_calendar_events":
+            from .calendar_client import list_calendar_events as cal_list
+
+            raw_max = params.get("max_results")
+            max_results = None
+            if raw_max is not None:
+                try:
+                    max_results = int(raw_max)
+                except (TypeError, ValueError):
+                    return {"ok": False, "error": "max_results must be an integer"}
+            return cal_list(
+                time_min=str(params.get("time_min") or "").strip() or None,
+                time_max=str(params.get("time_max") or "").strip() or None,
+                max_results=max_results,
+                calendar_id=str(params.get("calendar_id") or "").strip() or None,
+                query=str(params.get("query") or "").strip() or None,
+            )
+        if alias == "create_calendar_event":
+            from .calendar_client import create_calendar_event as cal_create
+
+            return cal_create(
+                str(params.get("summary") or ""),
+                str(params.get("start") or ""),
+                str(params.get("end") or ""),
+                description=(
+                    str(params.get("description"))
+                    if params.get("description") is not None
+                    else None
+                ),
+                location=(
+                    str(params.get("location"))
+                    if params.get("location") is not None
+                    else None
+                ),
+                calendar_id=str(params.get("calendar_id") or "").strip() or None,
+                all_day=bool(params.get("all_day")),
+            )
+        if alias == "edit_calendar_event":
+            from .calendar_client import edit_calendar_event as cal_edit
+
+            def _opt_str(key: str) -> str | None:
+                if key not in params:
+                    return None
+                return str(params.get(key))
+
+            return cal_edit(
+                str(params.get("event_id") or ""),
+                summary=_opt_str("summary"),
+                start=_opt_str("start"),
+                end=_opt_str("end"),
+                description=_opt_str("description"),
+                location=_opt_str("location"),
+                calendar_id=str(params.get("calendar_id") or "").strip() or None,
+                all_day=bool(params.get("all_day")),
+            )
         if alias == "browse_web":
             from .web_browse import browse_web as web_browse
 
@@ -448,6 +595,258 @@ def function_declarations_for(aliases: list[str] | None) -> list[Any]:
                             },
                         },
                         "required": ["query"],
+                    },
+                )
+            )
+        elif alias == "search_drive":
+            decls.append(
+                types.FunctionDeclaration(
+                    name="search_drive",
+                    description=(
+                        "Search the user's Google Drive using Drive query syntax. "
+                        "Examples: name contains 'budget'; mimeType = "
+                        "'application/vnd.google-apps.document'; "
+                        "fullText contains 'invoice' and trashed = false. "
+                        "Returns file id, name, mime type, modified time, and URL."
+                    ),
+                    parameters_json_schema={
+                        "type": "object",
+                        "properties": {
+                            "query": {
+                                "type": "string",
+                                "description": "Drive search query (name contains, mimeType, fullText, …)",
+                            },
+                            "max_results": {
+                                "type": "integer",
+                                "description": "Maximum files to return (default 20, max 50)",
+                            },
+                            "mime_type": {
+                                "type": "string",
+                                "description": "Optional MIME type filter appended to the query",
+                            },
+                        },
+                        "required": ["query"],
+                    },
+                )
+            )
+        elif alias == "create_drive_file":
+            decls.append(
+                types.FunctionDeclaration(
+                    name="create_drive_file",
+                    description=(
+                        "Create a file in the user's Google Drive. Default MIME type "
+                        "is text/plain. Use create_google_doc for a Google Doc."
+                    ),
+                    parameters_json_schema={
+                        "type": "object",
+                        "properties": {
+                            "name": {
+                                "type": "string",
+                                "description": "File name, including extension when useful",
+                            },
+                            "content": {
+                                "type": "string",
+                                "description": "Optional file body (UTF-8 text)",
+                            },
+                            "mime_type": {
+                                "type": "string",
+                                "description": "MIME type (default text/plain)",
+                            },
+                        },
+                        "required": ["name"],
+                    },
+                )
+            )
+        elif alias == "read_google_doc":
+            decls.append(
+                types.FunctionDeclaration(
+                    name="read_google_doc",
+                    description=(
+                        "Read the plain text of a Google Doc. Use search_drive first "
+                        "when you only have a title, then pass the returned file id."
+                    ),
+                    parameters_json_schema={
+                        "type": "object",
+                        "properties": {
+                            "document_id": {
+                                "type": "string",
+                                "description": "Google Doc document/file ID",
+                            },
+                        },
+                        "required": ["document_id"],
+                    },
+                )
+            )
+        elif alias == "create_google_doc":
+            decls.append(
+                types.FunctionDeclaration(
+                    name="create_google_doc",
+                    description="Create a Google Doc with a title and optional body text.",
+                    parameters_json_schema={
+                        "type": "object",
+                        "properties": {
+                            "title": {
+                                "type": "string",
+                                "description": "Document title",
+                            },
+                            "text": {
+                                "type": "string",
+                                "description": "Optional initial document body",
+                            },
+                        },
+                        "required": ["title"],
+                    },
+                )
+            )
+        elif alias == "edit_google_doc":
+            decls.append(
+                types.FunctionDeclaration(
+                    name="edit_google_doc",
+                    description=(
+                        "Edit a Google Doc. mode=replace overwrites the body; "
+                        "mode=append adds text at the end."
+                    ),
+                    parameters_json_schema={
+                        "type": "object",
+                        "properties": {
+                            "document_id": {
+                                "type": "string",
+                                "description": "Google Doc document/file ID",
+                            },
+                            "text": {
+                                "type": "string",
+                                "description": "Text to write or append",
+                            },
+                            "mode": {
+                                "type": "string",
+                                "description": "replace (default) or append",
+                            },
+                        },
+                        "required": ["document_id", "text"],
+                    },
+                )
+            )
+        elif alias == "list_calendar_events":
+            decls.append(
+                types.FunctionDeclaration(
+                    name="list_calendar_events",
+                    description=(
+                        "List events on the user's Google Calendar. Times are RFC3339 "
+                        "(for example 2026-08-30T09:00:00-06:00). Defaults to the primary calendar."
+                    ),
+                    parameters_json_schema={
+                        "type": "object",
+                        "properties": {
+                            "time_min": {
+                                "type": "string",
+                                "description": "Lower bound (RFC3339), inclusive",
+                            },
+                            "time_max": {
+                                "type": "string",
+                                "description": "Upper bound (RFC3339), exclusive",
+                            },
+                            "query": {
+                                "type": "string",
+                                "description": "Optional free-text search across events",
+                            },
+                            "max_results": {
+                                "type": "integer",
+                                "description": "Maximum events to return (default 20, max 50)",
+                            },
+                            "calendar_id": {
+                                "type": "string",
+                                "description": "Calendar ID (default primary)",
+                            },
+                        },
+                    },
+                )
+            )
+        elif alias == "create_calendar_event":
+            decls.append(
+                types.FunctionDeclaration(
+                    name="create_calendar_event",
+                    description=(
+                        "Create an event on the user's Google Calendar. "
+                        "Use RFC3339 dateTimes, or YYYY-MM-DD with all_day=true."
+                    ),
+                    parameters_json_schema={
+                        "type": "object",
+                        "properties": {
+                            "summary": {
+                                "type": "string",
+                                "description": "Event title",
+                            },
+                            "start": {
+                                "type": "string",
+                                "description": "Start time (RFC3339) or date (YYYY-MM-DD)",
+                            },
+                            "end": {
+                                "type": "string",
+                                "description": "End time (RFC3339) or date (YYYY-MM-DD)",
+                            },
+                            "description": {
+                                "type": "string",
+                                "description": "Optional event description",
+                            },
+                            "location": {
+                                "type": "string",
+                                "description": "Optional location",
+                            },
+                            "calendar_id": {
+                                "type": "string",
+                                "description": "Calendar ID (default primary)",
+                            },
+                            "all_day": {
+                                "type": "boolean",
+                                "description": "When true, start/end are calendar dates",
+                            },
+                        },
+                        "required": ["summary", "start", "end"],
+                    },
+                )
+            )
+        elif alias == "edit_calendar_event":
+            decls.append(
+                types.FunctionDeclaration(
+                    name="edit_calendar_event",
+                    description="Update fields on an existing Google Calendar event.",
+                    parameters_json_schema={
+                        "type": "object",
+                        "properties": {
+                            "event_id": {
+                                "type": "string",
+                                "description": "Event ID from list_calendar_events",
+                            },
+                            "summary": {
+                                "type": "string",
+                                "description": "New title",
+                            },
+                            "start": {
+                                "type": "string",
+                                "description": "New start (RFC3339 or YYYY-MM-DD)",
+                            },
+                            "end": {
+                                "type": "string",
+                                "description": "New end (RFC3339 or YYYY-MM-DD)",
+                            },
+                            "description": {
+                                "type": "string",
+                                "description": "New description",
+                            },
+                            "location": {
+                                "type": "string",
+                                "description": "New location",
+                            },
+                            "calendar_id": {
+                                "type": "string",
+                                "description": "Calendar ID (default primary)",
+                            },
+                            "all_day": {
+                                "type": "boolean",
+                                "description": "When true, start/end are calendar dates",
+                            },
+                        },
+                        "required": ["event_id"],
                     },
                 )
             )

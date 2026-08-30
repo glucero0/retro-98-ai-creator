@@ -181,20 +181,20 @@ class Api:
         """Built-in Gemini file tools available when Use Tools is enabled."""
         return {"ok": True, "tools": self._gemini_tools_catalog()}
 
-    def get_gmail_auth_status(self) -> dict[str, Any]:
-        """Whether Gmail OAuth client + token are configured for search_gmail."""
-        from .gmail_client import gmail_auth_status
+    def get_google_workspace_auth_status(self) -> dict[str, Any]:
+        """Whether Google Workspace OAuth client + token are configured."""
+        from .google_auth import google_auth_status
 
-        return gmail_auth_status(self.config)
+        return google_auth_status(self.config)
 
-    def authorize_gmail(self) -> dict[str, Any]:
-        """Run desktop OAuth for Gmail read-only access (opens browser)."""
-        from .gmail_client import authorize_gmail
+    def authorize_google_workspace(self) -> dict[str, Any]:
+        """Run desktop OAuth for Gmail, Drive, Docs, and Calendar (opens browser)."""
+        from .google_auth import authorize_google
 
-        return authorize_gmail(self.config)
+        return authorize_google(self.config)
 
-    def pick_gmail_credentials(self) -> dict[str, Any]:
-        """Pick a Google OAuth client JSON file for Gmail."""
+    def pick_google_workspace_credentials(self) -> dict[str, Any]:
+        """Pick a Google OAuth client JSON file for Workspace tools."""
         import webview
 
         if self._window is None:
@@ -210,6 +210,16 @@ class Api:
         if not path.is_file():
             return {"ok": False, "error": f"File not found: {path}"}
         return {"ok": True, "path": str(path.resolve())}
+
+    # Older Control Panel JS called these Gmail names.
+    def get_gmail_auth_status(self) -> dict[str, Any]:
+        return self.get_google_workspace_auth_status()
+
+    def authorize_gmail(self) -> dict[str, Any]:
+        return self.authorize_google_workspace()
+
+    def pick_gmail_credentials(self) -> dict[str, Any]:
+        return self.pick_google_workspace_credentials()
 
     def _public_config(self) -> dict[str, Any]:
         cfg = self.config
@@ -235,7 +245,7 @@ class Api:
             "openrouter": openrouter,
             "huggingface": dict(cfg.get("huggingface") or {}),
             "prompt": dict(cfg.get("prompt") or {}),
-            "gmail": dict(cfg.get("gmail") or {}),
+            "google_workspace": dict(cfg.get("google_workspace") or {}),
             "ui": dict(cfg.get("ui") or {}),
             "paths": dict(cfg.get("paths") or {}),
         }

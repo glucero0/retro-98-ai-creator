@@ -9,8 +9,8 @@ A Windows 98–themed desktop studio for general-purpose AI creation: **text**, 
 ## Features
 
 - Win98 desktop UI (98.css) with draggable/minimizable windows, a taskbar, and a Start menu
-- **Creation Studio** — one freeform prompt box; the app infers text/image/video from your prompt and generation intent. Turn on **Enable Tools** in Studio (or set the Control Panel default) to switch to **Search** (optional) + **Tool Use** for file, PowerShell, Gmail, and web-browse automation.
-- **Gemini Use Tools** (optional) — attach built-in tools (`read_json`, `write_json`, `read_text`, `write_text`, `execute_powershell`, `search_gmail`, `browse_web`) and describe steps in natural language; Gemini calls them via function calling (text generations only, Windows for PowerShell)
+- **Creation Studio** — one freeform prompt box; the app infers text/image/video from your prompt and generation intent. Turn on **Enable Tools** in Studio (or set the Control Panel default) to switch to **Search** (optional) + **Tool Use** for file, PowerShell, Gmail, Drive, Docs, Calendar, and web-browse automation.
+- **Gemini Use Tools** (optional) — attach built-in tools (`read_json`, `write_json`, `read_text`, `write_text`, `execute_powershell`, `search_gmail`, `search_drive`, `create_drive_file`, `read_google_doc`, `create_google_doc`, `edit_google_doc`, `list_calendar_events`, `create_calendar_event`, `edit_calendar_event`, `browse_web`) and describe steps in natural language; Gemini calls them via function calling (text generations only, Windows for PowerShell)
 - **Google Search enrichment** (optional, Gemini text) — when Search runs, the app can OCR images and pull YouTube captions from cited results before the tool or document pass
 - **Gemini** text, image, and video generation with separate model pickers per modality
 - **OpenRouter** — text, image, and video slots (Studio routes by prompt intent)
@@ -18,7 +18,7 @@ A Windows 98–themed desktop studio for general-purpose AI creation: **text**, 
 - **Archives** — every creation (and its prompt/model metadata) is saved automatically; search, import/export JSON, or import existing text/image/video files
 - **Viewer** — displays the active creation (document, image, or video) with export buttons and a jump into editing
 - **Image Edit** and **Video Edit** — standalone editors (and reachable via Viewer → Edit) for crop/rotate, color/filter adjustments, and (for video) a segment timeline for splitting/reordering/trimming clips
-- **Control Panel** — backend/model selection, display themes, sound, CRT overlay, and UI scale
+- **Control Panel** — backend/model selection, Google Workspace OAuth, display themes, sound, CRT overlay, and UI scale
 - Cancel a generation in progress
 - "Use as Basis" / "Load…" — start a new creation from the Viewer's active item or an imported file, without touching the original
 
@@ -166,19 +166,31 @@ When tools are on, Studio hides the normal prompt and shows:
 | `read_text` | Read a text file |
 | `write_text` | Write text to a file (overwrites) |
 | `execute_powershell` | Run a `.ps1` script (Windows only); returns `stdout`, `stderr`, and `exit_code` |
-| `search_gmail` | Search your Gmail inbox (read-only) using Gmail query syntax |
+| `search_gmail` | Search your Gmail inbox using Gmail query syntax |
+| `search_drive` | Search Google Drive files (name, MIME type, Drive query syntax) |
+| `create_drive_file` | Create a Drive file (default `text/plain`) |
+| `read_google_doc` | Read a Google Doc by document ID |
+| `create_google_doc` | Create a Google Doc (optional initial body) |
+| `edit_google_doc` | Replace or append text in a Google Doc |
+| `list_calendar_events` | List Google Calendar events in a time range |
+| `create_calendar_event` | Create a Google Calendar event |
+| `edit_calendar_event` | Update an existing Google Calendar event |
 | `browse_web` | Fetch an http(s) URL, return readable text and links, then follow links to traverse |
 
-### Gmail setup (`search_gmail`)
+### Google Workspace setup (Gmail, Drive, Docs, Calendar)
 
-1. In [Google Cloud Console](https://console.cloud.google.com/), create a project, enable the **Gmail API**, and create an OAuth client (**Desktop application**).
-2. Download the client JSON file.
-3. Control Panel → **Gemini** → **Gmail**: **Pick OAuth JSON…**, **Save**, then **Connect Gmail…** (one-time browser sign-in).
-4. In Creation Studio, attach `search_gmail` and describe what to check in **Tool Use** (e.g. unread mail, shipment tracking, a specific sender).
+One desktop OAuth client and one stored token cover all of these tools. Google Keep is not supported on a personal Gmail account.
 
-Example queries the model may build: `is:unread in:inbox`, `category:purchases`, `subject:tracking newer_than:7d`, `from:amazon.com`.
+1. In [Google Cloud Console](https://console.cloud.google.com/), create a project and enable the **Gmail**, **Google Drive**, **Google Docs**, and **Google Calendar** APIs.
+2. Create an OAuth client (**Desktop application**) and download the client JSON file.
+3. Control Panel → **Gemini** → **Google Workspace**: **Pick OAuth JSON…**, **Save**, then **Connect Google Workspace…** (browser sign-in). Re-connect after adding APIs so the new scopes are granted.
+4. In Creation Studio, attach the tools you need (`search_gmail`, `search_drive`, `read_google_doc`, `create_calendar_event`, …) and describe the work in **Tool Use**.
 
-**Security note:** `search_gmail` is read-only (`gmail.readonly` scope). The OAuth token is stored under `.retro-98-ai-creator/` (gitignored).
+Example Gmail queries: `is:unread in:inbox`, `category:purchases`, `subject:tracking newer_than:7d`, `from:amazon.com`.
+
+Example Drive queries: `name contains 'budget'`, `mimeType = 'application/vnd.google-apps.document'`.
+
+**Security note:** the token can read and write Gmail, Drive, Docs, and Calendar data you grant at consent. It is stored as `.retro-98-ai-creator/google_workspace_token.json` (the whole `.retro-98-ai-creator/` folder is gitignored). An OAuth app in Testing must reconnect about every 7 days. Existing `gmail_token.json` files are migrated on the next successful connect or refresh.
 
 All paths for file tools must be **absolute** (e.g. `C:\data\step1.json`). The model infers call order from your Tool Use text once tools are attached.
 
@@ -220,7 +232,7 @@ All paths for file tools must be **absolute** (e.g. `C:\data\step1.json`). The m
 - **Search + tools**: Search pass first (Google Search + URL context, plus optional image OCR and YouTube captions), then a separate tool pass that uses the research brief. Search and file tools are not combined in a single Gemini call (avoids the model skipping search or inventing file contents).
 - **Image/video prompts** with tools on: tools are dropped for that run; Search and Tool Use text are merged into a normal media prompt instead.
 
-**Security note:** tools read and write files on your machine, `execute_powershell` runs scripts you point at, `search_gmail` reads your inbox when connected, and `browse_web` fetches http(s) pages you (or the model) choose. Only attach tools you trust.
+**Security note:** tools read and write files on your machine, `execute_powershell` runs scripts you point at, Google tools use your connected Gmail/Drive/Docs/Calendar account, and `browse_web` fetches http(s) pages you (or the model) choose. Only attach tools you trust.
 
 ## OpenRouter setup
 

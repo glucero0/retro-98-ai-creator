@@ -9,6 +9,7 @@ from retro_98_ai_creator.config import (
     archives_path,
     expand_path,
     load_config,
+    normalize_google_workspace_cfg,
     normalize_huggingface_cfg,
 )
 from retro_98_ai_creator.creation_utils import extract_json_object
@@ -45,7 +46,31 @@ def test_load_config_has_sections():
     assert "openrouter" in cfg
     assert "huggingface" in cfg
     assert "prompt" in cfg
+    assert "google_workspace" in cfg
     assert "extra_instructions" in (cfg.get("prompt") or {})
+
+
+def test_normalize_google_workspace_reads_legacy_gmail():
+    out = normalize_google_workspace_cfg(
+        {
+            "gmail": {
+                "credentials_path": "C:/secrets/client.json",
+                "token_path": ".retro-98-ai-creator/gmail_token.json",
+            }
+        }
+    )
+    assert out["credentials_path"] == "C:/secrets/client.json"
+    assert out["token_path"] == ".retro-98-ai-creator/google_workspace_token.json"
+
+
+def test_normalize_google_workspace_prefers_new_section():
+    out = normalize_google_workspace_cfg(
+        {
+            "gmail": {"credentials_path": "C:/old.json"},
+            "google_workspace": {"credentials_path": "C:/new.json"},
+        }
+    )
+    assert out["credentials_path"] == "C:/new.json"
 
 
 def test_archives_path_is_in_project():

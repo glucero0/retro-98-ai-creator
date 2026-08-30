@@ -36,8 +36,8 @@ def test_search_gmail_not_authorized():
         }
     }
     with patch(
-        "retro_98_ai_creator.gmail_client.get_gmail_credentials",
-        return_value=None,
+        "retro_98_ai_creator.gmail_client.build_google_service",
+        side_effect=RuntimeError("Google Workspace is not authorized."),
     ):
         result = search_gmail("is:unread", cfg=cfg)
     assert result["ok"] is False
@@ -120,6 +120,7 @@ def test_authorize_gmail_requests_offline_refresh_token(tmp_path: Path):
     kwargs = mock_flow.run_local_server.call_args.kwargs
     assert kwargs["access_type"] == "offline"
     assert kwargs["prompt"] == "consent"
+    assert kwargs["include_granted_scopes"] == "true"
     assert token.is_file()
 
 
@@ -143,11 +144,11 @@ def test_get_gmail_credentials_returns_none_when_refresh_fails(tmp_path: Path):
 
     with (
         patch(
-            "retro_98_ai_creator.gmail_client._load_stored_credentials",
+            "retro_98_ai_creator.google_auth._load_stored_credentials",
             return_value=expired,
         ),
         patch(
-            "retro_98_ai_creator.gmail_client._refresh_credentials",
+            "retro_98_ai_creator.google_auth._refresh_credentials",
             side_effect=RuntimeError("invalid_grant"),
         ),
     ):
