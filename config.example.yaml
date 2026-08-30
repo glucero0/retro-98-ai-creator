@@ -69,7 +69,7 @@ paths:
 
 google_workspace:
   # OAuth client JSON from Google Cloud Console (Desktop application type)
-  # One token covers Gmail, Drive, Docs, and Calendar after Connect Google Workspace.
+  # One token covers Gmail, Drive, Docs, Calendar, and Tasks after Connect Google Workspace.
   credentials_path: null
   token_path: .retro-98-ai-creator/google_workspace_token.json
 

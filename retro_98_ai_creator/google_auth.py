@@ -1,4 +1,4 @@
-"""Shared Google OAuth for Gmail, Drive, Docs, and Calendar tools."""
+"""Shared Google OAuth for Gmail, Drive, Docs, Calendar, and Tasks tools."""
 
 from __future__ import annotations
 
@@ -24,6 +24,8 @@ DOCUMENTS = "https://www.googleapis.com/auth/documents"
 DOCUMENTS_READONLY = "https://www.googleapis.com/auth/documents.readonly"
 CALENDAR = "https://www.googleapis.com/auth/calendar"
 CALENDAR_EVENTS = "https://www.googleapis.com/auth/calendar.events"
+TASKS = "https://www.googleapis.com/auth/tasks"
+TASKS_READONLY = "https://www.googleapis.com/auth/tasks.readonly"
 
 # One consent covers all official Google tools. drive.readonly finds existing
 # files; drive.file lets the app create files it owns.
@@ -33,6 +35,7 @@ GOOGLE_SCOPES = [
     DRIVE_FILE,
     DOCUMENTS,
     CALENDAR_EVENTS,
+    TASKS,
 ]
 
 SCOPE_SUPERSETS: dict[str, tuple[str, ...]] = {
@@ -43,6 +46,8 @@ SCOPE_SUPERSETS: dict[str, tuple[str, ...]] = {
     DOCUMENTS_READONLY: (DOCUMENTS, DOCUMENTS_READONLY),
     DOCUMENTS: (DOCUMENTS,),
     CALENDAR_EVENTS: (CALENDAR, CALENDAR_EVENTS),
+    TASKS_READONLY: (TASKS, TASKS_READONLY),
+    TASKS: (TASKS,),
 }
 
 SCOPE_PRODUCTS: list[tuple[str, tuple[str, ...]]] = [
@@ -50,6 +55,7 @@ SCOPE_PRODUCTS: list[tuple[str, tuple[str, ...]]] = [
     ("Drive", (DRIVE, DRIVE_READONLY, DRIVE_FILE)),
     ("Docs", (DOCUMENTS, DOCUMENTS_READONLY)),
     ("Calendar", (CALENDAR, CALENDAR_EVENTS)),
+    ("Tasks", (TASKS, TASKS_READONLY)),
 ]
 
 DEFAULT_TOKEN_REL = ".retro-98-ai-creator/google_workspace_token.json"
@@ -206,7 +212,7 @@ def authorize_google(cfg: dict[str, Any] | None = None) -> dict[str, Any]:
     Run the desktop OAuth flow (opens the system browser).
 
     Requires credentials_path in config pointing to a Google OAuth client JSON file.
-    Requests Gmail, Drive, Docs, and Calendar scopes on one token.
+    Requests Gmail, Drive, Docs, Calendar, and Tasks scopes on one token.
     """
     cfg = cfg or load_config()
     creds_path = credentials_path(cfg)

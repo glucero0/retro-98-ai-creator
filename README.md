@@ -9,8 +9,8 @@ A Windows 98–themed desktop studio for general-purpose AI creation: **text**, 
 ## Features
 
 - Win98 desktop UI (98.css) with draggable/minimizable windows, a taskbar, and a Start menu
-- **Creation Studio** — one freeform prompt box; the app infers text/image/video from your prompt and generation intent. Turn on **Enable Tools** in Studio (or set the Control Panel default) to switch to **Search** (optional) + **Tool Use** for file, PowerShell, Gmail, Drive, Docs, Calendar, and web-browse automation.
-- **Gemini Use Tools** (optional) — attach built-in tools (`read_json`, `write_json`, `read_text`, `write_text`, `execute_powershell`, `search_gmail`, `search_drive`, `create_drive_file`, `read_google_doc`, `create_google_doc`, `edit_google_doc`, `list_calendar_events`, `create_calendar_event`, `edit_calendar_event`, `browse_web`) and describe steps in natural language; Gemini calls them via function calling (text generations only, Windows for PowerShell)
+- **Creation Studio** — one freeform prompt box; the app infers text/image/video from your prompt and generation intent. Turn on **Enable Tools** in Studio (or set the Control Panel default) to switch to **Search** (optional) + **Tool Use** for file, PowerShell, Gmail, Drive, Docs, Calendar, Tasks, and web-browse automation.
+- **Gemini Use Tools** (optional) — attach built-in tools (`read_json`, `write_json`, `read_text`, `write_text`, `execute_powershell`, `search_gmail`, `search_drive`, `create_drive_file`, `read_google_doc`, `create_google_doc`, `edit_google_doc`, `list_calendar_events`, `create_calendar_event`, `edit_calendar_event`, `list_tasks`, `create_task`, `edit_task`, `browse_web`) and describe steps in natural language; Gemini calls them via function calling (text generations only, Windows for PowerShell)
 - **Google Search enrichment** (optional, Gemini text) — when Search runs, the app can OCR images and pull YouTube captions from cited results before the tool or document pass
 - **Gemini** text, image, and video generation with separate model pickers per modality
 - **OpenRouter** — text, image, and video slots (Studio routes by prompt intent)
@@ -175,22 +175,27 @@ When tools are on, Studio hides the normal prompt and shows:
 | `list_calendar_events` | List Google Calendar events in a time range |
 | `create_calendar_event` | Create a Google Calendar event |
 | `edit_calendar_event` | Update an existing Google Calendar event |
+| `list_tasks` | List Google Tasks (default list `@default`) |
+| `create_task` | Create a Google Task (title, optional notes and due date/time) |
+| `edit_task` | Update or complete a Google Task |
 | `browse_web` | Fetch an http(s) URL, return readable text and links, then follow links to traverse |
 
-### Google Workspace setup (Gmail, Drive, Docs, Calendar)
+### Google Workspace setup (Gmail, Drive, Docs, Calendar, Tasks)
 
-One desktop OAuth client and one stored token cover all of these tools. Google Keep is not supported on a personal Gmail account.
+One desktop OAuth client and one stored token cover all of these tools. Google Keep is not supported on a personal Gmail account. Adding a product later does not require a new client secret — enable the API, add the scope, then Connect again.
 
-1. In [Google Cloud Console](https://console.cloud.google.com/), create a project and enable the **Gmail**, **Google Drive**, **Google Docs**, and **Google Calendar** APIs.
+1. In [Google Cloud Console](https://console.cloud.google.com/), create a project and enable the **Gmail**, **Google Drive**, **Google Docs**, **Google Calendar**, and **Google Tasks** APIs.
 2. Create an OAuth client (**Desktop application**) and download the client JSON file.
 3. Control Panel → **Gemini** → **Google Workspace**: **Pick OAuth JSON…**, **Save**, then **Connect Google Workspace…** (browser sign-in). Re-connect after adding APIs so the new scopes are granted.
 4. In Creation Studio, attach the tools you need (`search_gmail`, `search_drive`, `read_google_doc`, `create_calendar_event`, …) and describe the work in **Tool Use**.
+
+When any Google Workspace tool is attached, the app injects the machine’s current date, time, timezone, and the upcoming week into the prompt behind the scenes. You can say “this coming Wednesday at 9:45am” or “mail from yesterday” — you do not type RFC3339 or today’s date. Calendar events and Task due times use that local clock with a UTC offset (not `Z` unless you asked for UTC). Gmail and Drive search resolve relative windows the same way (`after:`, `newer_than:`, `modifiedTime`). Local file tools and `browse_web` do not get the clock.
 
 Example Gmail queries: `is:unread in:inbox`, `category:purchases`, `subject:tracking newer_than:7d`, `from:amazon.com`.
 
 Example Drive queries: `name contains 'budget'`, `mimeType = 'application/vnd.google-apps.document'`.
 
-**Security note:** the token can read and write Gmail, Drive, Docs, and Calendar data you grant at consent. It is stored as `.retro-98-ai-creator/google_workspace_token.json` (the whole `.retro-98-ai-creator/` folder is gitignored). An OAuth app in Testing must reconnect about every 7 days. Existing `gmail_token.json` files are migrated on the next successful connect or refresh.
+**Security note:** the token can read and write Gmail, Drive, Docs, Calendar, and Tasks data you grant at consent. It is stored as `.retro-98-ai-creator/google_workspace_token.json` (the whole `.retro-98-ai-creator/` folder is gitignored). An OAuth app in Testing must reconnect about every 7 days. Existing `gmail_token.json` files are migrated on the next successful connect or refresh.
 
 All paths for file tools must be **absolute** (e.g. `C:\data\step1.json`). The model infers call order from your Tool Use text once tools are attached.
 

@@ -1382,6 +1382,21 @@
         summary: "Update an existing Google Calendar event",
       },
       {
+        alias: "list_tasks",
+        display_name: "List Tasks",
+        summary: "List Google Tasks on the default or a named list",
+      },
+      {
+        alias: "create_task",
+        display_name: "Create Task",
+        summary: "Create a Google Task (title, optional notes and due date/time)",
+      },
+      {
+        alias: "edit_task",
+        display_name: "Edit Task",
+        summary: "Update or complete a Google Task",
+      },
+      {
         alias: "browse_web",
         display_name: "Browse Web",
         summary: "Open an http(s) URL, read the page, and follow its links",
@@ -4525,8 +4540,8 @@
           const products = (status && status.granted_products) || [];
           const missing = (status && status.missing_scopes) || [];
           let text = products.length
-            ? "Google Workspace is connected (" + products.join(", ") + "). Attach Gmail, Drive, Docs, or Calendar tools in Studio."
-            : "Google Workspace is connected. Attach Gmail, Drive, Docs, or Calendar tools in Studio.";
+            ? "Google Workspace is connected (" + products.join(", ") + "). Attach Gmail, Drive, Docs, Calendar, or Tasks tools in Studio."
+            : "Google Workspace is connected. Attach Gmail, Drive, Docs, Calendar, or Tasks tools in Studio.";
           if (missing.length) {
             text += " Some requested scopes were not granted — Connect Google Workspace again if a product is missing.";
           }
