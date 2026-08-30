@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+from datetime import datetime, timedelta
 from typing import Any
 
 JSON_SCHEMA_HINT = """
@@ -151,6 +152,169 @@ AMBIGUOUS_SCHEMA_HINT = """
 """.strip()
 
 
+# Workspace tools that receive behind-the-scenes local clock context.
+CALENDAR_CLOCK_ALIASES = frozenset(
+    {
+        "list_calendar_events",
+        "create_calendar_event",
+        "edit_calendar_event",
+    }
+)
+TASK_CLOCK_ALIASES = frozenset({"list_tasks", "create_task", "edit_task"})
+GMAIL_CLOCK_ALIASES = frozenset({"search_gmail"})
+DRIVE_CLOCK_ALIASES = frozenset({"search_drive", "create_drive_file"})
+DOCS_CLOCK_ALIASES = frozenset(
+    {
+        "read_google_doc",
+        "create_google_doc",
+        "edit_google_doc",
+    }
+)
+CLOCK_TOOL_ALIASES = (
+    CALENDAR_CLOCK_ALIASES
+    | TASK_CLOCK_ALIASES
+    | GMAIL_CLOCK_ALIASES
+    | DRIVE_CLOCK_ALIASES
+    | DOCS_CLOCK_ALIASES
+)
+
+_WEEKDAYS_EN = (
+    "Monday",
+    "Tuesday",
+    "Wednesday",
+    "Thursday",
+    "Friday",
+    "Saturday",
+    "Sunday",
+)
+
+
+def _aware_local(now: datetime | None = None) -> datetime:
+    if now is None:
+        return datetime.now().astimezone()
+    if now.tzinfo is None:
+        return now.astimezone()
+    return now
+
+
+def _weekday_en(when: datetime) -> str:
+    return _WEEKDAYS_EN[when.weekday()]
+
+
+def _offset_string(when: datetime) -> str:
+    """Numeric UTC offset like -06:00 (never Z)."""
+    delta = when.utcoffset() or timedelta(0)
+    total = int(delta.total_seconds())
+    sign = "+" if total >= 0 else "-"
+    total = abs(total)
+    hours, rem = divmod(total, 3600)
+    minutes = rem // 60
+    return f"{sign}{hours:02d}:{minutes:02d}"
+
+
+def _utc_offset_label(when: datetime) -> str:
+    return f"UTC{_offset_string(when)}"
+
+
+def _rfc3339_with_offset(when: datetime) -> str:
+    """RFC3339 timestamp with numeric offset, never Z."""
+    return when.strftime("%Y-%m-%dT%H:%M:%S") + _offset_string(when)
+
+
+def _upcoming_week(when: datetime) -> list[str]:
+    days: list[str] = []
+    for i in range(1, 8):
+        day = when + timedelta(days=i)
+        days.append(f"{_weekday_en(day)} {day.date().isoformat()}")
+    return days
+
+
+def local_clock_line(now: datetime | None = None) -> str:
+    """One-line LOCAL CLOCK for FunctionDeclaration descriptions."""
+    when = _aware_local(now)
+    tzname = when.tzname() or _offset_string(when)
+    upcoming = ", ".join(_upcoming_week(when))
+    return (
+        f"LOCAL CLOCK: now {_weekday_en(when)} {when.date().isoformat()} "
+        f"{when.strftime('%H:%M:%S')} {tzname} ({_utc_offset_label(when)}); "
+        f"RFC3339 {_rfc3339_with_offset(when)}; upcoming: {upcoming}."
+    )
+
+
+def local_clock_context(
+    now: datetime | None = None,
+    *,
+    include_calendar: bool = False,
+    include_tasks: bool = False,
+    include_gmail: bool = False,
+    include_drive: bool = False,
+    include_docs: bool = False,
+) -> str:
+    """Behind-the-scenes local now / timezone / upcoming week for Workspace tools."""
+    when = _aware_local(now)
+    tzname = when.tzname() or _offset_string(when)
+    offset = _offset_string(when)
+    rfc = _rfc3339_with_offset(when)
+    lines = [
+        "LOCAL CLOCK (injected; resolve relative dates against this — "
+        "do not ask the user for RFC3339 or today's date):",
+        f"Now: {_weekday_en(when)} {when.date().isoformat()} "
+        f"{when.strftime('%H:%M:%S')} {tzname} ({_utc_offset_label(when)})",
+        f"RFC3339 now: {rfc}",
+        "Upcoming week:",
+    ]
+    lines.extend(f"- {day}" for day in _upcoming_week(when))
+    lines.append(
+        "Resolve today, tomorrow, this coming <weekday>, and times like 9:45am "
+        "against this clock."
+    )
+    example_wednesday = None
+    if include_calendar or include_tasks:
+        example_wednesday = next(
+            (
+                (when + timedelta(days=i)).date().isoformat()
+                for i in range(1, 8)
+                if (when + timedelta(days=i)).weekday() == 2
+            ),
+            (when + timedelta(days=1)).date().isoformat(),
+        )
+    if include_calendar:
+        lines.append(
+            "Calendar: pass start/end as RFC3339 with this UTC offset "
+            f"(for example {example_wednesday}T09:45:00{offset}), not Z, unless the user "
+            "asked for UTC. In the final user-facing summary, state the resolved "
+            'local date and time, not only "this Wednesday".'
+        )
+    if include_tasks:
+        lines.append(
+            "Tasks: pass due as RFC3339 with this UTC offset "
+            f"(for example {example_wednesday}T09:45:00{offset}), not Z, unless the user "
+            "asked for UTC. Resolve today, tomorrow, this coming Wednesday, and "
+            "9:45am against this clock. In the final user-facing summary, state "
+            'the resolved local date and time, not only "this Wednesday".'
+        )
+    if include_gmail:
+        yesterday = (when - timedelta(days=1)).strftime("%Y/%m/%d")
+        lines.append(
+            "Gmail: resolve today/yesterday/last week against this clock. "
+            "Use Gmail operators such as after:YYYY/MM/DD, before:YYYY/MM/DD, "
+            f"newer_than:7d (for example after:{yesterday} for yesterday)."
+        )
+    if include_drive:
+        lines.append(
+            "Drive: resolve relative dates against this clock. For search, use "
+            "Drive query times (modifiedTime, createdTime) with RFC3339 from "
+            "this clock. For create, use today's date in the title only if the "
+            "user asked for today/this week."
+        )
+    if include_docs:
+        lines.append(
+            "Docs: resolve \"today/this week\" against this clock for titles or "
+            "body; do not invent dates the user did not imply."
+        )
+    return "\n".join(lines)
+
+
 def _platform_hardware_block(
     platform: str,
     platform_hardware: dict[str, Any] | None = None,
@@ -221,6 +385,7 @@ def build_general_text_prompt(
     tool_aliases: list[str] | None = None,
     with_search: bool = False,
     research_context: str = "",
+    now: datetime | None = None,
 ) -> str:
     """Freeform studio text prompt (not game-manual JSON)."""
     user = (prompt or "").strip()
@@ -249,6 +414,25 @@ def build_general_text_prompt(
                 "internet or cite sources, use Search to find real pages, prefer primary/"
                 "reputable sources, and include full source URLs in any JSON you write.\n"
                 "Do not invent website names or bindings — ground them in Search results.\n"
+            )
+        aliases_set = set(tools)
+        include_calendar = bool(aliases_set & CALENDAR_CLOCK_ALIASES)
+        include_tasks = bool(aliases_set & TASK_CLOCK_ALIASES)
+        include_gmail = bool(aliases_set & GMAIL_CLOCK_ALIASES)
+        include_drive = bool(aliases_set & DRIVE_CLOCK_ALIASES)
+        include_docs = bool(aliases_set & DOCS_CLOCK_ALIASES)
+        if aliases_set & CLOCK_TOOL_ALIASES:
+            tools_block += (
+                "\n"
+                + local_clock_context(
+                    now,
+                    include_calendar=include_calendar,
+                    include_tasks=include_tasks,
+                    include_gmail=include_gmail,
+                    include_drive=include_drive,
+                    include_docs=include_docs,
+                )
+                + "\n"
             )
     research = (research_context or "").strip()
     research_block = ""

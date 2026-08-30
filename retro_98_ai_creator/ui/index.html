@@ -332,7 +332,7 @@
                     write_text, execute_powershell, search_gmail, search_drive,
                     create_drive_file, read_google_doc, create_google_doc, edit_google_doc,
                     list_calendar_events, create_calendar_event, edit_calendar_event,
-                    browse_web) via Gemini function calling.
+                    list_tasks, create_task, edit_task, browse_web) via Gemini function calling.
                     Absolute paths only for file tools; overwrites allowed. Google Search is optional:
                     when on, Creator can run a deep Search (+ URL context) research pass
                     before file tools; when off, only Tool Use runs. Text prompts only.
@@ -340,10 +340,11 @@
                   <fieldset id="google-workspace-settings">
                     <legend>Google Workspace</legend>
                     <p class="hint">
-                      One OAuth token for Gmail, Drive, Docs, and Calendar tools.
+                      One OAuth token for Gmail, Drive, Docs, Calendar, and Tasks tools.
                       Create a Google Cloud project, enable the <strong>Gmail</strong>,
-                      <strong>Google Drive</strong>, <strong>Google Docs</strong>, and
-                      <strong>Google Calendar</strong> APIs, and download an OAuth client
+                      <strong>Google Drive</strong>, <strong>Google Docs</strong>,
+                      <strong>Google Calendar</strong>, and <strong>Google Tasks</strong>
+                      APIs, and download an OAuth client
                       JSON (<strong>Desktop application</strong> type). Pick it below,
                       Save, then Connect Google Workspace once (re-connect after adding
                       APIs so new scopes are granted). Access tokens last about an hour;

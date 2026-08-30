@@ -3,6 +3,9 @@
 from __future__ import annotations
 
 import logging
+import re
+import sys
+from datetime import datetime, timedelta, tzinfo
 from typing import Any
 
 from .google_auth import CALENDAR_EVENTS, build_google_service
@@ -12,6 +15,34 @@ logger = logging.getLogger(__name__)
 DEFAULT_MAX_RESULTS = 20
 MAX_RESULTS_CAP = 50
 DEFAULT_CALENDAR = "primary"
+
+# Offset or Z after a time component (not the YYYY-MM-DD dashes).
+_TZ_SUFFIX_RE = re.compile(r"(Z|[+-]\d{2}:?\d{2})$", re.IGNORECASE)
+
+# Common Windows TimeZoneKeyName → IANA (Google Calendar timeZone).
+_WINDOWS_TO_IANA = {
+    "Alaskan Standard Time": "America/Anchorage",
+    "Atlantic Standard Time": "America/Halifax",
+    "AUS Eastern Standard Time": "Australia/Sydney",
+    "Central Standard Time": "America/Chicago",
+    "Central Standard Time (Mexico)": "America/Mexico_City",
+    "China Standard Time": "Asia/Shanghai",
+    "Eastern Standard Time": "America/New_York",
+    "GMT Standard Time": "Europe/London",
+    "Hawaiian Standard Time": "Pacific/Honolulu",
+    "India Standard Time": "Asia/Kolkata",
+    "Mountain Standard Time": "America/Denver",
+    "Mountain Standard Time (Mexico)": "America/Chihuahua",
+    "Pacific Standard Time": "America/Los_Angeles",
+    "Pacific Standard Time (Mexico)": "America/Tijuana",
+    "Romance Standard Time": "Europe/Paris",
+    "Russian Standard Time": "Europe/Moscow",
+    "Tokyo Standard Time": "Asia/Tokyo",
+    "US Eastern Standard Time": "America/Indiana/Indianapolis",
+    "US Mountain Standard Time": "America/Phoenix",
+    "UTC": "UTC",
+    "W. Europe Standard Time": "Europe/Berlin",
+}
 
 
 def _normalize_max_results(value: Any) -> int:
@@ -44,11 +75,68 @@ def _event_summary(item: dict[str, Any]) -> dict[str, Any]:
     }
 
 
-def _event_time(value: str, *, all_day: bool) -> dict[str, str]:
+def _offset_string(when: datetime) -> str:
+    delta = when.utcoffset() or timedelta(0)
+    total = int(delta.total_seconds())
+    sign = "+" if total >= 0 else "-"
+    total = abs(total)
+    hours, rem = divmod(total, 3600)
+    minutes = rem // 60
+    return f"{sign}{hours:02d}:{minutes:02d}"
+
+
+def _iana_name_from_tz(tz: tzinfo | None) -> str | None:
+    if tz is None:
+        return None
+    for attr in ("key", "zone"):
+        name = getattr(tz, attr, None)
+        if not isinstance(name, str):
+            continue
+        name = name.strip()
+        if name == "UTC" or "/" in name:
+            return name
+    return None
+
+
+def _windows_iana_name() -> str | None:
+    if sys.platform != "win32":
+        return None
+    try:
+        import winreg
+
+        with winreg.OpenKey(
+            winreg.HKEY_LOCAL_MACHINE,
+            r"SYSTEM\CurrentControlSet\Control\TimeZoneInformation",
+        ) as key:
+            raw, _ = winreg.QueryValueEx(key, "TimeZoneKeyName")
+    except OSError:
+        return None
+    win_name = str(raw).strip("\x00").strip()
+    return _WINDOWS_TO_IANA.get(win_name)
+
+
+def _event_time(
+    value: str,
+    *,
+    all_day: bool,
+    now: datetime | None = None,
+) -> dict[str, str]:
     stamp = (value or "").strip()
     if all_day:
         return {"date": stamp[:10]}
-    return {"dateTime": stamp}
+    if _TZ_SUFFIX_RE.search(stamp):
+        # Keep explicit Z or an existing offset; do not shift the wall clock.
+        return {"dateTime": stamp}
+    if now is None:
+        when = datetime.now().astimezone()
+        tz_name = _iana_name_from_tz(when.tzinfo) or _windows_iana_name()
+    else:
+        when = now if now.tzinfo is not None else now.astimezone()
+        tz_name = _iana_name_from_tz(when.tzinfo)
+    out: dict[str, str] = {"dateTime": stamp + _offset_string(when)}
+    if tz_name:
+        out["timeZone"] = tz_name
+    return out
 
 
 def list_calendar_events(

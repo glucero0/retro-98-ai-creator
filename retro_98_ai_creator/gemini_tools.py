@@ -89,6 +89,21 @@ TOOL_CATALOG: list[dict[str, str]] = [
         "summary": "Update an existing Google Calendar event",
     },
     {
+        "alias": "list_tasks",
+        "display_name": "List Tasks",
+        "summary": "List Google Tasks on the default or a named list",
+    },
+    {
+        "alias": "create_task",
+        "display_name": "Create Task",
+        "summary": "Create a Google Task (title, optional notes and due date/time)",
+    },
+    {
+        "alias": "edit_task",
+        "display_name": "Edit Task",
+        "summary": "Update or complete a Google Task",
+    },
+    {
         "alias": "browse_web",
         "display_name": "Browse Web",
         "summary": "Open an http(s) URL, read the page, and follow its links",
@@ -417,6 +432,51 @@ def execute_tool(name: str, args: dict[str, Any] | None) -> dict[str, Any]:
                 calendar_id=str(params.get("calendar_id") or "").strip() or None,
                 all_day=bool(params.get("all_day")),
             )
+        if alias == "list_tasks":
+            from .tasks_client import list_tasks as tasks_list
+
+            raw_max = params.get("max_results")
+            max_results = None
+            if raw_max is not None:
+                try:
+                    max_results = int(raw_max)
+                except (TypeError, ValueError):
+                    return {"ok": False, "error": "max_results must be an integer"}
+            return tasks_list(
+                max_results=max_results,
+                tasklist_id=str(params.get("tasklist_id") or "").strip() or None,
+                show_completed=bool(params.get("show_completed")),
+                query=str(params.get("query") or "").strip() or None,
+            )
+        if alias == "create_task":
+            from .tasks_client import create_task as tasks_create
+
+            return tasks_create(
+                str(params.get("title") or ""),
+                notes=(
+                    str(params.get("notes"))
+                    if params.get("notes") is not None
+                    else None
+                ),
+                due=str(params.get("due") or "").strip() or None,
+                tasklist_id=str(params.get("tasklist_id") or "").strip() or None,
+            )
+        if alias == "edit_task":
+            from .tasks_client import edit_task as tasks_edit
+
+            def _opt_task_str(key: str) -> str | None:
+                if key not in params:
+                    return None
+                return str(params.get(key))
+
+            return tasks_edit(
+                str(params.get("task_id") or ""),
+                title=_opt_task_str("title"),
+                notes=_opt_task_str("notes"),
+                due=_opt_task_str("due"),
+                status=_opt_task_str("status"),
+                tasklist_id=str(params.get("tasklist_id") or "").strip() or None,
+            )
         if alias == "browse_web":
             from .web_browse import browse_web as web_browse
 
@@ -442,11 +502,20 @@ def execute_tool(name: str, args: dict[str, Any] | None) -> dict[str, Any]:
         return {"ok": False, "error": str(exc)}
 
 
-def function_declarations_for(aliases: list[str] | None) -> list[Any]:
+def function_declarations_for(
+    aliases: list[str] | None,
+    *,
+    now: Any = None,
+) -> list[Any]:
     """Build google.genai FunctionDeclaration objects for the given aliases."""
     from google.genai import types
 
+    from .prompts import CLOCK_TOOL_ALIASES, local_clock_line
+
     selected = normalize_tool_aliases(aliases)
+    clock_line = ""
+    if any(alias in CLOCK_TOOL_ALIASES for alias in selected):
+        clock_line = " " + local_clock_line(now)
     decls: list[Any] = []
     for alias in selected:
         if alias == "read_json":
@@ -567,18 +636,26 @@ def function_declarations_for(aliases: list[str] | None) -> list[Any]:
                     name="search_gmail",
                     description=(
                         "Search the user's Gmail inbox using Gmail search syntax. "
-                        "Examples: is:unread in:inbox; category:purchases; "
-                        "subject:tracking; from:amazon.com newer_than:7d; "
-                        "is:unread to:me -from:noreply. "
+                        "Resolve today/yesterday/last week against the injected "
+                        "local clock. Use after:YYYY/MM/DD, before:YYYY/MM/DD, "
+                        "newer_than:7d. Examples: is:unread in:inbox; "
+                        "category:purchases; subject:tracking; from:amazon.com "
+                        "newer_than:7d; is:unread to:me -from:noreply. "
                         "Returns message metadata (from, subject, date, snippet, labels) "
                         "and optional full plain-text bodies. Read-only."
+                        f"{clock_line}"
                     ),
                     parameters_json_schema={
                         "type": "object",
                         "properties": {
                             "query": {
                                 "type": "string",
-                                "description": "Gmail search query (same syntax as Gmail search box)",
+                                "description": (
+                                    "Gmail search query (same syntax as Gmail search "
+                                    "box). Resolve relative dates against the injected "
+                                    "local clock (after:YYYY/MM/DD, before:YYYY/MM/DD, "
+                                    "newer_than:7d)."
+                                ),
                             },
                             "max_results": {
                                 "type": "integer",
@@ -604,17 +681,25 @@ def function_declarations_for(aliases: list[str] | None) -> list[Any]:
                     name="search_drive",
                     description=(
                         "Search the user's Google Drive using Drive query syntax. "
-                        "Examples: name contains 'budget'; mimeType = "
+                        "Resolve relative date windows against the injected local "
+                        "clock; use modifiedTime / createdTime with RFC3339 from "
+                        "this clock. Examples: name contains 'budget'; mimeType = "
                         "'application/vnd.google-apps.document'; "
                         "fullText contains 'invoice' and trashed = false. "
                         "Returns file id, name, mime type, modified time, and URL."
+                        f"{clock_line}"
                     ),
                     parameters_json_schema={
                         "type": "object",
                         "properties": {
                             "query": {
                                 "type": "string",
-                                "description": "Drive search query (name contains, mimeType, fullText, …)",
+                                "description": (
+                                    "Drive search query (name contains, mimeType, "
+                                    "fullText, modifiedTime, createdTime, …). "
+                                    "Resolve relative windows against the injected "
+                                    "local clock using RFC3339."
+                                ),
                             },
                             "max_results": {
                                 "type": "integer",
@@ -635,14 +720,22 @@ def function_declarations_for(aliases: list[str] | None) -> list[Any]:
                     name="create_drive_file",
                     description=(
                         "Create a file in the user's Google Drive. Default MIME type "
-                        "is text/plain. Use create_google_doc for a Google Doc."
+                        "is text/plain. Use create_google_doc for a Google Doc. "
+                        "Resolve relative dates against the injected local clock; "
+                        "put today's date in the title only if the user asked for "
+                        "today/this week."
+                        f"{clock_line}"
                     ),
                     parameters_json_schema={
                         "type": "object",
                         "properties": {
                             "name": {
                                 "type": "string",
-                                "description": "File name, including extension when useful",
+                                "description": (
+                                    "File name, including extension when useful. "
+                                    "Use today's date from the local clock only if "
+                                    "the user asked for today/this week."
+                                ),
                             },
                             "content": {
                                 "type": "string",
@@ -663,7 +756,11 @@ def function_declarations_for(aliases: list[str] | None) -> list[Any]:
                     name="read_google_doc",
                     description=(
                         "Read the plain text of a Google Doc. Use search_drive first "
-                        "when you only have a title, then pass the returned file id."
+                        "when you only have a title, then pass the returned file id. "
+                        "Resolve today/this week against the injected local clock "
+                        "when matching titles; do not invent dates the user did "
+                        "not imply."
+                        f"{clock_line}"
                     ),
                     parameters_json_schema={
                         "type": "object",
@@ -681,13 +778,23 @@ def function_declarations_for(aliases: list[str] | None) -> list[Any]:
             decls.append(
                 types.FunctionDeclaration(
                     name="create_google_doc",
-                    description="Create a Google Doc with a title and optional body text.",
+                    description=(
+                        "Create a Google Doc with a title and optional body text. "
+                        "Resolve today/this week against the injected local clock "
+                        "for titles or body; do not invent dates the user did "
+                        "not imply."
+                        f"{clock_line}"
+                    ),
                     parameters_json_schema={
                         "type": "object",
                         "properties": {
                             "title": {
                                 "type": "string",
-                                "description": "Document title",
+                                "description": (
+                                    "Document title. Use today's date from the "
+                                    "local clock only if the user asked for "
+                                    "today/this week."
+                                ),
                             },
                             "text": {
                                 "type": "string",
@@ -704,7 +811,10 @@ def function_declarations_for(aliases: list[str] | None) -> list[Any]:
                     name="edit_google_doc",
                     description=(
                         "Edit a Google Doc. mode=replace overwrites the body; "
-                        "mode=append adds text at the end."
+                        "mode=append adds text at the end. Resolve today/this "
+                        "week against the injected local clock for body text; "
+                        "do not invent dates the user did not imply."
+                        f"{clock_line}"
                     ),
                     parameters_json_schema={
                         "type": "object",
@@ -731,19 +841,28 @@ def function_declarations_for(aliases: list[str] | None) -> list[Any]:
                 types.FunctionDeclaration(
                     name="list_calendar_events",
                     description=(
-                        "List events on the user's Google Calendar. Times are RFC3339 "
-                        "(for example 2026-08-30T09:00:00-06:00). Defaults to the primary calendar."
+                        "List events on the user's Google Calendar. Resolve relative "
+                        "dates against the injected local clock. Times are RFC3339 with "
+                        "the local UTC offset, not Z unless the user asked for UTC. "
+                        "Defaults to the primary calendar."
+                        f"{clock_line}"
                     ),
                     parameters_json_schema={
                         "type": "object",
                         "properties": {
                             "time_min": {
                                 "type": "string",
-                                "description": "Lower bound (RFC3339), inclusive",
+                                "description": (
+                                    "Lower bound (RFC3339 with local UTC offset, "
+                                    "not Z unless UTC was requested), inclusive"
+                                ),
                             },
                             "time_max": {
                                 "type": "string",
-                                "description": "Upper bound (RFC3339), exclusive",
+                                "description": (
+                                    "Upper bound (RFC3339 with local UTC offset, "
+                                    "not Z unless UTC was requested), exclusive"
+                                ),
                             },
                             "query": {
                                 "type": "string",
@@ -766,8 +885,11 @@ def function_declarations_for(aliases: list[str] | None) -> list[Any]:
                 types.FunctionDeclaration(
                     name="create_calendar_event",
                     description=(
-                        "Create an event on the user's Google Calendar. "
-                        "Use RFC3339 dateTimes, or YYYY-MM-DD with all_day=true."
+                        "Create an event on the user's Google Calendar. Resolve "
+                        "relative dates/times against the injected local clock. Pass "
+                        "start/end as RFC3339 with the local UTC offset, not Z unless "
+                        "the user asked for UTC; or YYYY-MM-DD with all_day=true."
+                        f"{clock_line}"
                     ),
                     parameters_json_schema={
                         "type": "object",
@@ -778,11 +900,17 @@ def function_declarations_for(aliases: list[str] | None) -> list[Any]:
                             },
                             "start": {
                                 "type": "string",
-                                "description": "Start time (RFC3339) or date (YYYY-MM-DD)",
+                                "description": (
+                                    "Start time (RFC3339 with local UTC offset, "
+                                    "not Z unless UTC was requested) or date (YYYY-MM-DD)"
+                                ),
                             },
                             "end": {
                                 "type": "string",
-                                "description": "End time (RFC3339) or date (YYYY-MM-DD)",
+                                "description": (
+                                    "End time (RFC3339 with local UTC offset, "
+                                    "not Z unless UTC was requested) or date (YYYY-MM-DD)"
+                                ),
                             },
                             "description": {
                                 "type": "string",
@@ -809,7 +937,13 @@ def function_declarations_for(aliases: list[str] | None) -> list[Any]:
             decls.append(
                 types.FunctionDeclaration(
                     name="edit_calendar_event",
-                    description="Update fields on an existing Google Calendar event.",
+                    description=(
+                        "Update fields on an existing Google Calendar event. Resolve "
+                        "relative dates/times against the injected local clock. Pass "
+                        "start/end as RFC3339 with the local UTC offset, not Z unless "
+                        "the user asked for UTC."
+                        f"{clock_line}"
+                    ),
                     parameters_json_schema={
                         "type": "object",
                         "properties": {
@@ -823,11 +957,17 @@ def function_declarations_for(aliases: list[str] | None) -> list[Any]:
                             },
                             "start": {
                                 "type": "string",
-                                "description": "New start (RFC3339 or YYYY-MM-DD)",
+                                "description": (
+                                    "New start (RFC3339 with local UTC offset, "
+                                    "not Z unless UTC was requested, or YYYY-MM-DD)"
+                                ),
                             },
                             "end": {
                                 "type": "string",
-                                "description": "New end (RFC3339 or YYYY-MM-DD)",
+                                "description": (
+                                    "New end (RFC3339 with local UTC offset, "
+                                    "not Z unless UTC was requested, or YYYY-MM-DD)"
+                                ),
                             },
                             "description": {
                                 "type": "string",
@@ -847,6 +987,130 @@ def function_declarations_for(aliases: list[str] | None) -> list[Any]:
                             },
                         },
                         "required": ["event_id"],
+                    },
+                )
+            )
+        elif alias == "list_tasks":
+            decls.append(
+                types.FunctionDeclaration(
+                    name="list_tasks",
+                    description=(
+                        "List Google Tasks on the user's default task list "
+                        "(@default) or a specific tasklist_id. This is Tasks, "
+                        "not Calendar events. Resolve relative due dates/times against "
+                        "the injected local clock."
+                        f"{clock_line}"
+                    ),
+                    parameters_json_schema={
+                        "type": "object",
+                        "properties": {
+                            "query": {
+                                "type": "string",
+                                "description": "Optional filter matching title or notes",
+                            },
+                            "max_results": {
+                                "type": "integer",
+                                "description": "Maximum tasks to return (default 20, max 50)",
+                            },
+                            "tasklist_id": {
+                                "type": "string",
+                                "description": "Task list ID (default @default)",
+                            },
+                            "show_completed": {
+                                "type": "boolean",
+                                "description": "When true, include completed tasks",
+                            },
+                        },
+                    },
+                )
+            )
+        elif alias == "create_task":
+            decls.append(
+                types.FunctionDeclaration(
+                    name="create_task",
+                    description=(
+                        "Create a Google Task (a to-do item, not a Calendar event). "
+                        "Resolve relative due dates/times against the injected local "
+                        "clock. due is an optional due date and time — pass RFC3339 "
+                        "with the local UTC offset from the injected clock, not Z "
+                        "unless the user asked for UTC."
+                        f"{clock_line}"
+                    ),
+                    parameters_json_schema={
+                        "type": "object",
+                        "properties": {
+                            "title": {
+                                "type": "string",
+                                "description": "Task title",
+                            },
+                            "notes": {
+                                "type": "string",
+                                "description": "Optional details",
+                            },
+                            "due": {
+                                "type": "string",
+                                "description": (
+                                    "Optional due date/time (RFC3339 with local UTC "
+                                    "offset from the injected clock, not Z unless UTC "
+                                    "was requested). Resolve relative dates and times "
+                                    "against the local clock."
+                                ),
+                            },
+                            "tasklist_id": {
+                                "type": "string",
+                                "description": "Task list ID (default @default)",
+                            },
+                        },
+                        "required": ["title"],
+                    },
+                )
+            )
+        elif alias == "edit_task":
+            decls.append(
+                types.FunctionDeclaration(
+                    name="edit_task",
+                    description=(
+                        "Update a Google Task. status is needsAction or completed. "
+                        "Resolve relative due dates/times against the injected local "
+                        "clock. due is an optional due date and time — pass RFC3339 "
+                        "with the local UTC offset from the injected clock, not Z "
+                        "unless the user asked for UTC."
+                        f"{clock_line}"
+                    ),
+                    parameters_json_schema={
+                        "type": "object",
+                        "properties": {
+                            "task_id": {
+                                "type": "string",
+                                "description": "Task ID from list_tasks",
+                            },
+                            "title": {
+                                "type": "string",
+                                "description": "New title",
+                            },
+                            "notes": {
+                                "type": "string",
+                                "description": "New notes",
+                            },
+                            "due": {
+                                "type": "string",
+                                "description": (
+                                    "New due date/time (RFC3339 with local UTC offset "
+                                    "from the injected clock, not Z unless UTC was "
+                                    "requested). Resolve relative dates and times "
+                                    "against the local clock."
+                                ),
+                            },
+                            "status": {
+                                "type": "string",
+                                "description": "needsAction or completed",
+                            },
+                            "tasklist_id": {
+                                "type": "string",
+                                "description": "Task list ID (default @default)",
+                            },
+                        },
+                        "required": ["task_id"],
                     },
                 )
             )

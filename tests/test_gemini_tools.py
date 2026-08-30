@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from types import SimpleNamespace
 from typing import Any
@@ -21,7 +22,7 @@ from retro_98_ai_creator.gemini_tools import (
     response_text,
     tools_config_for,
 )
-from retro_98_ai_creator.prompts import build_general_text_prompt
+from retro_98_ai_creator.prompts import build_general_text_prompt, local_clock_context
 
 
 def test_use_tools_default_is_false():
@@ -45,6 +46,9 @@ def test_catalog_aliases():
         "list_calendar_events",
         "create_calendar_event",
         "edit_calendar_event",
+        "list_tasks",
+        "create_task",
+        "edit_task",
         "browse_web",
     ]
 
@@ -180,6 +184,24 @@ def test_execute_list_calendar_events_delegates():
         max_results=5,
         calendar_id=None,
         query=None,
+    )
+    assert result["ok"] is True
+
+
+def test_execute_create_task_delegates():
+    with patch(
+        "retro_98_ai_creator.tasks_client.create_task",
+        return_value={"ok": True, "id": "t1", "title": "Buy milk"},
+    ) as mock_create:
+        result = execute_tool(
+            "create_task",
+            {"title": "Buy milk", "due": "2026-08-30T00:00:00.000Z"},
+        )
+    mock_create.assert_called_once_with(
+        "Buy milk",
+        notes=None,
+        due="2026-08-30T00:00:00.000Z",
+        tasklist_id=None,
     )
     assert result["ok"] is True
 
@@ -331,6 +353,159 @@ def test_build_general_text_prompt_includes_research_context():
     assert "WEB RESEARCH FINDINGS" in prompt
     assert "https://example.com/bindings" in prompt
     assert "Do not invent URLs" in prompt
+
+
+_FROZEN_NOW = datetime(
+    2026, 8, 30, 7, 58, 0, tzinfo=timezone(timedelta(hours=-6), "MDT")
+)
+
+
+def test_local_clock_frozen_upcoming_wednesday():
+    text = local_clock_context(
+        _FROZEN_NOW, include_calendar=True, include_tasks=True
+    )
+    assert "Sunday 2026-08-30" in text
+    assert "Wednesday 2026-09-02" in text
+    assert "2026-08-30T07:58:00-06:00" in text
+    assert "2026-09-02T09:45:00-06:00" in text
+    assert "UTC-06:00" in text
+    assert "discarded" not in text.lower()
+    assert "midnight UTC" not in text
+
+
+def test_calendar_tools_inject_local_clock():
+    user = (
+        'create_calendar_event add a meeting named "fire jim jim" '
+        "on this coming Wednesday at 9:45am"
+    )
+    prompt = build_general_text_prompt(
+        user,
+        tool_aliases=["create_calendar_event"],
+        now=_FROZEN_NOW,
+    )
+    assert "LOCAL CLOCK" in prompt
+    assert "RFC3339" in prompt
+    assert "Wednesday 2026-09-02" in prompt
+    assert "not Z" in prompt
+    assert user in prompt
+    assert "Tasks:" not in prompt.split("USER PROMPT:")[0]
+
+
+def test_task_tools_inject_local_clock():
+    user = "create a task due this coming Wednesday"
+    prompt = build_general_text_prompt(
+        user,
+        tool_aliases=["create_task"],
+        now=_FROZEN_NOW,
+    )
+    header = prompt.split("USER PROMPT:")[0]
+    assert "LOCAL CLOCK" in prompt
+    assert "Wednesday 2026-09-02" in prompt
+    assert "09:45:00-06:00" in prompt
+    assert "not Z" in prompt
+    assert "00:00:00.000Z" not in prompt
+    assert "discarded" not in header.lower()
+    assert "midnight UTC" not in header
+    assert user in prompt
+    assert "Calendar:" not in header
+
+
+def test_list_tasks_injects_local_clock():
+    prompt = build_general_text_prompt(
+        "list my tasks due tomorrow",
+        tool_aliases=["list_tasks"],
+        now=_FROZEN_NOW,
+    )
+    assert "LOCAL CLOCK" in prompt
+    assert "Wednesday 2026-09-02" in prompt
+
+
+def test_gmail_tools_inject_local_clock():
+    user = "search mail from yesterday"
+    prompt = build_general_text_prompt(
+        user,
+        tool_aliases=["search_gmail"],
+        now=_FROZEN_NOW,
+    )
+    header = prompt.split("USER PROMPT:")[0]
+    assert "LOCAL CLOCK" in prompt
+    assert "after:" in prompt
+    assert "newer_than:" in prompt
+    assert "after:2026/08/29" in prompt
+    assert "Wednesday 2026-09-02" in prompt
+    assert user in prompt
+    assert "Calendar:" not in header
+    assert "Tasks:" not in header
+    assert "Drive:" not in header
+    assert "Docs:" not in header
+
+
+def test_drive_tools_inject_local_clock():
+    prompt = build_general_text_prompt(
+        "find files I edited this week",
+        tool_aliases=["search_drive"],
+        now=_FROZEN_NOW,
+    )
+    header = prompt.split("USER PROMPT:")[0]
+    assert "LOCAL CLOCK" in prompt
+    assert "Drive:" in header
+    assert "modifiedTime" in prompt
+    assert "createdTime" in prompt
+    assert "Wednesday 2026-09-02" in prompt
+    assert "Calendar:" not in header
+    assert "Gmail:" not in header
+
+
+def test_docs_tools_inject_local_clock():
+    prompt = build_general_text_prompt(
+        "create today's notes",
+        tool_aliases=["create_google_doc"],
+        now=_FROZEN_NOW,
+    )
+    header = prompt.split("USER PROMPT:")[0]
+    assert "LOCAL CLOCK" in prompt
+    assert "Docs:" in header
+    assert "Wednesday 2026-09-02" in prompt
+    assert "Calendar:" not in header
+    assert "Gmail:" not in header
+
+
+def test_non_scheduling_tools_do_not_inject_clock():
+    prompt = build_general_text_prompt(
+        "read the file",
+        tool_aliases=["read_json", "write_json"],
+        now=_FROZEN_NOW,
+    )
+    assert "LOCAL CLOCK" not in prompt
+    assert "Wednesday 2026-09-02" not in prompt
+
+
+def test_function_declarations_include_local_clock():
+    decls = function_declarations_for(
+        ["create_calendar_event", "create_task"],
+        now=_FROZEN_NOW,
+    )
+    assert len(decls) == 2
+    for decl in decls:
+        assert "LOCAL CLOCK" in decl.description
+        assert "Wednesday 2026-09-02" in decl.description
+    gmail_decls = function_declarations_for(["search_gmail"], now=_FROZEN_NOW)
+    assert "LOCAL CLOCK" in gmail_decls[0].description
+    assert "Wednesday 2026-09-02" in gmail_decls[0].description
+    json_decls = function_declarations_for(["read_json"], now=_FROZEN_NOW)
+    assert "LOCAL CLOCK" not in json_decls[0].description
+    task_decls = function_declarations_for(
+        ["create_task", "edit_task"], now=_FROZEN_NOW
+    )
+    for decl in task_decls:
+        schema = json.dumps(decl.parameters_json_schema)
+        blob = f"{decl.description}\n{schema}"
+        assert "discarded" not in blob.lower()
+        assert "midnight UTC" not in blob
+        assert "00:00:00.000Z" not in blob
+        assert "calendar date" not in blob.lower()
+        assert "due date/time" in blob.lower() or "due date and time" in blob.lower()
+        assert "not Z" in blob
 
 
 def test_tool_loop_mock(tmp_path: Path):
