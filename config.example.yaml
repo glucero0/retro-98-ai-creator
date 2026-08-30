@@ -67,10 +67,11 @@ paths:
   archives: archives.json
   media: media
 
-gmail:
+google_workspace:
   # OAuth client JSON from Google Cloud Console (Desktop application type)
+  # One token covers Gmail, Drive, Docs, and Calendar after Connect Google Workspace.
   credentials_path: null
-  token_path: .retro-98-ai-creator/gmail_token.json
+  token_path: .retro-98-ai-creator/google_workspace_token.json
 
 # Video Edit (Viewer → Edit on a video) requires ffmpeg + ffprobe on PATH
 # (or a common Windows install location). Install from https://ffmpeg.org/

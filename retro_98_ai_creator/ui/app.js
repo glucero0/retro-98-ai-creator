@@ -1342,6 +1342,46 @@
         summary: "Search Gmail with query syntax (unread, shipments, specific senders, etc.)",
       },
       {
+        alias: "search_drive",
+        display_name: "Search Drive",
+        summary: "Search Google Drive files by name, type, or Drive query syntax",
+      },
+      {
+        alias: "create_drive_file",
+        display_name: "Create Drive file",
+        summary: "Create a Google Drive file (text/plain by default)",
+      },
+      {
+        alias: "read_google_doc",
+        display_name: "Read Google Doc",
+        summary: "Read the text of a Google Doc by document ID",
+      },
+      {
+        alias: "create_google_doc",
+        display_name: "Create Google Doc",
+        summary: "Create a Google Doc with an optional initial body",
+      },
+      {
+        alias: "edit_google_doc",
+        display_name: "Edit Google Doc",
+        summary: "Replace or append text in a Google Doc",
+      },
+      {
+        alias: "list_calendar_events",
+        display_name: "List Calendar events",
+        summary: "List Google Calendar events in a time range",
+      },
+      {
+        alias: "create_calendar_event",
+        display_name: "Create Calendar event",
+        summary: "Create a Google Calendar event",
+      },
+      {
+        alias: "edit_calendar_event",
+        display_name: "Edit Calendar event",
+        summary: "Update an existing Google Calendar event",
+      },
+      {
         alias: "browse_web",
         display_name: "Browse Web",
         summary: "Open an http(s) URL, read the page, and follow its links",
@@ -4156,11 +4196,13 @@
     }
     syncGeminiToolsAvailability();
 
-    const gmailCfg = (boot.config && boot.config.gmail) || {};
-    if ($("#gmail-credentials-path")) {
-      $("#gmail-credentials-path").value = gmailCfg.credentials_path || "";
+    const workspaceCfg =
+      (boot.config && (boot.config.google_workspace || boot.config.gmail)) || {};
+    if ($("#google-workspace-credentials-path")) {
+      $("#google-workspace-credentials-path").value =
+        workspaceCfg.credentials_path || "";
     }
-    void refreshGmailAuthStatus();
+    void refreshGoogleWorkspaceAuthStatus();
 
     const suggested = boot.suggestedGeminiModels || [];
     fillGeminiModalitySelect(
@@ -4452,11 +4494,11 @@
     }
   }
 
-  function updateGmailAuthIndicators(status) {
-    const pathInput = $("#gmail-credentials-path");
+  function updateGoogleWorkspaceAuthIndicators(status) {
+    const pathInput = $("#google-workspace-credentials-path");
     const configured = !!(pathInput && pathInput.value.trim());
-    const badge = $("#gmail-auth-badge");
-    const statusEl = $("#gmail-auth-status");
+    const badge = $("#google-workspace-auth-badge");
+    const statusEl = $("#google-workspace-auth-status");
     const authorized = !!(status && status.authorized);
 
     if (badge) {
@@ -4476,30 +4518,43 @@
     }
     if (statusEl) {
       if (authorized) {
-        statusEl.textContent = status && status.has_refresh_token === false
-          ? "Gmail is connected, but Google did not issue a refresh token. Click Connect Gmail again so the session can renew after the hourly access token expires."
-          : "Gmail is connected. Attach search_gmail in Studio to query your inbox.";
+        if (status && status.has_refresh_token === false) {
+          statusEl.textContent =
+            "Google Workspace is connected, but Google did not issue a refresh token. Click Connect Google Workspace again so the session can renew after the hourly access token expires.";
+        } else {
+          const products = (status && status.granted_products) || [];
+          const missing = (status && status.missing_scopes) || [];
+          let text = products.length
+            ? "Google Workspace is connected (" + products.join(", ") + "). Attach Gmail, Drive, Docs, or Calendar tools in Studio."
+            : "Google Workspace is connected. Attach Gmail, Drive, Docs, or Calendar tools in Studio.";
+          if (missing.length) {
+            text += " Some requested scopes were not granted — Connect Google Workspace again if a product is missing.";
+          }
+          statusEl.textContent = text;
+        }
       } else if (configured) {
         statusEl.textContent =
-          "OAuth client JSON selected. Save settings, then click Connect Gmail.";
+          "OAuth client JSON selected. Save settings, then click Connect Google Workspace.";
       } else {
         statusEl.textContent =
-          "Pick an OAuth client JSON, Save, then Connect Gmail.";
+          "Pick an OAuth client JSON, Save, then Connect Google Workspace.";
       }
     }
   }
 
-  async function refreshGmailAuthStatus() {
+  async function refreshGoogleWorkspaceAuthStatus() {
     try {
       const a = api();
       if (!a) {
-        updateGmailAuthIndicators();
+        updateGoogleWorkspaceAuthIndicators();
         return;
       }
-      const res = await a.get_gmail_auth_status();
-      updateGmailAuthIndicators(res);
+      const res = a.get_google_workspace_auth_status
+        ? await a.get_google_workspace_auth_status()
+        : await a.get_gmail_auth_status();
+      updateGoogleWorkspaceAuthIndicators(res);
     } catch (_err) {
-      updateGmailAuthIndicators();
+      updateGoogleWorkspaceAuthIndicators();
     }
   }
 
@@ -4652,11 +4707,12 @@
       prompt: {
         extra_instructions: ($("#system-extra") && $("#system-extra").value) || "",
       },
-      gmail: {
+      google_workspace: {
         credentials_path:
-          ($("#gmail-credentials-path") && $("#gmail-credentials-path").value.trim()) ||
+          ($("#google-workspace-credentials-path") &&
+            $("#google-workspace-credentials-path").value.trim()) ||
           null,
-        token_path: ".retro-98-ai-creator/gmail_token.json",
+        token_path: ".retro-98-ai-creator/google_workspace_token.json",
       },
       ui: {
         sound_enabled: $("#opt-sound").checked,
@@ -7739,35 +7795,37 @@
       });
     }
 
-    if ($("#btn-gmail-pick-credentials")) {
-      $("#btn-gmail-pick-credentials").addEventListener("click", async () => {
+    if ($("#btn-google-workspace-pick-credentials")) {
+      $("#btn-google-workspace-pick-credentials").addEventListener("click", async () => {
         const a = api();
         if (!a) {
           showToast("Python bridge not ready.");
           return;
         }
-        const res = await a.pick_gmail_credentials();
+        const picker = a.pick_google_workspace_credentials || a.pick_gmail_credentials;
+        const res = await picker.call(a);
         if (res.cancelled) return;
         if (!res.ok) {
           showToast(res.error || "Could not pick OAuth client JSON");
           return;
         }
-        if ($("#gmail-credentials-path")) {
-          $("#gmail-credentials-path").value = res.path || "";
+        if ($("#google-workspace-credentials-path")) {
+          $("#google-workspace-credentials-path").value = res.path || "";
         }
-        updateGmailAuthIndicators();
+        updateGoogleWorkspaceAuthIndicators();
       });
     }
 
-    if ($("#btn-gmail-connect")) {
-      $("#btn-gmail-connect").addEventListener("click", async () => {
+    if ($("#btn-google-workspace-connect")) {
+      $("#btn-google-workspace-connect").addEventListener("click", async () => {
         const a = api();
         if (!a) {
           showToast("Python bridge not ready.");
           return;
         }
         const path =
-          ($("#gmail-credentials-path") && $("#gmail-credentials-path").value.trim()) ||
+          ($("#google-workspace-credentials-path") &&
+            $("#google-workspace-credentials-path").value.trim()) ||
           "";
         if (!path) {
           showToast("Pick OAuth client JSON before connecting.");
@@ -7775,20 +7833,22 @@
         }
         const saved =
           (state.config &&
-            state.config.gmail &&
-            state.config.gmail.credentials_path) ||
+            ((state.config.google_workspace &&
+              state.config.google_workspace.credentials_path) ||
+              (state.config.gmail && state.config.gmail.credentials_path))) ||
           "";
         if (saved !== path) {
           showToast("Save settings first so the OAuth JSON path is stored.");
           return;
         }
-        const res = await a.authorize_gmail();
+        const authorize = a.authorize_google_workspace || a.authorize_gmail;
+        const res = await authorize.call(a);
         if (!res.ok) {
-          showToast(res.error || "Gmail authorization failed");
+          showToast(res.error || "Google Workspace authorization failed");
           return;
         }
-        showToast(res.message || "Gmail connected.");
-        await refreshGmailAuthStatus();
+        showToast(res.message || "Google Workspace connected.");
+        await refreshGoogleWorkspaceAuthStatus();
       });
     }
 

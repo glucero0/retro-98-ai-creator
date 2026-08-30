@@ -329,39 +329,46 @@
                   <p class="hint" id="gemini-use-tools-hint">
                     Default for Creation Studio’s Enable Tools toggle (Studio can still
                     override per session). Enables built-in tools (read_json, write_json, read_text,
-                    write_text, execute_powershell, search_gmail, browse_web) via Gemini function calling.
+                    write_text, execute_powershell, search_gmail, search_drive,
+                    create_drive_file, read_google_doc, create_google_doc, edit_google_doc,
+                    list_calendar_events, create_calendar_event, edit_calendar_event,
+                    browse_web) via Gemini function calling.
                     Absolute paths only for file tools; overwrites allowed. Google Search is optional:
                     when on, Creator can run a deep Search (+ URL context) research pass
                     before file tools; when off, only Tool Use runs. Text prompts only.
                   </p>
-                  <fieldset id="gmail-settings">
-                    <legend>Gmail (search_gmail tool)</legend>
+                  <fieldset id="google-workspace-settings">
+                    <legend>Google Workspace</legend>
                     <p class="hint">
-                      Read-only inbox search for the <code>search_gmail</code> tool.
-                      Create a Google Cloud project, enable the Gmail API, and download an
-                      OAuth client JSON (<strong>Desktop application</strong> type). Pick it
-                      below, Save, then Connect Gmail once. Google access tokens last about
-                      an hour; Creator refreshes them automatically. If you have to reconnect
-                      every week, publish the OAuth consent screen (Testing → In production)
-                      in Google Cloud Console, then Connect Gmail again.
+                      One OAuth token for Gmail, Drive, Docs, and Calendar tools.
+                      Create a Google Cloud project, enable the <strong>Gmail</strong>,
+                      <strong>Google Drive</strong>, <strong>Google Docs</strong>, and
+                      <strong>Google Calendar</strong> APIs, and download an OAuth client
+                      JSON (<strong>Desktop application</strong> type). Pick it below,
+                      Save, then Connect Google Workspace once (re-connect after adding
+                      APIs so new scopes are granted). Access tokens last about an hour;
+                      Creator refreshes them automatically. If you have to reconnect
+                      every week, publish the OAuth consent screen (Testing → In
+                      production) in Google Cloud Console, then Connect Google Workspace
+                      again.
                     </p>
                     <div class="field-row-stacked">
-                      <label for="gmail-credentials-path">
+                      <label for="google-workspace-credentials-path">
                         <span>OAuth client JSON</span>
-                        <span class="label-hint" id="gmail-auth-badge">Not configured</span>
+                        <span class="label-hint" id="google-workspace-auth-badge">Not configured</span>
                       </label>
                       <input
-                        id="gmail-credentials-path"
+                        id="google-workspace-credentials-path"
                         type="text"
                         readonly
                         placeholder="Pick OAuth client JSON…"
                       />
                     </div>
                     <div class="form-actions">
-                      <button type="button" id="btn-gmail-pick-credentials">Pick OAuth JSON…</button>
-                      <button type="button" id="btn-gmail-connect">Connect Gmail…</button>
+                      <button type="button" id="btn-google-workspace-pick-credentials">Pick OAuth JSON…</button>
+                      <button type="button" id="btn-google-workspace-connect">Connect Google Workspace…</button>
                     </div>
-                    <p class="hint" id="gmail-auth-status"></p>
+                    <p class="hint" id="google-workspace-auth-status"></p>
                   </fieldset>
                   <div class="field-row">
                     <input type="checkbox" id="gemini-ocr-search-images" checked />
