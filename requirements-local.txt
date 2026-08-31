@@ -12,5 +12,5 @@ protobuf>=4.25
 huggingface-hub>=0.24
 tqdm>=4.66
 Pillow>=10.0
-imageio>=2.34
+imageio>=2.37.4
 imageio-ffmpeg>=0.5
