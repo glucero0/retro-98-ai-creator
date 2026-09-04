@@ -189,7 +189,7 @@ When tools are on, Studio hides the normal prompt and shows:
 
 ### Google Workspace setup (Gmail, Drive, Docs, Calendar, Tasks)
 
-One desktop OAuth client and one stored token cover all of these tools. Google Keep is not supported on a personal Gmail account. Adding a product later does not require a new client secret — enable the API, add the scope, then Connect again.
+One desktop OAuth client and one stored token cover all of these tools. **Google Keep is omitted** — the Keep API is not available on a personal Gmail account; it requires a Google Workspace (enterprise) account. Adding a product later does not require a new client secret — enable the API, add the scope, then Connect again.
 
 1. In [Google Cloud Console](https://console.cloud.google.com/), create a project and enable the **Gmail**, **Google Drive**, **Google Docs**, **Google Calendar**, and **Google Tasks** APIs.
 2. Create an OAuth client (**Desktop application**) and download the client JSON file.
