@@ -2246,8 +2246,6 @@
       el.classList.remove("minimized");
     }
     focusWindow(id);
-    // Let layout settle (esp. Control Panel height:auto) then extend scroll area
-    requestAnimationFrame(() => syncDesktopScrollExtent());
     if (id === "control") {
       syncControlPanelWidth();
     }
@@ -2260,6 +2258,11 @@
     if (id === "form") {
       syncStudioToolsPanel();
     }
+    if (el && !state.maximized[id]) layoutWindowInWorkArea(el);
+    requestAnimationFrame(() => {
+      if (el && !state.maximized[id]) layoutWindowInWorkArea(el);
+      syncDesktopScrollExtent();
+    });
   }
 
   let _geminiModelsRefreshSeq = 0;
@@ -2732,11 +2735,53 @@
   let dragState = null;
 
   function getDesktopBounds() {
-    const layer = $("#windows-layer") || $("#desktop");
+    const layer = windowsLayer();
     return {
       width: layer ? layer.clientWidth : window.innerWidth,
       height: layer ? layer.clientHeight : window.innerHeight,
     };
+  }
+
+  function getDesktopWorkArea() {
+    const bounds = getDesktopBounds();
+    const icons = document.getElementById("desktop-icons");
+    const pad = 12;
+    let left = pad;
+    if (icons) left = Math.round(icons.offsetLeft + icons.offsetWidth + pad);
+    const top = pad;
+    let width = bounds.width - left - pad;
+    let height = bounds.height - top - pad;
+    if (width < 320) {
+      left = pad;
+      width = Math.max(0, bounds.width - pad * 2);
+    }
+    height = Math.max(0, height);
+    return { left, top, width, height };
+  }
+
+  function layoutWindowInWorkArea(el) {
+    if (!el || el.classList.contains("maximized")) return;
+    const area = getDesktopWorkArea();
+    el.style.left = area.left + "px";
+    el.style.top = area.top + "px";
+    el.style.width = area.width + "px";
+    el.style.height = area.height + "px";
+    el.style.right = "auto";
+    el.style.maxWidth = "none";
+    el.style.maxHeight = "none";
+    el.style.minWidth = "0";
+    el.style.minHeight = "0";
+  }
+
+  function layoutOpenWindowsInWorkArea() {
+    document.querySelectorAll(".app-window").forEach((el) => {
+      const id = el.dataset.window;
+      if (!id || !state.open[id] || state.minimized[id] || state.maximized[id]) {
+        return;
+      }
+      if (el.hidden) return;
+      layoutWindowInWorkArea(el);
+    });
   }
 
   function clampWindowPosition(win, left, top) {
@@ -4847,7 +4892,10 @@
     document.documentElement.style.zoom = "";
     const label = $("#ui-scale-label");
     if (label) label.textContent = Math.round(clamped * 100) + "%";
-    requestAnimationFrame(() => syncDesktopScrollExtent());
+    requestAnimationFrame(() => {
+      layoutOpenWindowsInWorkArea();
+      syncDesktopScrollExtent();
+    });
   }
 
   function setControlTab(tab) {
@@ -4872,12 +4920,6 @@
     const ai = state.controlTab !== "display";
     win.classList.toggle("control-tab-ai", ai);
     win.classList.toggle("control-tab-display", !ai);
-    // Keep inline style in sync so open/drag layout matches CSS
-    win.style.width = ai ? "820px" : "600px";
-    // Drop any leftover resize height so the panel sizes to content / max-height
-    win.style.height = "";
-    win.style.maxHeight = "";
-    win.style.maxWidth = "";
   }
 
   function applyDisplaySettingsFromControls() {
@@ -8069,10 +8111,15 @@
     enableWindowResizing();
     tickClock();
     setInterval(tickClock, 15000);
+    layoutWindowInWorkArea(document.getElementById("win-form"));
     focusWindow("form");
     renderTaskbar();
+    layoutOpenWindowsInWorkArea();
     syncDesktopScrollExtent();
-    window.addEventListener("resize", () => syncDesktopScrollExtent());
+    window.addEventListener("resize", () => {
+      layoutOpenWindowsInWorkArea();
+      syncDesktopScrollExtent();
+    });
 
     const a = await waitForApi();
     if (!a) {
