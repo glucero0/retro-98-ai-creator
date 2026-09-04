@@ -26,7 +26,7 @@ def run_cancellable(
     """
     Run ``fn`` on a daemon thread and stop waiting if ``cancel_event`` is set.
 
-    Used around blocking provider HTTP calls (Gemini / OpenRouter) that cannot
+    Used around blocking provider HTTP calls (Gemini) that cannot
     be aborted mid-request. The orphaned call may still finish in the background;
     we only stop blocking the job so Cancel does not hang the UI.
     """

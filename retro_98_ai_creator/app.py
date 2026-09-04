@@ -235,27 +235,12 @@ def main() -> int:
     if hasattr(window.events, "resized"):
         window.events.resized += _remember_size
 
-    provider = (cfg.get("backend") or {}).get("provider") or "gemini"
     logger.info("Starting Retro 98 AI Creator")
     logger.info("UI: %s", url)
     logger.info("Media HTTP: %s/media/", origin)
     logger.info("Window: %sx%s", width, height)
-    logger.info("Backend: %s", provider)
-    if provider == "gemini":
-        logger.info("Gemini text model: %s", (cfg.get("gemini") or {}).get("text_model"))
-    elif provider == "openrouter":
-        logger.info(
-            "OpenRouter text model: %s",
-            (cfg.get("openrouter") or {}).get("text_model"),
-        )
-    else:
-        hf = cfg.get("huggingface") or {}
-        logger.info(
-            "HF models: text=%s image=%s video=%s",
-            hf.get("text_model") or hf.get("repo_id"),
-            hf.get("image_model"),
-            hf.get("video_model"),
-        )
+    logger.info("Backend: gemini")
+    logger.info("Gemini text model: %s", (cfg.get("gemini") or {}).get("text_model"))
     try:
         webview.start(debug=bool(ui_cfg.get("debug")))
     finally:

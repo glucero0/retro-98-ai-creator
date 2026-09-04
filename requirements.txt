@@ -1,6 +1,5 @@
 # Pinned from `pip freeze` (project .venv on Windows).
-# Optional local Hugging Face backend: pip install -r requirements-local.txt
-# Editable (-e) installs from the freeze were omitted ? they are machine-specific.
+# Editable (-e) installs from the freeze were omitted — they are machine-specific.
 
 annotated-types==0.8.0
 anyio==4.14.2

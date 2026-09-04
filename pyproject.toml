@@ -10,7 +10,7 @@ readme = "README.md"
 license = { text = "MIT" }
 requires-python = ">=3.10"
 authors = [{ name = "Retro 98 AI Creator contributors" }]
-keywords = ["retro", "gaming", "documentation", "gemini", "huggingface", "win98", "98.css"]
+keywords = ["retro", "gaming", "documentation", "gemini", "win98", "98.css"]
 classifiers = [
   "Development Status :: 3 - Alpha",
   "Environment :: Win32 (MS Windows)",
@@ -30,15 +30,6 @@ dependencies = [
 
 [project.optional-dependencies]
 dev = ["pytest>=8.0", "ruff>=0.5"]
-local = [
-  "torch>=2.2",
-  "transformers>=4.43",
-  "accelerate>=0.33",
-  "sentencepiece>=0.2",
-  "protobuf>=4.25",
-  "huggingface-hub>=0.24",
-  "tqdm>=4.66",
-]
 
 [project.scripts]
 retro-98-ai-creator = "retro_98_ai_creator.app:main"

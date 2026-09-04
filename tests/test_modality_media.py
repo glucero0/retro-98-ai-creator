@@ -88,39 +88,6 @@ def test_gemini_routes_image_prompt_ok():
     assert "flash-image" in ok["model"] or "image" in ok["model"]
 
 
-def test_openrouter_routes_image_prompt_ok():
-    prompt = "create an image of a dragon in a suit"
-    ok = check_prompt_model_compatibility(
-        prompt, "google/gemini-2.5-flash", provider="openrouter"
-    )
-    assert ok["ok"] is True
-    assert ok.get("routed") is True
-    assert ok["modelModality"] == "image"
-    assert "image" in ok["model"] or "flux" in ok["model"]
-
-
-def test_huggingface_routes_image_and_video_prompts():
-    image = check_prompt_model_compatibility(
-        "create an image of a dragon in a suit",
-        "microsoft/Phi-3.5-mini-instruct",
-        provider="huggingface",
-    )
-    assert image["ok"] is True
-    assert image.get("routed") is True
-    assert image["modelModality"] == "image"
-    assert "diffusion" in image["model"] or "sd" in image["model"].lower()
-
-    video = check_prompt_model_compatibility(
-        "Generate a video of waves",
-        "microsoft/Phi-3.5-mini-instruct",
-        provider="huggingface",
-    )
-    assert video["ok"] is True
-    assert video.get("routed") is True
-    assert video["modelModality"] == "video"
-    assert "video" in video["model"].lower() or "zeroscope" in video["model"].lower()
-
-
 def test_classify_local_diffusion_and_t2v():
     assert (
         classify_model_modality("stable-diffusion-v1-5/stable-diffusion-v1-5")
