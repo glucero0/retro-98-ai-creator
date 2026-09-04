@@ -73,5 +73,5 @@ google_workspace:
   credentials_path: null
   token_path: .retro-98-ai-creator/google_workspace_token.json
 
-# Video Edit (Viewer → Edit on a video) requires ffmpeg + ffprobe on PATH
+# Video Editor (Viewer → Edit on a video) requires ffmpeg + ffprobe on PATH
 # (or a common Windows install location). Install from https://ffmpeg.org/

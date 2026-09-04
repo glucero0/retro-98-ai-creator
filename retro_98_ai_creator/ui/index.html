@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Retro 98 AI Creator</title>
   <link rel="stylesheet" href="vendor/98.css" />
-  <link rel="stylesheet" href="styles.css?v=workarea1" />
+  <link rel="stylesheet" href="styles.css?v=editor3" />
 </head>
 <body>
   <div id="desktop">
@@ -23,13 +23,13 @@
           <div class="icon-glyph">👁️</div>
           <span>Viewer</span>
         </button>
-        <button type="button" class="desktop-icon" data-open="image-edit" title="Image Edit">
+        <button type="button" class="desktop-icon" data-open="image-edit" title="Image Editor">
           <div class="icon-glyph">🖼️</div>
-          <span>Image Edit</span>
+          <span>Image Editor</span>
         </button>
-        <button type="button" class="desktop-icon" data-open="video-edit" title="Video Edit">
+        <button type="button" class="desktop-icon" data-open="video-edit" title="Video Editor">
           <div class="icon-glyph">🎬</div>
-          <span>Video Edit</span>
+          <span>Video Editor</span>
         </button>
         <button type="button" class="desktop-icon" data-open="control" title="Control Panel">
           <div class="icon-glyph">⚙️</div>
@@ -187,6 +187,7 @@
             <button type="button" id="btn-edit-image" hidden>Edit</button>
             <button type="button" id="btn-edit-video" hidden>Edit</button>
             <button type="button" id="btn-use-basis">Use as Basis</button>
+            <button type="button" id="btn-viewer-send-creator" hidden>Save and Send to Creator</button>
             <button type="button" id="btn-copy-ascii">Copy ASCII</button>
             <button type="button" id="btn-voice">Voice Reader</button>
           </div>
@@ -616,7 +617,7 @@
                     </p>
                   </div>
                   <p class="hint">
-                    Video Edit requires a <strong>current ffmpeg</strong> on PATH
+                    Video Editor requires a <strong>current ffmpeg</strong> on PATH
                     (https://ffmpeg.org/ or <code>winget install ffmpeg</code>).
                     Avoid outdated copies under <code>Python\Scripts</code>
                     (see <code>config.example.yaml</code>).
@@ -635,7 +636,7 @@
       <!-- Image Edit (ReFrame-style adjustments) -->
       <div class="window app-window" id="win-image-edit" data-window="image-edit" hidden style="left:80px;top:30px;width:920px;height:640px;">
         <div class="title-bar">
-          <div class="title-bar-text">Image Edit</div>
+          <div class="title-bar-text">Image Editor</div>
           <div class="title-bar-controls">
             <button aria-label="Minimize" data-action="minimize"></button>
             <button aria-label="Maximize" data-action="maximize"></button>
@@ -780,6 +781,7 @@
                 <button type="button" id="btn-edit-apply" class="default">Apply</button>
                 <button type="button" id="btn-edit-save" class="default" hidden>Save</button>
                 <button type="button" id="btn-edit-save-as">Save As…</button>
+                <button type="button" id="btn-edit-send-creator">Save and Send to Creator</button>
               </div>
             </div>
           </div>
@@ -789,7 +791,7 @@
       <!-- Video Edit (ffmpeg filters + trim/split/splice) -->
       <div class="window app-window" id="win-video-edit" data-window="video-edit" hidden style="left:60px;top:20px;width:960px;height:680px;">
         <div class="title-bar">
-          <div class="title-bar-text">Video Edit</div>
+          <div class="title-bar-text">Video Editor</div>
           <div class="title-bar-controls">
             <button aria-label="Minimize" data-action="minimize"></button>
             <button aria-label="Maximize" data-action="maximize"></button>
@@ -942,6 +944,7 @@
                 <button type="button" id="btn-vedit-apply" class="default">Apply</button>
                 <button type="button" id="btn-vedit-save" class="default" hidden>Save</button>
                 <button type="button" id="btn-vedit-save-as">Save As…</button>
+                <button type="button" id="btn-vedit-send-creator">Save and Send to Creator</button>
               </div>
             </div>
           </div>
@@ -963,8 +966,8 @@
       <button type="button" data-open="form">✨ Creation Studio</button>
       <button type="button" data-open="library">📁 Archives</button>
       <button type="button" data-open="viewer">👁️ Viewer</button>
-      <button type="button" data-open="image-edit">🖼️ Image Edit</button>
-      <button type="button" data-open="video-edit">🎬 Video Edit</button>
+      <button type="button" data-open="image-edit">🖼️ Image Editor</button>
+      <button type="button" data-open="video-edit">🎬 Video Editor</button>
       <button type="button" data-open="control">⚙️ Control Panel</button>
     </div>
 
@@ -1075,6 +1078,6 @@
   <script src="vendor/jspdf.umd.min.js"></script>
   <script src="catalog.js"></script>
   <script src="image_edit.js"></script>
-  <script src="app.js?v=workarea1"></script>
+  <script src="app.js?v=editor3"></script>
 </body>
 </html>

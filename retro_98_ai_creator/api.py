@@ -54,6 +54,34 @@ def _file_dialog(kind: str) -> Any:
         raise ValueError(f"Unknown file dialog kind: {kind!r}")
     return getattr(webview, name)
 
+
+def _save_file_types(suffix: str) -> tuple[str, ...]:
+    """pywebview file_types entry for a save dialog, or empty if unknown."""
+    labels = {
+        ".png": "PNG Image (*.png)",
+        ".pdf": "PDF Document (*.pdf)",
+        ".mp4": "MP4 Video (*.mp4)",
+        ".json": "JSON (*.json)",
+        ".txt": "Text File (*.txt)",
+    }
+    key = suffix.lower()
+    if key and not key.startswith("."):
+        key = "." + key
+    label = labels.get(key)
+    return (label,) if label else ()
+
+
+def _ensure_save_suffix(path: Path, suffix: str) -> Path:
+    """Force a save path to end with suffix, replacing any other extension."""
+    want = (suffix or "").lower()
+    if not want:
+        return path
+    if not want.startswith("."):
+        want = "." + want
+    if path.suffix.lower() != want:
+        return path.with_suffix(want)
+    return path
+
 class Api:
     """Methods on this class are callable from window.pywebview.api in the UI."""
 
@@ -1045,7 +1073,7 @@ class Api:
         return {"ok": True, "creation": saved}
 
     def ffmpeg_status(self) -> dict[str, Any]:
-        """Whether system ffmpeg/ffprobe are available for Video Edit."""
+        """Whether system ffmpeg/ffprobe are available for Video Editor."""
         from .video_edit import ffmpeg_available
 
         return ffmpeg_available()
@@ -1186,10 +1214,14 @@ class Api:
             result = self._window.create_file_dialog(
                 _file_dialog("save"),
                 save_filename=f"{safe}.mp4",
+                file_types=_save_file_types(".mp4"),
             )
             if not result:
                 return {"ok": False, "cancelled": True}
-            out = Path(result if isinstance(result, str) else result[0])
+            out = _ensure_save_suffix(
+                Path(result if isinstance(result, str) else result[0]),
+                ".mp4",
+            )
             out.write_bytes(dest.read_bytes())
             return {"ok": True, "path": str(out)}
         except Exception as exc:  # noqa: BLE001
@@ -1315,10 +1347,8 @@ class Api:
                 pass
 
     def export_creation_media(self, creation: dict[str, Any] | None = None) -> dict[str, Any]:
-        """Save the native media file via a file dialog (PNG/JPEG/MP4/…)."""
-        import webview
-
-        from .media_store import extension_for_mime, mime_for_path, resolve_media_path
+        """Save the native media file via a file dialog (Viewer Save MP4 / similar)."""
+        from .media_store import mime_for_path, resolve_media_path
 
         if self._window is None:
             return {"ok": False, "error": "No window"}
@@ -1327,40 +1357,51 @@ class Api:
         if path is None:
             return {"ok": False, "error": "Media file not found"}
         mime = creation.get("mimeType") or mime_for_path(path)
-        ext = extension_for_mime(mime, fallback=path.suffix or ".bin")
+        modality = (creation.get("modality") or "").strip().lower()
+        if modality == "video" or (mime or "").startswith("video/"):
+            ext = ".mp4"
+        else:
+            from .media_store import extension_for_mime
+
+            ext = extension_for_mime(mime, fallback=path.suffix or ".bin")
         title = (creation.get("title") or creation.get("game") or "creation").strip()
         safe = "".join(c if c.isalnum() or c in "-_ " else "_" for c in title)[:40].strip() or "creation"
         default_name = f"{safe}{ext}"
         result = self._window.create_file_dialog(
             _file_dialog("save"),
             save_filename=default_name,
+            file_types=_save_file_types(ext),
         )
         if not result:
             return {"ok": False, "cancelled": True}
-        dest = Path(result if isinstance(result, str) else result[0])
+        dest = _ensure_save_suffix(
+            Path(result if isinstance(result, str) else result[0]),
+            ext,
+        )
         dest.write_bytes(path.read_bytes())
         return {"ok": True, "path": str(dest)}
 
     def save_file_dialog(self, default_name: str, content: str) -> dict[str, Any]:
         """Open a native save dialog and write text content."""
-        import webview
-
         if self._window is None:
             return {"ok": False, "error": "No window"}
         result = self._window.create_file_dialog(
             _file_dialog("save"),
             save_filename=default_name,
+            file_types=_save_file_types(Path(default_name).suffix),
         )
         if not result:
             return {"ok": False, "cancelled": True}
-        path = Path(result if isinstance(result, str) else result[0])
+        path = _ensure_save_suffix(
+            Path(result if isinstance(result, str) else result[0]),
+            Path(default_name).suffix,
+        )
         path.write_text(content, encoding="utf-8")
         return {"ok": True, "path": str(path)}
 
     def save_binary_file_dialog(self, default_name: str, base64_data: str) -> dict[str, Any]:
         """Open a native save dialog and write base64-decoded bytes (PNG/PDF)."""
         import base64
-        import webview
 
         if self._window is None:
             return {"ok": False, "error": "No window"}
@@ -1380,10 +1421,14 @@ class Api:
         result = self._window.create_file_dialog(
             _file_dialog("save"),
             save_filename=default_name,
+            file_types=_save_file_types(Path(default_name).suffix),
         )
         if not result:
             return {"ok": False, "cancelled": True}
-        path = Path(result if isinstance(result, str) else result[0])
+        path = _ensure_save_suffix(
+            Path(result if isinstance(result, str) else result[0]),
+            Path(default_name).suffix,
+        )
         path.write_bytes(raw)
         return {"ok": True, "path": str(path)}
 

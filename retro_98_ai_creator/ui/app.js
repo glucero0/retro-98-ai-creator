@@ -1993,6 +1993,26 @@
     );
   }
 
+  async function sendCreationToCreator(creation) {
+    if (!creation) {
+      showToast("Open or select a creation first.");
+      return false;
+    }
+    const mod = creationModality(creation);
+    if (mod !== "image" && mod !== "video") {
+      showToast("Save and Send to Creator is for images and videos.");
+      return false;
+    }
+    const ok = await setStudioBasisFromCreation(creation, { anonymous: true });
+    if (!ok) return false;
+    openWindow("form");
+    showToast(
+      (mod === "image" ? "Image" : "Video") +
+        " sent to Creation Studio — describe the change, then CREATE. The new result is saved as its own Archive item."
+    );
+    return true;
+  }
+
   function clearStudioBasis() {
     state.studioBasis = null;
     renderStudioBasisPanel();
@@ -2044,16 +2064,22 @@
       preview.appendChild(img);
     }
     if (label) {
-      label.textContent =
-        (basis.modality === "video" ? "Video basis: " : "Image basis: ") +
-        (basis.title || basis.creationId || "media");
+      if (basis.title) {
+        label.textContent =
+          (basis.modality === "video" ? "Video basis: " : "Image basis: ") +
+          basis.title;
+      } else {
+        label.textContent =
+          basis.modality === "video" ? "Video basis" : "Image basis";
+      }
     }
     requestAnimationFrame(() => syncDesktopScrollExtent());
   }
 
-  async function setStudioBasisFromCreation(creation) {
+  async function setStudioBasisFromCreation(creation, opts) {
     const a = api();
     if (!a || !creation) return false;
+    const anonymous = !!(opts && opts.anonymous);
     const mod = creationModality(creation);
     if (mod !== "image" && mod !== "video") {
       showToast("Only image or video can be a media basis.");
@@ -2071,18 +2097,20 @@
       modality: mod,
       fileUrl: previewUrl,
       mimeType: payload.mimeType || creation.mimeType || "",
-      title: creationTitle(creation),
+      title: anonymous ? "" : creationTitle(creation),
       mediaPath: creation.mediaPath || "",
     };
-    if (!(getStudioPrompt() || "").trim() && (creation.prompt || "").trim()) {
-      setStudioPrompt(creation.prompt.trim());
-    }
-    if (
-      studioToolsEnabled() &&
-      !(getStudioSearch() || "").trim() &&
-      (creation.prompt || "").trim()
-    ) {
-      setStudioSearch(creation.prompt.trim());
+    if (!anonymous) {
+      if (!(getStudioPrompt() || "").trim() && (creation.prompt || "").trim()) {
+        setStudioPrompt(creation.prompt.trim());
+      }
+      if (
+        studioToolsEnabled() &&
+        !(getStudioSearch() || "").trim() &&
+        (creation.prompt || "").trim()
+      ) {
+        setStudioSearch(creation.prompt.trim());
+      }
     }
     renderStudioBasisPanel();
     return true;
@@ -2214,16 +2242,23 @@
     state.windowZOrder = order;
     const el = document.getElementById("win-" + id);
     if (!el) return;
+    const layer = windowsLayer();
+    // Reparenting/restacking during mousedown cancels the following click, so
+    // leave a window that is already front-most alone.
+    if (layer && layer.lastElementChild === el) return;
     windowZTop += 1;
     el.style.setProperty("z-index", String(windowZTop), "important");
-    const layer = windowsLayer();
     if (layer) layer.appendChild(el);
   }
 
   function focusWindow(id) {
     if (!id) return;
+    const already = state.focused === id;
     state.focused = id;
     bringWindowToFront(id);
+    if (already && document.querySelector(".app-window.focused")?.dataset.window === id) {
+      return;
+    }
     document.querySelectorAll(".app-window").forEach((w) => {
       const title = w.querySelector(".title-bar");
       if (w.dataset.window === id) {
@@ -2820,13 +2855,19 @@
         origLeft: Number.isFinite(startLeft) ? startLeft : win.offsetLeft || 0,
         origTop: Number.isFinite(startTop) ? startTop : win.offsetTop || 0,
         scale: uiZoomFactor(),
+        dragging: false,
       };
-      win.classList.add("dragging");
-      e.preventDefault();
     });
 
     document.addEventListener("mousemove", (e) => {
       if (!dragState) return;
+      if (!dragState.dragging) {
+        const adx = e.clientX - dragState.startX;
+        const ady = e.clientY - dragState.startY;
+        if (adx * adx + ady * ady < 16) return;
+        dragState.dragging = true;
+        dragState.win.classList.add("dragging");
+      }
       const scale = dragState.scale || 1;
       const dx = (e.clientX - dragState.startX) / scale;
       const dy = (e.clientY - dragState.startY) / scale;
@@ -2980,8 +3021,8 @@
       viewer: state.active ? "Viewer — " + creationTitle(state.active) : "Viewer",
       library: "Archives",
       control: "Control Panel",
-      "image-edit": "Image Edit",
-      "video-edit": "Video Edit",
+      "image-edit": "Image Editor",
+      "video-edit": "Video Editor",
     };
     const ids = ["form", "viewer", "library", "control", "image-edit", "video-edit"].filter(
       (id) => state.open[id]
@@ -4276,6 +4317,9 @@
     }
     if ($("#btn-edit-image")) $("#btn-edit-image").hidden = !showEditImage;
     if ($("#btn-edit-video")) $("#btn-edit-video").hidden = !showEditVideo;
+    if ($("#btn-viewer-send-creator")) {
+      $("#btn-viewer-send-creator").hidden = !(showEditImage || showEditVideo);
+    }
     if ($("#btn-copy-ascii")) $("#btn-copy-ascii").hidden = !showAscii;
     if ($("#btn-voice")) $("#btn-voice").hidden = !showVoice;
     if ($("#btn-export-json")) {
@@ -5671,11 +5715,12 @@
     if ($("#btn-edit-save")) $("#btn-edit-save").hidden = !imageEdit.standalone;
     // Save As is always available once an image is loaded (Archives Apply or desktop editor)
     if ($("#btn-edit-save-as")) $("#btn-edit-save-as").hidden = false;
+    if ($("#btn-edit-send-creator")) $("#btn-edit-send-creator").hidden = false;
     const hint = $("#image-edit-hint");
     if (hint) {
       hint.textContent = imageEdit.standalone
-        ? "Load an image to begin. At 0° rotation, drag to set a crop, then drag the box or handles to adjust. Save writes Archives; Save As… exports a file."
-        : "At 0° rotation, drag on the image to set a crop. Drag the yellow box to move, or use the handles to resize. Clear Crop to reset. Apply saves to Archives; Save As… exports a file.";
+        ? "Load an image to begin. At 0° rotation, drag to set a crop, then drag the box or handles to adjust. Save writes Archives; Save As… exports a file. Save and Send to Creator hands the current image to Creation Studio without the original filename."
+        : "At 0° rotation, drag on the image to set a crop. Drag the yellow box to move, or use the handles to resize. Clear Crop to reset. Apply saves to Archives; Save As… exports a file. Save and Send to Creator hands the current image to Creation Studio without the original filename.";
     }
   }
 
@@ -5726,7 +5771,7 @@
       }
       rememberImportedCreation(res.creation);
       await openImageEditor(res.creation, { standalone: true });
-      showToast("Image loaded into Image Edit");
+      showToast("Image loaded into Image Editor");
     } catch (err) {
       showToast("Load failed: " + err);
     } finally {
@@ -6173,6 +6218,24 @@
     }
   }
 
+  async function saveImageEditorAndSendToCreator() {
+    if (!imageEdit.sourceImg || !window.R98ImageEdit) {
+      showToast("Load an image first.");
+      return;
+    }
+    beginBusy("Sending to Creator", "Saving the edited image…", { delayMs: 0 });
+    try {
+      const saved = await persistEditedImageToArchives();
+      if (!saved) return;
+      await reloadImageEditorFromCreation(saved);
+      await sendCreationToCreator(saved);
+    } catch (err) {
+      showToast("Send to Creator failed: " + err);
+    } finally {
+      endBusy("Ready");
+    }
+  }
+
   function closeImageEditor() {
     closeWindow("image-edit");
   }
@@ -6416,6 +6479,11 @@
         saveImageEditorAs();
       });
     }
+    if ($("#btn-edit-send-creator")) {
+      $("#btn-edit-send-creator").addEventListener("click", () => {
+        saveImageEditorAndSendToCreator();
+      });
+    }
     setupImageEditCropInteraction();
   }
 
@@ -6457,11 +6525,12 @@
     if ($("#btn-vedit-save")) $("#btn-vedit-save").hidden = !videoEdit.standalone;
     // Save As is always available once a video is loaded
     if ($("#btn-vedit-save-as")) $("#btn-vedit-save-as").hidden = false;
+    if ($("#btn-vedit-send-creator")) $("#btn-vedit-send-creator").hidden = false;
     const hint = $("#video-edit-hint");
     if (hint) {
       hint.textContent = videoEdit.standalone
-        ? "Load a video to begin. Sliders preview live on the player (play, scrub, and timeline keep working). Save writes Archives; Save As… exports MP4 (ffmpeg required)."
-        : "Sliders preview live on the player while you play and edit the timeline. Apply rebuilds the video in Archives; Save As… exports MP4 (requires ffmpeg on PATH). Drag a paused frame (0°) to crop. Timeline starts at 0.00s.";
+        ? "Load a video to begin. Sliders preview live on the player (play, scrub, and timeline keep working). Save writes Archives; Save As… exports MP4 (ffmpeg required). Save and Send to Creator hands the current video to Creation Studio without the original filename."
+        : "Sliders preview live on the player while you play and edit the timeline. Apply rebuilds the video in Archives; Save As… exports MP4 (requires ffmpeg on PATH). Drag a paused frame (0°) to crop. Timeline starts at 0.00s. Save and Send to Creator hands the current video to Creation Studio without the original filename.";
     }
   }
 
@@ -6486,7 +6555,7 @@
       }
       rememberImportedCreation(res.creation);
       await openVideoEditor(res.creation, { standalone: true });
-      showToast("Video loaded into Video Edit");
+      showToast("Video loaded into Video Editor");
     } catch (err) {
       showToast("Load failed: " + err);
     } finally {
@@ -7229,32 +7298,38 @@
     return ops;
   }
 
-  async function applyVideoEditor() {
+  async function persistEditedVideoToArchives() {
     if (!videoEdit.creationId) {
       showToast("Load a video first.");
-      return;
+      return null;
     }
     if (!videoEdit.segments.length) {
       showToast("Keep at least one segment.");
-      return;
+      return null;
     }
     const a = api();
-    if (!a) return;
+    if (!a) return null;
+    const res = await a.edit_video(videoEdit.creationId, buildVideoEditOps());
+    if (!res || !res.ok) {
+      showToast((res && res.error) || "Failed to save edited video");
+      return null;
+    }
+    const saved = res.creation;
+    state.creations = [saved].concat(
+      state.creations.filter((c) => c.id !== saved.id)
+    );
+    state.active = saved;
+    renderArchives();
+    return saved;
+  }
+
+  async function applyVideoEditor() {
     beginBusy("Saving video edit", "Cutting and assembling segments…", {
       delayMs: 0,
     });
     try {
-      const res = await a.edit_video(videoEdit.creationId, buildVideoEditOps());
-      if (!res || !res.ok) {
-        showToast((res && res.error) || "Failed to save edited video");
-        return;
-      }
-      const saved = res.creation;
-      state.creations = [saved].concat(
-        state.creations.filter((c) => c.id !== saved.id)
-      );
-      state.active = saved;
-      renderArchives();
+      const saved = await persistEditedVideoToArchives();
+      if (!saved) return;
       renderDocument(saved);
       closeVideoEditor();
       showToast("Video edit applied");
@@ -7266,36 +7341,34 @@
   }
 
   async function saveVideoEditor() {
-    if (!videoEdit.creationId) {
-      showToast("Load a video first.");
-      return;
-    }
-    if (!videoEdit.segments.length) {
-      showToast("Keep at least one segment.");
-      return;
-    }
-    const a = api();
-    if (!a) return;
     const keepStandalone = videoEdit.standalone;
     beginBusy("Saving video", "Cutting and assembling segments…", {
       delayMs: 0,
     });
     try {
-      const res = await a.edit_video(videoEdit.creationId, buildVideoEditOps());
-      if (!res || !res.ok) {
-        showToast((res && res.error) || "Failed to save edited video");
-        return;
-      }
-      const saved = res.creation;
-      state.creations = [saved].concat(
-        state.creations.filter((c) => c.id !== saved.id)
-      );
-      state.active = saved;
-      renderArchives();
+      const saved = await persistEditedVideoToArchives();
+      if (!saved) return;
       await openVideoEditor(saved, { standalone: keepStandalone });
       showToast("Video saved");
     } catch (err) {
       showToast("Save failed: " + err);
+    } finally {
+      endBusy("Ready");
+    }
+  }
+
+  async function saveVideoEditorAndSendToCreator() {
+    const keepStandalone = videoEdit.standalone;
+    beginBusy("Sending to Creator", "Saving the edited video…", {
+      delayMs: 0,
+    });
+    try {
+      const saved = await persistEditedVideoToArchives();
+      if (!saved) return;
+      await openVideoEditor(saved, { standalone: keepStandalone });
+      await sendCreationToCreator(saved);
+    } catch (err) {
+      showToast("Send to Creator failed: " + err);
     } finally {
       endBusy("Ready");
     }
@@ -7528,6 +7601,11 @@
     if ($("#btn-vedit-save-as")) {
       $("#btn-vedit-save-as").addEventListener("click", () => saveVideoEditorAs());
     }
+    if ($("#btn-vedit-send-creator")) {
+      $("#btn-vedit-send-creator").addEventListener("click", () => {
+        saveVideoEditorAndSendToCreator();
+      });
+    }
     setupVideoEditCropInteraction();
   }
 
@@ -7588,7 +7666,9 @@
         return;
       }
       const win = e.target.closest(".app-window");
-      if (win && win.dataset.window) focusWindow(win.dataset.window);
+      if (win && win.dataset.window && state.focused !== win.dataset.window) {
+        focusWindow(win.dataset.window);
+      }
     });
 
     $("#create-form").addEventListener("submit", async (e) => {
@@ -7625,6 +7705,11 @@
     if ($("#btn-use-basis")) {
       $("#btn-use-basis").addEventListener("click", () =>
         useCreationAsBasis(state.active)
+      );
+    }
+    if ($("#btn-viewer-send-creator")) {
+      $("#btn-viewer-send-creator").addEventListener("click", () =>
+        sendCreationToCreator(state.active)
       );
     }
     if ($("#btn-iedit-load")) {
