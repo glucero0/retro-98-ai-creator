@@ -68,10 +68,14 @@ class _AppRequestHandler(SimpleHTTPRequestHandler):
         return str(candidate)
 
     def end_headers(self) -> None:
-        # Allow the WebView to cache/seek media from this origin.
-        if urlparse(self.path).path.startswith("/media/"):
+        path = urlparse(self.path).path
+        if path.startswith("/media/"):
+            # Allow the WebView to cache/seek media from this origin.
             self.send_header("Accept-Ranges", "bytes")
             self.send_header("Cache-Control", "private, max-age=60")
+        elif path.endswith((".html", ".js", ".css")) or path in ("/", "/index.html"):
+            # WebView2 otherwise keeps stale JS/CSS and stacking/focus fixes never load.
+            self.send_header("Cache-Control", "no-store, max-age=0")
         super().end_headers()
 
     def _send_json(self, status: int, payload: dict[str, Any]) -> None:

@@ -2193,21 +2193,31 @@
   }
 
   // ── Window manager ─────────────────────────────────────────────────
-  const WINDOW_Z_BASE = 10;
+  let windowZTop = 20;
+
+  function windowsLayer() {
+    return document.getElementById("windows-layer") || document.getElementById("desktop");
+  }
+
+  function adoptWindowsIntoLayer() {
+    const layer = document.getElementById("windows-layer");
+    if (!layer) return;
+    document.querySelectorAll(".app-window").forEach((el) => {
+      if (el.parentElement !== layer) layer.appendChild(el);
+    });
+  }
 
   function bringWindowToFront(id) {
     if (!id) return;
     const order = (state.windowZOrder || []).filter((w) => w !== id);
     order.push(id);
     state.windowZOrder = order;
-    applyWindowZOrder();
-  }
-
-  function applyWindowZOrder() {
-    (state.windowZOrder || []).forEach((wid, i) => {
-      const el = document.getElementById("win-" + wid);
-      if (el) el.style.zIndex = String(WINDOW_Z_BASE + i);
-    });
+    const el = document.getElementById("win-" + id);
+    if (!el) return;
+    windowZTop += 1;
+    el.style.setProperty("z-index", String(windowZTop), "important");
+    const layer = windowsLayer();
+    if (layer) layer.appendChild(el);
   }
 
   function focusWindow(id) {
@@ -2920,7 +2930,6 @@
   function renderTaskbar() {
     const host = $("#taskbar-windows");
     if (!host) return;
-    host.innerHTML = "";
     const titles = {
       form: "Creation Studio",
       viewer: state.active ? "Viewer — " + creationTitle(state.active) : "Viewer",
@@ -2929,24 +2938,45 @@
       "image-edit": "Image Edit",
       "video-edit": "Video Edit",
     };
-    ["form", "viewer", "library", "control", "image-edit", "video-edit"].forEach((id) => {
-      if (!state.open[id]) return;
-      const btn = document.createElement("button");
-      btn.type = "button";
-      btn.className =
-        "task-btn" + (state.focused === id && !state.minimized[id] ? " active" : "");
-      btn.textContent = titles[id];
-      btn.addEventListener("click", (e) => {
-        e.stopPropagation();
-        if (state.minimized[id]) {
-          state.minimized[id] = false;
-          const win = document.getElementById("win-" + id);
-          if (win) win.classList.remove("minimized");
-        }
-        focusWindow(id);
-        toggleStartMenu(false);
+    const ids = ["form", "viewer", "library", "control", "image-edit", "video-edit"].filter(
+      (id) => state.open[id]
+    );
+    const existing = [...host.querySelectorAll(".task-btn")].map((b) =>
+      b.getAttribute("data-window")
+    );
+    const sameSet =
+      existing.length === ids.length && existing.every((id, i) => id === ids[i]);
+    if (!sameSet) {
+      host.innerHTML = "";
+      ids.forEach((id) => {
+        const btn = document.createElement("button");
+        btn.type = "button";
+        btn.className = "task-btn";
+        btn.setAttribute("data-window", id);
+        const activate = (e) => {
+          e.stopPropagation();
+          e.preventDefault();
+          if (state.minimized[id]) {
+            state.minimized[id] = false;
+            const win = document.getElementById("win-" + id);
+            if (win) win.classList.remove("minimized");
+          }
+          focusWindow(id);
+          toggleStartMenu(false);
+        };
+        btn.addEventListener("mousedown", activate);
+        btn.addEventListener("click", activate);
+        host.appendChild(btn);
       });
-      host.appendChild(btn);
+    }
+    ids.forEach((id) => {
+      const btn = host.querySelector('.task-btn[data-window="' + id + '"]');
+      if (!btn) return;
+      btn.textContent = titles[id];
+      btn.classList.toggle(
+        "active",
+        state.focused === id && !state.minimized[id]
+      );
     });
   }
 
@@ -3889,6 +3919,11 @@
         tr.appendChild(tdType);
         tr.appendChild(tdDate);
         tr.appendChild(tdActions);
+        tr.addEventListener("dblclick", (e) => {
+          if (e.target.closest(".arch-col-actions")) return;
+          e.preventDefault();
+          renderDocument(c);
+        });
         list.appendChild(tr);
       });
   }
@@ -7455,13 +7490,18 @@
   }
 
   function wireEvents() {
+    const activateLauncher = (openEl, e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      openWindow(openEl.getAttribute("data-open"));
+      toggleStartMenu(false);
+    };
+
     // Desktop icons + Start menu items (event delegation)
     document.addEventListener("click", (e) => {
       const openEl = e.target.closest("[data-open]");
       if (openEl) {
-        e.preventDefault();
-        openWindow(openEl.getAttribute("data-open"));
-        toggleStartMenu(false);
+        activateLauncher(openEl, e);
         return;
       }
 
@@ -7496,7 +7536,15 @@
       }
     });
 
+    document.addEventListener("dblclick", (e) => {
+      const openEl = e.target.closest("[data-open]");
+      if (openEl) activateLauncher(openEl, e);
+    });
+
     document.addEventListener("mousedown", (e) => {
+      if (e.target.closest("[data-open], .task-btn, #taskbar, #start-menu, #start-btn")) {
+        return;
+      }
       const win = e.target.closest(".app-window");
       if (win && win.dataset.window) focusWindow(win.dataset.window);
     });
@@ -8015,6 +8063,7 @@
     applyUiFont(state.uiFont || "inter");
     applyAppTheme(state.appTheme || "light");
     syncControlPanelWidth();
+    adoptWindowsIntoLayer();
     wireEvents();
     enableWindowDragging();
     enableWindowResizing();
