@@ -2468,17 +2468,30 @@
     const desktop = $("#desktop");
     const layer = $("#windows-layer");
     if (!desktop || !layer) return;
-    // With document zoom, layout sizes are already in zoomed CSS pixels.
-    let maxBottom = window.innerHeight;
+    // Desktop is a fixed logical screen (DPI zoom). Do not grow a page scrollbar.
+    desktop.style.minHeight = "";
+    layer.style.minHeight = "";
+    clampWindowsToDesktop();
+  }
+
+  function clampWindowsToDesktop() {
+    const bounds = getDesktopBounds();
     document.querySelectorAll(".app-window").forEach((win) => {
       if (win.hidden || win.classList.contains("minimized")) return;
-      const top = parseFloat(win.style.top);
-      const y = Number.isFinite(top) ? top : win.offsetTop || 0;
+      if (win.classList.contains("maximized")) return;
+      let left = parseFloat(win.style.left);
+      let top = parseFloat(win.style.top);
+      if (!Number.isFinite(left)) left = win.offsetLeft || 0;
+      if (!Number.isFinite(top)) top = win.offsetTop || 0;
+      const w = win.offsetWidth || 0;
       const h = win.offsetHeight || 0;
-      maxBottom = Math.max(maxBottom, y + h + 24);
+      if (w < bounds.width) left = Math.min(Math.max(left, 0), bounds.width - w);
+      else left = 0;
+      if (h < bounds.height) top = Math.min(Math.max(top, 0), bounds.height - h);
+      else top = 0;
+      win.style.left = left + "px";
+      win.style.top = top + "px";
     });
-    layer.style.minHeight = maxBottom + "px";
-    desktop.style.minHeight = Math.max(window.innerHeight, maxBottom + 40) + "px";
   }
 
   async function cancelControlPanel() {
@@ -2623,14 +2636,18 @@
   // Snapshot the window's current on-screen geometry (relative to the
   // windows layer) so maximize can be undone later.
   function captureWindowGeometry(win, layerRect) {
-    const rect = win.getBoundingClientRect();
     const left = parseFloat(win.style.left);
     const top = parseFloat(win.style.top);
+    const scale = uiZoomFactor();
     return {
-      left: Number.isFinite(left) ? left : rect.left - layerRect.left,
-      top: Number.isFinite(top) ? top : rect.top - layerRect.top,
-      width: win.style.width || rect.width + "px",
-      height: win.style.height || rect.height + "px",
+      left: Number.isFinite(left)
+        ? left
+        : (win.getBoundingClientRect().left - layerRect.left) / scale,
+      top: Number.isFinite(top)
+        ? top
+        : (win.getBoundingClientRect().top - layerRect.top) / scale,
+      width: win.style.width || win.offsetWidth + "px",
+      height: win.style.height || win.offsetHeight + "px",
     };
   }
 
@@ -2685,24 +2702,20 @@
 
   function getDesktopBounds() {
     const layer = $("#windows-layer") || $("#desktop");
-    const rect = layer.getBoundingClientRect();
     return {
-      left: rect.left,
-      top: rect.top,
-      right: rect.right,
-      bottom: rect.bottom,
-      width: rect.width,
-      height: rect.height,
+      width: layer ? layer.clientWidth : window.innerWidth,
+      height: layer ? layer.clientHeight : window.innerHeight,
     };
   }
 
   function clampWindowPosition(win, left, top) {
     const bounds = getDesktopBounds();
-    const rect = win.getBoundingClientRect();
+    const w = win.offsetWidth || 0;
+    const h = win.offsetHeight || 0;
     const minVisible = 48;
     const maxLeft = bounds.width - minVisible;
     const maxTop = Math.max(0, bounds.height - minVisible);
-    const minLeft = -(rect.width - minVisible);
+    const minLeft = -(w - minVisible);
     left = Math.min(Math.max(left, minLeft), maxLeft);
     top = Math.min(Math.max(top, 0), maxTop);
     return { left, top };
@@ -2721,19 +2734,16 @@
       if (id && state.maximized[id]) restoreWindow(id);
       if (id) focusWindow(id);
 
-      const rect = win.getBoundingClientRect();
-      const layer = $("#windows-layer") || $("#desktop");
-      const layerRect = layer.getBoundingClientRect();
-      // Position is relative to windows-layer
-      const startLeft = rect.left - layerRect.left;
-      const startTop = rect.top - layerRect.top;
+      const startLeft = parseFloat(win.style.left);
+      const startTop = parseFloat(win.style.top);
 
       dragState = {
         win,
         startX: e.clientX,
         startY: e.clientY,
-        origLeft: startLeft,
-        origTop: startTop,
+        origLeft: Number.isFinite(startLeft) ? startLeft : win.offsetLeft || 0,
+        origTop: Number.isFinite(startTop) ? startTop : win.offsetTop || 0,
+        scale: uiZoomFactor(),
       };
       win.classList.add("dragging");
       e.preventDefault();
@@ -2741,8 +2751,9 @@
 
     document.addEventListener("mousemove", (e) => {
       if (!dragState) return;
-      const dx = e.clientX - dragState.startX;
-      const dy = e.clientY - dragState.startY;
+      const scale = dragState.scale || 1;
+      const dx = (e.clientX - dragState.startX) / scale;
+      const dy = (e.clientY - dragState.startY) / scale;
       const next = clampWindowPosition(
         dragState.win,
         dragState.origLeft + dx,
@@ -2771,10 +2782,13 @@
   let resizeState = null;
 
   function uiZoomFactor() {
-    const fromStyle = Number(document.documentElement.style.zoom);
-    if (Number.isFinite(fromStyle) && fromStyle > 0) return fromStyle;
     const fromState = Number(state.uiScale);
-    return Number.isFinite(fromState) && fromState > 0 ? fromState : 1;
+    if (Number.isFinite(fromState) && fromState > 0) return fromState;
+    const fromVar = Number(
+      getComputedStyle(document.documentElement).getPropertyValue("--ui-scale")
+    );
+    if (Number.isFinite(fromVar) && fromVar > 0) return fromVar;
+    return 1;
   }
 
   function enableWindowResizing() {
@@ -2833,20 +2847,26 @@
       if (!resizeState || e.pointerId !== resizeState.pointerId) return;
       const layer = $("#windows-layer") || $("#desktop");
       const scale = resizeState.scale || 1;
-      // clientWidth is in the same CSS-px space as offsetWidth under document zoom
       const deskW = layer ? layer.clientWidth : window.innerWidth;
       const deskH = layer ? layer.clientHeight : window.innerHeight;
-      const minW =
+      const roomW = Math.max(160, deskW - resizeState.origLeft - 8);
+      const roomH = Math.max(120, deskH - resizeState.origTop - 8);
+      const minW = Math.min(
+        roomW,
         resizeState.win.id === "win-form"
           ? resizeState.win.classList.contains("has-studio-basis")
             ? 720
             : 400
-          : 320;
-      const minH = resizeState.win.id === "win-form" ? 400 : 180;
+          : 320
+      );
+      const minH = Math.min(
+        roomH,
+        resizeState.win.id === "win-form" ? 400 : 180
+      );
       let nextW = resizeState.origW + (e.clientX - resizeState.startX) / scale;
       let nextH = resizeState.origH + (e.clientY - resizeState.startY) / scale;
-      nextW = Math.max(minW, Math.min(nextW, deskW - resizeState.origLeft - 8));
-      nextH = Math.max(minH, Math.min(nextH, deskH - resizeState.origTop - 8));
+      nextW = Math.max(minW, Math.min(nextW, roomW));
+      nextH = Math.max(minH, Math.min(nextH, roomH));
       resizeState.win.style.width = Math.round(nextW) + "px";
       resizeState.win.style.height = Math.round(nextH) + "px";
     });
@@ -4766,8 +4786,9 @@
     const s = Number(scale);
     const clamped = Number.isFinite(s) ? Math.min(2, Math.max(0.75, s)) : 1;
     state.uiScale = clamped;
-    // Chromium / WebView2 zoom scales fonts, chrome, and layout together
-    document.documentElement.style.zoom = String(clamped);
+    // DPI-style scale: logical desktop is viewport/scale, then zoomed to fill the screen.
+    document.documentElement.style.setProperty("--ui-scale", String(clamped));
+    document.documentElement.style.zoom = "";
     const label = $("#ui-scale-label");
     if (label) label.textContent = Math.round(clamped * 100) + "%";
     requestAnimationFrame(() => syncDesktopScrollExtent());

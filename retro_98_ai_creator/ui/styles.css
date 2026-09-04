@@ -37,6 +37,8 @@
   --ui-border-dark: #808080;
   --ui-border-darker: #0a0a0a;
   --ui-font: Inter, "Segoe UI", Tahoma, sans-serif;
+  /* Display scaling (DPI). Layout is 1/scale of the viewport, then zoomed. */
+  --ui-scale: 1;
 }
 
 * {
@@ -46,22 +48,26 @@
 html,
 body {
   margin: 0;
+  width: 100%;
   height: 100%;
-  overflow: auto;
+  overflow: hidden;
   background: var(--desktop-bg);
   color: var(--ui-text);
   font-family: var(--ui-font);
 }
 
 #desktop {
-  position: relative;
-  width: 100%;
-  min-height: 100%;
-  height: auto;
+  position: absolute;
+  top: 0;
+  left: 0;
+  /* Inverse size + scale = true DPI: everything grows, desktop still fills the screen. */
+  width: calc(100% / var(--ui-scale));
+  height: calc(100% / var(--ui-scale));
+  transform: scale(var(--ui-scale));
+  transform-origin: top left;
   background-color: var(--desktop-bg);
   background-image: none;
-  overflow: visible;
-  padding-bottom: var(--taskbar-h);
+  overflow: hidden;
   transition: background-color 0.25s ease;
 }
 
@@ -127,8 +133,7 @@ body {
   bottom: var(--taskbar-h);
   z-index: 5;
   pointer-events: none;
-  overflow: visible;
-  min-height: calc(100% - var(--taskbar-h));
+  overflow: hidden;
 }
 
 .app-window {
@@ -140,8 +145,8 @@ body {
   display: flex;
   flex-direction: column;
   overflow: hidden;
-  min-width: 320px;
-  min-height: 180px;
+  min-width: min(320px, 100%);
+  min-height: min(180px, 100%);
 }
 
 .app-window .window-resize-handle {
@@ -582,7 +587,14 @@ ul[role="tablist"] li[role="tab"] a:focus {
   display: flex;
   flex-direction: column;
   gap: 8px;
-  max-height: calc(100vh - 140px);
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.viewer-tabs,
+.viewer-toolbar {
+  flex-shrink: 0;
 }
 
 .viewer-tabs {
@@ -612,9 +624,15 @@ ul[role="tablist"] li[role="tab"] a:focus {
   align-items: center;
 }
 
+#win-viewer > .window-body {
+  overflow: hidden;
+}
+
 .doc-canvas {
   overflow: auto;
-  max-height: calc(100vh - 280px);
+  flex: 1 1 auto;
+  min-height: 0;
+  max-height: none;
   padding: 12px;
   font-family: var(--ui-font);
   box-shadow:
@@ -963,26 +981,32 @@ ul[role="tablist"] li[role="tab"] a:focus {
 
 /* Fill the Studio window: prompt (or Search / Tool Use) grows with the dialog. */
 #win-form {
-  min-width: 400px;
-  min-height: 400px;
+  min-width: min(400px, 100%);
+  min-height: min(400px, 100%);
 }
 
 #win-form > .window-body {
   display: flex;
   flex-direction: column;
   min-height: 0;
+  /* Textareas flex-shrink to the client area; scrollbar only if chrome cannot fit. */
   overflow: auto;
 }
 
 #win-form .mission-banner,
 #win-form #studio-enable-tools-row,
 #win-form #studio-enable-tools-hint,
-#win-form #studio-tools-panel,
 #win-form #studio-tools-hint,
 #win-form .form-actions,
 #win-form #studio-load-hint,
 #win-form #studio-status-bar {
   flex-shrink: 0;
+}
+
+#win-form #studio-tools-panel {
+  flex: 0 1 auto;
+  min-height: 0;
+  overflow: auto;
 }
 
 #win-form #studio-layout {
@@ -1017,7 +1041,7 @@ ul[role="tablist"] li[role="tab"] a:focus {
 #win-form #studio-tool-use {
   flex: 1 1 auto;
   width: 100%;
-  min-height: 5em;
+  min-height: 0;
   max-height: none;
   height: auto;
   resize: none;
@@ -1087,7 +1111,7 @@ ul[role="tablist"] li[role="tab"] a:focus {
 }
 
 #win-form.has-studio-basis {
-  min-width: 720px;
+  min-width: min(720px, 100%);
 }
 
 .editor-app-toolbar {
@@ -1536,7 +1560,7 @@ ul[role="tablist"] li[role="tab"] a:focus {
 }
 
 #taskbar {
-  position: fixed;
+  position: absolute;
   left: 0;
   right: 0;
   bottom: 0;
@@ -1599,7 +1623,7 @@ ul[role="tablist"] li[role="tab"] a:focus {
 }
 
 #start-menu {
-  position: fixed;
+  position: absolute;
   left: 4px;
   bottom: calc(var(--taskbar-h) + 2px);
   width: 220px;
@@ -1955,6 +1979,7 @@ code {
   margin-top: 6px;
   margin-bottom: 0;
   padding-top: 2px;
+  flex-shrink: 0;
 }
 
 .control-tab-panel {
@@ -1983,13 +2008,11 @@ code {
   word-break: break-word;
 }
 
-/* Control Panel — fixed tab widths; no resize grip; height follows content (desktop scrolls). */
+/* Control Panel — fixed tab widths; no resize grip; clamp to the desktop like a dialog. */
 #win-control.app-window {
   height: auto;
-  max-height: none;
-  /* Clip horizontal bleed from nested 98.css margins + fieldset borders */
-  overflow-x: hidden;
-  overflow-y: visible;
+  max-height: 100%;
+  overflow: hidden;
   box-sizing: border-box;
   min-height: 0;
 }
@@ -2001,12 +2024,12 @@ code {
 
 #win-control.control-tab-ai {
   width: 820px !important;
-  max-width: min(820px, calc(100vw - 24px));
+  max-width: min(820px, calc(100% - 24px));
 }
 
 #win-control.control-tab-display {
   width: 600px !important;
-  max-width: min(600px, calc(100vw - 24px));
+  max-width: min(600px, calc(100% - 24px));
 }
 
 /*
@@ -2019,17 +2042,23 @@ code {
   min-width: 0;
   box-sizing: border-box;
   overflow: hidden;
-  flex: 0 0 auto;
+  flex: 1 1 auto;
+  min-height: 0;
   max-height: none;
+  display: flex;
+  flex-direction: column;
 }
 
 #win-control .control-tab-panel {
   width: auto;
   max-width: 100%;
   min-width: 0;
+  min-height: 0;
   box-sizing: border-box;
-  overflow: hidden;
-  display: block;
+  overflow: auto;
+  display: flex;
+  flex-direction: column;
+  flex: 1 1 auto;
 }
 
 #win-control .control-tab-panel > .window-body {
