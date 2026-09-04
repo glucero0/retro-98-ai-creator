@@ -76,6 +76,26 @@ def test_api_save_and_list_prompts(tmp_path):
     assert raw[0]["name"] == "Logo style"
 
 
+def test_api_delete_prompt(tmp_path):
+    api = Api()
+    api.prompt_store = PromptStore(path=tmp_path / "prompts.json")
+    saved = api.save_prompt({"name": "Keep", "body": "a"})
+    extra = api.save_prompt({"name": "Drop", "body": "b"})
+    assert extra["ok"] is True
+
+    missing = api.delete_prompt("")
+    assert missing["ok"] is False
+
+    gone = api.delete_prompt(extra["prompt"]["id"])
+    assert gone["ok"] is True
+    names = [p["name"] for p in gone["prompts"]]
+    assert names == ["Keep"]
+    assert saved["prompt"]["id"] == gone["prompts"][0]["id"]
+
+    still = api.list_prompts()["prompts"]
+    assert [p["name"] for p in still] == ["Keep"]
+
+
 def test_get_bootstrap_includes_prompts(tmp_path):
     api = Api()
     api.prompt_store = PromptStore(path=tmp_path / "prompts.json")

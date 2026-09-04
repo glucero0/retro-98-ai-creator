@@ -2100,6 +2100,39 @@
     }
   }
 
+  async function deleteCurrentPrompt() {
+    const id = state.promptEditor.selectedId || "";
+    const selected = savedPromptById(id);
+    if (!id || !selected) {
+      showToast("Select a saved prompt to delete.");
+      return;
+    }
+    const name = selected.name || "this prompt";
+    const go = await showConfirm(
+      "Delete prompt",
+      'Delete "' + name + '"? This cannot be undone.',
+      { yesLabel: "Delete", noLabel: "Cancel" }
+    );
+    if (!go) return;
+    const a = api();
+    if (!a || typeof a.delete_prompt !== "function") {
+      showToast("Python bridge not ready.");
+      return;
+    }
+    try {
+      const res = await a.delete_prompt(id);
+      if (!res || !res.ok) {
+        showToast((res && res.error) || "Could not delete prompt.");
+        return;
+      }
+      applySavedPrompts(res.prompts || []);
+      resetPromptEditor();
+      showToast('Deleted "' + name + '".');
+    } catch (err) {
+      showToast("Could not delete prompt: " + err);
+    }
+  }
+
   async function onPromptEditorListChange() {
     const list = $("#prompt-editor-list");
     const nextId = list ? list.value : "";
@@ -8044,6 +8077,9 @@
     }
     if ($("#btn-prompt-save")) {
       $("#btn-prompt-save").addEventListener("click", () => saveCurrentPrompt());
+    }
+    if ($("#btn-prompt-delete")) {
+      $("#btn-prompt-delete").addEventListener("click", () => deleteCurrentPrompt());
     }
     if ($("#btn-studio-clear-basis")) {
       $("#btn-studio-clear-basis").addEventListener("click", () => {

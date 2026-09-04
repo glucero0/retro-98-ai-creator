@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Retro 98 AI Creator</title>
   <link rel="stylesheet" href="vendor/98.css" />
-  <link rel="stylesheet" href="styles.css?v=toast1" />
+  <link rel="stylesheet" href="styles.css?v=prompt2" />
 </head>
 <body>
   <div id="desktop">
@@ -982,6 +982,7 @@
             <button type="button" id="btn-prompt-add">Add</button>
             <button type="button" id="btn-prompt-edit">Edit</button>
             <button type="button" id="btn-prompt-save" class="default">Save</button>
+            <button type="button" id="btn-prompt-delete">Delete</button>
           </div>
           <div class="field-row-stacked">
             <label for="prompt-editor-name">Name</label>
@@ -998,8 +999,9 @@
             ></textarea>
           </div>
           <p class="hint" id="prompt-editor-hint">
-            Add a prompt, give it a name, and Save. In Creation Studio, choose it from
-            Saved prompt to insert the text at the cursor.
+            Add a prompt, give it a name, and Save. Delete removes the selected
+            prompt. In Creation Studio, choose it from Saved prompt to insert the
+            text at the cursor.
           </p>
         </div>
       </div>
@@ -1132,6 +1134,6 @@
   <script src="vendor/jspdf.umd.min.js"></script>
   <script src="catalog.js"></script>
   <script src="image_edit.js"></script>
-  <script src="app.js?v=prompt1"></script>
+  <script src="app.js?v=prompt2"></script>
 </body>
 </html>
