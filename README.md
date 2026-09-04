@@ -9,22 +9,23 @@ A Windows 98–themed desktop studio for general-purpose AI creation: **text**, 
 ## Features
 
 - Win98 desktop UI (98.css) with draggable/minimizable windows, a taskbar, and a Start menu
-- **Creation Studio** — one freeform prompt box; the app infers text/image/video from your prompt and generation intent. Turn on **Enable Tools** in Studio (or set the Control Panel default) to switch to **Search** (optional) + **Tool Use** for file, PowerShell, Gmail, Drive, Docs, Calendar, Tasks, and web-browse automation.
+- **Creation Studio** — one freeform prompt box; the app infers text/image/video from your prompt and generation intent. Insert a named snippet from the **Saved prompt** dropdown (see **Prompt Editor**). Turn on **Enable Tools** in Studio (or set the Control Panel default) to switch to **Search** (optional) + **Tool Use** for file, PowerShell, Gmail, Drive, Docs, Calendar, Tasks, and web-browse automation.
+- **Prompt Editor** — add, name, edit, and delete reusable prompt snippets. Creation Studio’s **Saved prompt** list inserts the chosen snippet at the cursor (including in **Search** / **Tool Use** when tools are on).
 - **Gemini Use Tools** (optional) — attach built-in tools (`read_json`, `write_json`, `read_text`, `write_text`, `execute_powershell`, `search_gmail`, `search_drive`, `create_drive_file`, `read_google_doc`, `create_google_doc`, `edit_google_doc`, `list_calendar_events`, `create_calendar_event`, `edit_calendar_event`, `list_tasks`, `create_task`, `edit_task`, `browse_web`) and describe steps in natural language; Gemini calls them via function calling (text generations only, Windows for PowerShell)
 - **Google Search enrichment** (optional, Gemini text) — when Search runs, the app can OCR images and pull YouTube captions from cited results before the tool or document pass
-- **Gemini** text, image, and video generation with separate model pickers per modality
+- **Gemini** text, image, and video generation with separate model pickers per modality; **Recommend Models…** in Control Panel ranks live catalog options (economical / balanced / quality)
 - **Archives** — every creation (and its prompt/model metadata) is saved automatically; search, import/export JSON, or import existing text/image/video files
-- **Viewer** — displays the active creation (document, image, or video) with export buttons and a jump into editing
-- **Image Edit** and **Video Edit** — standalone editors (and reachable via Viewer → Edit) for crop/rotate, color/filter adjustments, and (for video) a segment timeline for splitting/reordering/trimming clips
-- **Control Panel** — Gemini model pickers, Google Workspace OAuth, display themes, sound, CRT overlay, and UI scale
+- **Viewer** — displays the active creation (document, image, or video) with export buttons, **Edit** into the image/video editors, **Use as Basis**, and **Save and Send to Creator** for the current image or video
+- **Image Editor** and **Video Editor** — standalone editors (and reachable via Viewer → Edit) for crop/rotate, color/filter adjustments, and (for video) a segment timeline for splitting/reordering/trimming clips. Each has **Save and Send to Creator** for the current edited frame or timeline.
+- **Control Panel** — Gemini model pickers, Google Workspace OAuth, display themes, UI font, sound, CRT overlay, and UI scale
 - Cancel a generation in progress
-- "Use as Basis" / "Load…" — start a new creation from the Viewer's active item or an imported file, without touching the original
+- **Use as Basis** / **Load…** — start a new creation from the Viewer’s Archive item or an imported file. **Save and Send to Creator** (Viewer, Image Editor, Video Editor) sends the current image or video into Studio as an anonymous media basis so the next **CREATE** is saved as its own Archive item.
 
 ## Requirements
 
 - Python 3.10+
 - A [Gemini API key](https://aistudio.google.com/apikey), set via **Control Panel** (saved to `config.yaml`)
-- **ffmpeg + ffprobe** — only needed for **Video Edit** (apply filters, split/reorder segments, export). See [Installing ffmpeg](#installing-ffmpeg) below.
+- **ffmpeg + ffprobe** — only needed for **Video Editor** (apply filters, split/reorder segments, export). See [Installing ffmpeg](#installing-ffmpeg) below.
 
 ## Quick start
 
@@ -44,7 +45,7 @@ Then open **Control Panel** → paste your Gemini API key → pick a **Text**, *
 
 ## Installing ffmpeg
 
-Video Edit shells out to system `ffmpeg` and `ffprobe`. They are **not** bundled with this app — install them yourself and put them on your `PATH` (or, on Windows, in a common install folder the app already checks).
+Video Editor shells out to system `ffmpeg` and `ffprobe`. They are **not** bundled with this app — install them yourself and put them on your `PATH` (or, on Windows, in a common install folder the app already checks).
 
 Official builds and docs: [https://ffmpeg.org/download.html](https://ffmpeg.org/download.html)
 
@@ -103,19 +104,31 @@ ffmpeg -version
 ffprobe -version
 ```
 
-Use a reasonably current build (roughly ffmpeg 4+). Very old copies on `PATH` (for example ancient helper scripts) can break Video Edit — remove or reorder `PATH` so the modern `ffmpeg` wins.
+Use a reasonably current build (roughly ffmpeg 4+). Very old copies on `PATH` (for example ancient helper scripts) can break Video Editor — remove or reorder `PATH` so the modern `ffmpeg` wins.
 ## The apps
 
 | Window | What it does |
 | --- | --- |
-| **Creation Studio** | Type a prompt and hit **Create**. With **Enable Tools** off, one prompt box handles text/image/video. With **Enable Tools** on (Studio checkbox; Control Panel → Use Tools is the default after launch/Save), Studio shows **Search** (optional), a **Tools** panel, and **Tool Use** instead — text only. Load text/image/video files or use the Viewer's active item as a basis. |
+| **Creation Studio** | Type a prompt and hit **Create**. With **Enable Tools** off, one prompt box handles text/image/video. With **Enable Tools** on (Studio checkbox; Control Panel → Use Tools is the default after launch/Save), Studio shows **Search** (optional), a **Tools** panel, and **Tool Use** instead — text only. **Saved prompt** inserts a Prompt Editor snippet at the cursor. Load text/image/video files or send media from Viewer / the editors as a basis. |
 | **Archives** | The library of everything you've generated or imported. Search, delete, import/export JSON, or import a text/image/video file directly. |
-| **Viewer** | Shows the active creation — rendered document, image, or video — with export buttons (TXT/JSON/PNG/PDF/MP4 depending on type) and an **Edit** shortcut into Image Edit or Video Edit. |
-| **Image Edit** | Crop, rotate, and adjust (brightness/contrast/saturation/hue/sepia/blur/exposure/gamma/vignette/tint, grayscale, threshold, sharpen, background removal). Opened standalone or via Viewer → Edit. |
-| **Video Edit** | Same filter/crop/rotate toolset plus a **segment timeline**: split at the playhead, delete/reorder segments, then re-render. Requires ffmpeg. Opened standalone or via Viewer → Edit. |
-| **Control Panel** | Gemini model pickers, Gemini search/tools toggles, display theme, sound, CRT scanlines, UI scale. **Save** writes `config.yaml` and resets Studio’s **Enable Tools** checkbox to the saved **Use Tools** default (search field visibility and model labels also update). |
+| **Viewer** | Shows the active creation — rendered document, image, or video — with export buttons (TXT/JSON/PNG/PDF/MP4 depending on type), **Edit** into Image Editor or Video Editor, **Use as Basis**, **Save and Send to Creator** (image/video), and **Voice Reader** for documents. |
+| **Image Editor** | Crop, rotate, and adjust (brightness/contrast/saturation/hue/sepia/blur/exposure/gamma/vignette/tint, grayscale, threshold, sharpen, background removal). Opened standalone or via Viewer → Edit. **Save and Send to Creator** applies the current edit and loads it into Studio as a new basis. |
+| **Video Editor** | Same filter/crop/rotate toolset plus a **segment timeline**: split at the playhead, delete/reorder segments, then re-render. Requires ffmpeg. Opened standalone or via Viewer → Edit. **Save and Send to Creator** applies the current edit and loads it into Studio as a new basis. |
+| **Prompt Editor** | Named prompt snippets (Add / Edit / Save / Delete). Creation Studio’s **Saved prompt** dropdown inserts the selected body at the text cursor. Stored in `prompts.json` (gitignored). |
+| **Control Panel** | Gemini model pickers, **Recommend Models…**, Gemini search/tools toggles, Google Workspace OAuth, display theme, UI font, sound, CRT scanlines, UI scale. **Save** writes `config.yaml` and resets Studio’s **Enable Tools** checkbox to the saved **Use Tools** default (search field visibility and model labels also update). |
 
-### Image Edit / Video Edit: Apply vs. Save
+### Prompt Editor and Saved prompt
+
+Use **Prompt Editor** to keep reusable snippets (a house style, a tool-use recipe, a search query, and so on). **Add** a prompt, give it a **Name**, write the **Prompt** body, then **Save**. **Delete** removes the selected snippet.
+
+In **Creation Studio**, open the **Saved prompt** dropdown and pick a name. The body is inserted at the current cursor in the Prompt field — or in **Search** / **Tool Use** when **Enable Tools** is on, depending on which field last had the cursor.
+
+### Send to Creator vs Use as Basis
+
+- **Use as Basis** (Viewer) — load the Archive item’s media into Studio without copying it. The original stays in Archives.
+- **Save and Send to Creator** (Viewer, Image Editor, Video Editor) — for images and videos only. Saves the current editor/viewer state, then sends that media into Studio as an anonymous basis. The next **CREATE** is stored as a **new** Archive item rather than overwriting the source.
+
+### Image Editor / Video Editor: Apply vs. Save
 
 - Opened **from the Viewer** on an existing Archive item: **Apply** writes the edit back onto that creation's media file.
 - Opened **standalone** (Load Image/Video…): use **Save** to overwrite the loaded file, or **Save As…** to write a new file, via a native save dialog.
@@ -123,7 +136,7 @@ Use a reasonably current build (roughly ffmpeg 4+). Very old copies on `PATH` (f
 ## Gemini setup
 
 1. Create a key at https://aistudio.google.com/apikey
-2. Open **Control Panel** → paste the key → pick Text / Image / Video models → **Save**
+2. Open **Control Panel** → paste the key → pick Text / Image / Video models (or **Recommend Models…**) → **Save**
 3. Model lists are fetched live from Google once a key is saved; each list only shows models compatible with that modality
 
 ### Control Panel → what affects Creation Studio
@@ -132,7 +145,7 @@ After **Save**, these settings apply on the next **Create** (no app restart):
 
 | Setting | Effect on Studio |
 | --- | --- |
-| **Text / Image / Video models** | Shown on the Studio model field; routing still follows prompt intent (e.g. “generate a video” uses the video model) |
+| **Text / Image / Video models** | Shown on the Studio model field; routing still follows prompt intent (e.g. “generate a video” uses the video model). **Recommend Models…** picks economical, balanced, or quality defaults from Google’s live catalog |
 | **Google Search grounding (text)** | When on, an optional **Search** field appears in tools mode. When off, Search is hidden and no web research pass runs |
 | **Two-pass verify** | Gemini text only, when Google Search is on and tools are off — extract with sources, then verify at temperature 0 |
 | **Use Tools** | Saved default for Studio’s **Enable Tools** checkbox (applied on launch and after Save). Studio can still toggle tools for the current session without opening Control Panel. Text generations only |
@@ -238,6 +251,7 @@ All paths for file tools must be **absolute** (e.g. `C:\data\step1.json`). The m
 Control Panel → **Display & Sound**:
 
 - **Appearance**: Light, Dark, or Customize (pick a solid desktop color, window color, title bar color, text color, and font — no patterned wallpaper)
+- **UI font**: Inter by default; Retro Pixel for the classic Win98 look (open-source fonts load from the network the first time you pick them)
 - **Sound effects** on/off
 - **CRT scanlines** overlay on/off
 - **UI scale** from 75%–200%, for high-DPI displays or larger text
@@ -245,8 +259,9 @@ Control Panel → **Display & Sound**:
 ## Data & storage
 
 - Generated/imported creations and their prompt/model metadata live in `archives.json` (project root, gitignored)
+- Named Prompt Editor snippets live in `prompts.json` (project root, gitignored)
 - Media files (images, video) are stored under `media/`
-- Both are local to your machine — nothing is uploaded except your prompts to Gemini
+- Both archives and media are local to your machine — nothing is uploaded except your prompts to Gemini
 
 ## config.yaml (excerpt)
 
@@ -276,10 +291,12 @@ ui:
   sound_enabled: true
   crt_enabled: false
   ui_scale: 1.0
+  ui_font: inter
 
 paths:
   archives: archives.json
   media: media
+  prompts: prompts.json
 ```
 
 ## License
