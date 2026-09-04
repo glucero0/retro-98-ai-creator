@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import base64
 import logging
 from datetime import datetime, timezone
 from typing import Any, Callable
@@ -136,10 +135,9 @@ def extract_text_from_creation(
         raise RuntimeError("Extract Text is only available for image and video creations.")
 
     model_id, provider = _active_model_and_provider(config)
-    if provider == "huggingface":
+    if provider != "gemini":
         raise RuntimeError(
-            "Extract Text needs Gemini or OpenRouter (multimodal text models). "
-            "Switch provider in Control Panel → AI Model."
+            "Extract Text requires Gemini. Paste a Gemini API key in Control Panel."
         )
 
     path = media_path
@@ -156,7 +154,6 @@ def extract_text_from_creation(
             raw,
             mime_type=image_mime,
             config=config,
-            provider=provider,
             model_id=model_id,
             progress=progress,
             cancel_check=_cancelled,
@@ -168,7 +165,6 @@ def extract_text_from_creation(
             path,
             mime_type=mime if mime.startswith("video/") else "video/mp4",
             config=config,
-            provider=provider,
             model_id=model_id,
             progress=progress,
             cancel_check=_cancelled,
@@ -209,13 +205,12 @@ def ocr_image_bytes(
     model_id, provider = _active_model_and_provider(config)
     if provider != "gemini":
         raise RuntimeError(
-            "Search image OCR requires Gemini. Switch provider in Control Panel → AI Model."
+            "Search image OCR requires a Gemini API key. Paste it in Control Panel."
         )
     return _extract_image(
         raw,
         mime_type=mime_type,
         config=config,
-        provider=provider,
         model_id=model_id,
         progress=progress,
         cancel_check=_cancelled,
@@ -228,7 +223,6 @@ def _extract_image(
     *,
     mime_type: str,
     config: dict[str, Any],
-    provider: str,
     model_id: str,
     progress: ProgressCallback | None,
     cancel_check: Callable[[], bool],
@@ -242,18 +236,7 @@ def _extract_image(
             f"Image is too large for Extract Text ({len(raw) // (1024 * 1024)} MB). "
             "Try a smaller image."
         )
-    if provider == "gemini":
-        return _gemini_multimodal(
-            raw,
-            mime_type=mime_type,
-            prompt=OCR_PROMPT,
-            config=config,
-            model_id=model_id,
-            progress=progress,
-            cancel_check=cancel_check,
-            cancel_event=cancel_event,
-        )
-    return _openrouter_multimodal(
+    return _gemini_multimodal(
         raw,
         mime_type=mime_type,
         prompt=OCR_PROMPT,
@@ -261,7 +244,6 @@ def _extract_image(
         model_id=model_id,
         progress=progress,
         cancel_check=cancel_check,
-        kind="image",
         cancel_event=cancel_event,
     )
 
@@ -271,7 +253,6 @@ def _extract_video(
     *,
     mime_type: str,
     config: dict[str, Any],
-    provider: str,
     model_id: str,
     progress: ProgressCallback | None,
     cancel_check: Callable[[], bool],
@@ -304,29 +285,16 @@ def _extract_video(
         raise_if_cancelled(cancel_check)
         if audio and len(audio) <= MAX_INLINE_BYTES:
             _emit(progress, "Transcribing audio…", percent=45, title="Transcribing")
-            if provider == "gemini":
-                text, model = _gemini_multimodal(
-                    audio,
-                    mime_type="audio/mpeg",
-                    prompt=TRANSCRIPT_PROMPT,
-                    config=config,
-                    model_id=model_id,
-                    progress=progress,
-                    cancel_check=cancel_check,
-                    cancel_event=cancel_event,
-                )
-            else:
-                text, model = _openrouter_multimodal(
-                    audio,
-                    mime_type="audio/mpeg",
-                    prompt=TRANSCRIPT_PROMPT,
-                    config=config,
-                    model_id=model_id,
-                    progress=progress,
-                    cancel_check=cancel_check,
-                    kind="audio",
-                    cancel_event=cancel_event,
-                )
+            text, model = _gemini_multimodal(
+                audio,
+                mime_type="audio/mpeg",
+                prompt=TRANSCRIPT_PROMPT,
+                config=config,
+                model_id=model_id,
+                progress=progress,
+                cancel_check=cancel_check,
+                cancel_event=cancel_event,
+            )
             return text, model, "transcript"
 
     # Silent / oversized audio: send a short video clip for on-screen text.
@@ -340,29 +308,16 @@ def _extract_video(
             "Video is too large to analyze without audio. "
             "Trim it in Video Editor, or use a clip with a spoken track."
         )
-    if provider == "gemini":
-        text, model = _gemini_multimodal(
-            clip,
-            mime_type="video/mp4",
-            prompt=VIDEO_FALLBACK_PROMPT,
-            config=config,
-            model_id=model_id,
-            progress=progress,
-            cancel_check=cancel_check,
-            cancel_event=cancel_event,
-        )
-    else:
-        text, model = _openrouter_multimodal(
-            clip,
-            mime_type="video/mp4",
-            prompt=VIDEO_FALLBACK_PROMPT,
-            config=config,
-            model_id=model_id,
-            progress=progress,
-            cancel_check=cancel_check,
-            kind="video",
-            cancel_event=cancel_event,
-        )
+    text, model = _gemini_multimodal(
+        clip,
+        mime_type="video/mp4",
+        prompt=VIDEO_FALLBACK_PROMPT,
+        config=config,
+        model_id=model_id,
+        progress=progress,
+        cancel_check=cancel_check,
+        cancel_event=cancel_event,
+    )
     return text, model, "ocr" if not has_audio else "transcript"
 
 
@@ -436,80 +391,3 @@ def _gemini_response_text(response: Any) -> str:
             if t:
                 parts.append(str(t))
     return "\n".join(parts).strip()
-
-
-def _openrouter_multimodal(
-    data: bytes,
-    *,
-    mime_type: str,
-    prompt: str,
-    config: dict[str, Any],
-    model_id: str,
-    progress: ProgressCallback | None,
-    cancel_check: Callable[[], bool],
-    kind: str,
-    cancel_event: Any = None,
-) -> tuple[str, str]:
-    from .cancellation import GenerationCancelled, raise_if_cancelled
-    from .openrouter_provider import (
-        OPENROUTER_BASE_URL,
-        normalize_openrouter_model,
-        resolve_api_key,
-        _chat_completion,
-    )
-
-    raise_if_cancelled(cancel_check)
-    or_cfg = config.get("openrouter") or {}
-    api_key = resolve_api_key(or_cfg)
-    if not api_key:
-        raise RuntimeError(
-            "OpenRouter API key missing. Paste your key in Control Panel → AI Model (OpenRouter)."
-        )
-    model_name = normalize_openrouter_model(model_id or or_cfg.get("text_model"))
-    base_url = (or_cfg.get("base_url") or OPENROUTER_BASE_URL).strip() or OPENROUTER_BASE_URL
-    b64 = base64.b64encode(data).decode("ascii")
-    data_url = f"data:{mime_type};base64,{b64}"
-
-    if kind == "image":
-        user_content: Any = [
-            {"type": "text", "text": prompt},
-            {"type": "image_url", "image_url": {"url": data_url}},
-        ]
-    elif kind == "audio":
-        # OpenRouter / OpenAI-style audio input (supported by Gemini models on OR).
-        fmt = "mp3" if "mpeg" in mime_type or mime_type.endswith("mp3") else "wav"
-        user_content = [
-            {"type": "text", "text": prompt},
-            {"type": "input_audio", "input_audio": {"data": b64, "format": fmt}},
-        ]
-    else:
-        # Video: many OR models accept as file/image_url-style data URL.
-        user_content = [
-            {"type": "text", "text": prompt},
-            {"type": "image_url", "image_url": {"url": data_url}},
-        ]
-
-    messages: list[dict[str, Any]] = [
-        {
-            "role": "system",
-            "content": "You extract text from media. Reply with plain text only.",
-        },
-        {"role": "user", "content": user_content},
-    ]
-
-    _emit(progress, f"Contacting OpenRouter ({model_name})…", percent=55)
-    raise_if_cancelled(cancel_check)
-    try:
-        text = _chat_completion(
-            api_key=api_key,
-            model=model_name,
-            messages=messages,
-            temperature=0.0,
-            base_url=base_url,
-            cancel_event=cancel_event,
-        )
-    except Exception as exc:  # noqa: BLE001
-        if isinstance(exc, GenerationCancelled):
-            raise
-        raise RuntimeError(f"OpenRouter Extract Text failed: {exc}") from exc
-    return (text or "").strip(), model_name

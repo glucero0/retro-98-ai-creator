@@ -38,4 +38,4 @@ Reports that are especially helpful include issues involving:
 - The local HTTP bridge used by the desktop UI (for example media replace/save endpoints)
 - Dependency vulnerabilities in published requirements with a clear exploit path in this app
 
-Out of scope for private security reports (use normal issues instead): feature requests, general bugs without security impact, and third-party service outages (Gemini, OpenRouter, Hugging Face, etc.).
+Out of scope for private security reports (use normal issues instead): feature requests, general bugs without security impact, and third-party service outages (Gemini, etc.).

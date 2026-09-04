@@ -2,9 +2,9 @@
 
 A Windows 98–themed desktop studio for general-purpose AI creation: **text**, **images**, and **video** — with built-in editors, an archive of everything you make, and a fully skinnable retro desktop.
 
-> **Work in progress.** This project is under active development. Features, APIs, config, and storage formats may change without notice. **Use at your own risk** — there is no warranty of any kind. You are responsible for API costs, local model downloads, and any data you generate or store. Do not rely on it for production, critical, or irreversible work.
+> **Work in progress.** This project is under active development. Features, APIs, config, and storage formats may change without notice. **Use at your own risk** — there is no warranty of any kind. You are responsible for API costs and any data you generate or store. Do not rely on it for production, critical, or irreversible work.
 
-**Default backend: Google Gemini** — text, image, and Veo video via separate model pickers. **OpenRouter** and optional **local Hugging Face** also support three modality slots (text / image / video).
+**Backend: Google Gemini** — text, image, and Veo video via separate model pickers. Studio routes by prompt intent.
 
 ## Features
 
@@ -13,22 +13,17 @@ A Windows 98–themed desktop studio for general-purpose AI creation: **text**, 
 - **Gemini Use Tools** (optional) — attach built-in tools (`read_json`, `write_json`, `read_text`, `write_text`, `execute_powershell`, `search_gmail`, `search_drive`, `create_drive_file`, `read_google_doc`, `create_google_doc`, `edit_google_doc`, `list_calendar_events`, `create_calendar_event`, `edit_calendar_event`, `list_tasks`, `create_task`, `edit_task`, `browse_web`) and describe steps in natural language; Gemini calls them via function calling (text generations only, Windows for PowerShell)
 - **Google Search enrichment** (optional, Gemini text) — when Search runs, the app can OCR images and pull YouTube captions from cited results before the tool or document pass
 - **Gemini** text, image, and video generation with separate model pickers per modality
-- **OpenRouter** — text, image, and video slots (Studio routes by prompt intent)
-- Optional **local Hugging Face** — text (causal LM), image (Diffusers), and video (Diffusers T2V) with separate pickers; Studio media basis uses local img2img (and I2V when the video model supports it)
 - **Archives** — every creation (and its prompt/model metadata) is saved automatically; search, import/export JSON, or import existing text/image/video files
 - **Viewer** — displays the active creation (document, image, or video) with export buttons and a jump into editing
 - **Image Edit** and **Video Edit** — standalone editors (and reachable via Viewer → Edit) for crop/rotate, color/filter adjustments, and (for video) a segment timeline for splitting/reordering/trimming clips
-- **Control Panel** — backend/model selection, Google Workspace OAuth, display themes, sound, CRT overlay, and UI scale
+- **Control Panel** — Gemini model pickers, Google Workspace OAuth, display themes, sound, CRT overlay, and UI scale
 - Cancel a generation in progress
 - "Use as Basis" / "Load…" — start a new creation from the Viewer's active item or an imported file, without touching the original
 
 ## Requirements
 
 - Python 3.10+
-- An API key for at least one backend, set via **Control Panel** (saved to `config.yaml`):
-  - **Gemini** (default backend) — a [Gemini API key](https://aistudio.google.com/apikey)
-  - **OpenRouter** — an [OpenRouter API key](https://openrouter.ai/keys)
-  - **Hugging Face** (optional local backend) — no key required for public models; a [Hugging Face access token](https://huggingface.co/settings/tokens) is only needed for gated/private models or to avoid rate limits, plus `pip install -r requirements-local.txt` and, for GPU use, sufficient VRAM
+- A [Gemini API key](https://aistudio.google.com/apikey), set via **Control Panel** (saved to `config.yaml`)
 - **ffmpeg + ffprobe** — only needed for **Video Edit** (apply filters, split/reorder segments, export). See [Installing ffmpeg](#installing-ffmpeg) below.
 
 ## Quick start
@@ -118,7 +113,7 @@ Use a reasonably current build (roughly ffmpeg 4+). Very old copies on `PATH` (f
 | **Viewer** | Shows the active creation — rendered document, image, or video — with export buttons (TXT/JSON/PNG/PDF/MP4 depending on type) and an **Edit** shortcut into Image Edit or Video Edit. |
 | **Image Edit** | Crop, rotate, and adjust (brightness/contrast/saturation/hue/sepia/blur/exposure/gamma/vignette/tint, grayscale, threshold, sharpen, background removal). Opened standalone or via Viewer → Edit. |
 | **Video Edit** | Same filter/crop/rotate toolset plus a **segment timeline**: split at the playhead, delete/reorder segments, then re-render. Requires ffmpeg. Opened standalone or via Viewer → Edit. |
-| **Control Panel** | AI backend + model pickers, Gemini search/tools toggles, display theme, sound, CRT scanlines, UI scale. **Save** writes `config.yaml` and resets Studio’s **Enable Tools** checkbox to the saved **Use Tools** default (search field visibility and model labels also update). |
+| **Control Panel** | Gemini model pickers, Gemini search/tools toggles, display theme, sound, CRT scanlines, UI scale. **Save** writes `config.yaml` and resets Studio’s **Enable Tools** checkbox to the saved **Use Tools** default (search field visibility and model labels also update). |
 
 ### Image Edit / Video Edit: Apply vs. Save
 
@@ -137,7 +132,6 @@ After **Save**, these settings apply on the next **Create** (no app restart):
 
 | Setting | Effect on Studio |
 | --- | --- |
-| **Provider** | Gemini vs OpenRouter vs Hugging Face — only **Gemini** supports Google Search, Use Tools, and enrichment |
 | **Text / Image / Video models** | Shown on the Studio model field; routing still follows prompt intent (e.g. “generate a video” uses the video model) |
 | **Google Search grounding (text)** | When on, an optional **Search** field appears in tools mode. When off, Search is hidden and no web research pass runs |
 | **Two-pass verify** | Gemini text only, when Google Search is on and tools are off — extract with sources, then verify at temperature 0 |
@@ -149,7 +143,7 @@ After **Save**, these settings apply on the next **Create** (no app restart):
 
 ## Gemini Use Tools (optional)
 
-In **Creation Studio**, check **Enable Tools** (Gemini backend). That is a per-session override — you do not need to open Control Panel. Control Panel → **Use Tools (local file read/write)** is only the default after launch or **Save**.
+In **Creation Studio**, check **Enable Tools**. That is a per-session override — you do not need to open Control Panel. Control Panel → **Use Tools (local file read/write)** is only the default after launch or **Save**.
 
 When tools are on, Studio hides the normal prompt and shows:
 
@@ -239,27 +233,6 @@ All paths for file tools must be **absolute** (e.g. `C:\data\step1.json`). The m
 
 **Security note:** tools read and write files on your machine, `execute_powershell` runs scripts you point at, Google tools use your connected Gmail/Drive/Docs/Calendar account, and `browse_web` fetches http(s) pages you (or the model) choose. Only attach tools you trust.
 
-## OpenRouter setup
-
-1. Create a key at https://openrouter.ai/keys
-2. Control Panel → **Provider: OpenRouter** → paste the key → pick Text / Image / Video models → **Save**
-3. Google Search grounding is Gemini-only; OpenRouter uses the model's own knowledge (no grounding tool)
-4. Studio routes by prompt intent to the matching OpenRouter slot (same pattern as Gemini)
-
-## Local Hugging Face backend (optional)
-
-```bash
-pip install -r requirements-local.txt
-```
-
-Then in Control Panel set **Provider** to **Hugging Face local**, pick **Text**, **Image**, and **Video** models, and save. You can download all three into the Hugging Face cache from the Save dialog. First generation of each modality also downloads on demand.
-
-- **Text** — causal instruct models (Phi-3.5, Qwen, Gemma, …)
-- **Image** — Diffusers text-to-image (Stable Diffusion 1.5, SD Turbo, …)
-- **Video** — Diffusers text-to-video (ModelScope T2V, Zeroscope, …)
-
-Local image/video is slow on CPU and needs substantial VRAM on GPU. Small text models are not recommended for factual docs or keybindings compared to Gemini/OpenRouter with web search.
-
 ## Display, sound, and UI scale
 
 Control Panel → **Display & Sound**:
@@ -273,7 +246,7 @@ Control Panel → **Display & Sound**:
 
 - Generated/imported creations and their prompt/model metadata live in `archives.json` (project root, gitignored)
 - Media files (images, video) are stored under `media/`
-- Both are local to your machine — nothing is uploaded except your prompts to the selected AI backend
+- Both are local to your machine — nothing is uploaded except your prompts to Gemini
 
 ## config.yaml (excerpt)
 
@@ -281,7 +254,7 @@ All settings, including API keys, live in `config.yaml` (gitignored). Control Pa
 
 ```yaml
 backend:
-  provider: gemini   # gemini | openrouter | huggingface
+  provider: gemini
 
 gemini:
   text_model: gemini-2.5-flash
@@ -294,20 +267,6 @@ gemini:
   ocr_search_images: true
   youtube_search_captions: true
   temperature: 0.0
-
-openrouter:
-  text_model: google/gemini-2.5-flash
-  image_model: google/gemini-2.5-flash-image
-  video_model: google/veo-2.0
-  api_key: your_openrouter_key
-  temperature: 0.0
-
-huggingface:         # used when provider: huggingface
-  text_model: microsoft/Phi-3.5-mini-instruct
-  image_model: stable-diffusion-v1-5/stable-diffusion-v1-5
-  video_model: ali-vilab/text-to-video-ms-1.7b
-  device: auto
-  max_new_tokens: 2048
 
 prompt:
   extra_instructions: ""

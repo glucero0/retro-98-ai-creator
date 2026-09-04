@@ -3,7 +3,6 @@
 from pathlib import Path
 
 from retro_98_ai_creator.config import (
-    DEFAULT_HF_MODEL,
     DEFAULTS,
     PROJECT_ROOT,
     archives_path,
@@ -11,7 +10,6 @@ from retro_98_ai_creator.config import (
     is_legacy_gmail_token_path,
     load_config,
     normalize_google_workspace_cfg,
-    normalize_huggingface_cfg,
     prompts_path,
 )
 from retro_98_ai_creator.creation_utils import extract_json_object
@@ -22,34 +20,39 @@ def test_default_backend_is_gemini():
     assert DEFAULTS["backend"]["provider"] == "gemini"
     assert DEFAULTS["gemini"]["text_model"] == "gemini-2.5-flash"
     assert DEFAULTS["gemini"]["use_tools"] is False
-    assert DEFAULTS["openrouter"]["text_model"] == "google/gemini-2.5-flash"
-
-
-def test_hf_default_still_phi35():
-    assert DEFAULT_HF_MODEL == "microsoft/Phi-3.5-mini-instruct"
-    assert DEFAULTS["huggingface"]["text_model"] == DEFAULT_HF_MODEL
-    assert DEFAULTS["huggingface"]["repo_id"] == DEFAULT_HF_MODEL
-    assert DEFAULTS["huggingface"]["image_model"]
-    assert DEFAULTS["huggingface"]["video_model"]
-
-
-def test_normalize_huggingface_cfg_repo_id_alias():
-    out = normalize_huggingface_cfg({"repo_id": "Qwen/Qwen2.5-1.5B-Instruct"})
-    assert out["text_model"] == "Qwen/Qwen2.5-1.5B-Instruct"
-    assert out["repo_id"] == out["text_model"]
-    assert out["image_model"]
-    assert out["video_model"]
+    assert "openrouter" not in DEFAULTS
+    assert "huggingface" not in DEFAULTS
 
 
 def test_load_config_has_sections():
     cfg = load_config()
     assert "backend" in cfg
+    assert cfg["backend"]["provider"] == "gemini"
     assert "gemini" in cfg
-    assert "openrouter" in cfg
-    assert "huggingface" in cfg
+    assert "openrouter" not in cfg
+    assert "huggingface" not in cfg
     assert "prompt" in cfg
     assert "google_workspace" in cfg
     assert "extra_instructions" in (cfg.get("prompt") or {})
+
+
+def test_load_config_strips_deprecated_backends(tmp_path, monkeypatch):
+    from retro_98_ai_creator import config as config_mod
+
+    cfg_path = tmp_path / "config.yaml"
+    cfg_path.write_text(
+        "backend:\n  provider: huggingface\n"
+        "openrouter:\n  api_key: leftover\n"
+        "huggingface:\n  text_model: microsoft/Phi-3.5-mini-instruct\n"
+        "gemini:\n  text_model: gemini-2.5-flash\n",
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(config_mod, "DEFAULT_CONFIG_PATH", cfg_path)
+    monkeypatch.setattr(config_mod, "PROJECT_ROOT", tmp_path)
+    cfg = load_config()
+    assert cfg["backend"]["provider"] == "gemini"
+    assert "openrouter" not in cfg
+    assert "huggingface" not in cfg
 
 
 def test_is_legacy_gmail_token_path_accepts_windows_separators():
