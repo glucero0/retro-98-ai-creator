@@ -7,11 +7,11 @@
     creations: [],
     active: null,
     focused: "form",
-    open: { form: true, viewer: false, library: false, control: false, "image-edit": false, "video-edit": false },
-    minimized: { form: false, viewer: false, library: false, control: false, "image-edit": false, "video-edit": false },
-    maximized: { form: false, viewer: false, library: false, control: false, "image-edit": false, "video-edit": false },
+    open: { form: true, viewer: false, library: false, control: false, "image-edit": false, "video-edit": false, "prompt-editor": false },
+    minimized: { form: false, viewer: false, library: false, control: false, "image-edit": false, "video-edit": false, "prompt-editor": false },
+    maximized: { form: false, viewer: false, library: false, control: false, "image-edit": false, "video-edit": false, "prompt-editor": false },
     // Back → front. Focus moves a window to the end; others keep their relative order.
-    windowZOrder: ["form", "viewer", "library", "control", "image-edit", "video-edit"],
+    windowZOrder: ["form", "viewer", "library", "control", "image-edit", "video-edit", "prompt-editor"],
     preMaximizeRect: {},
     generating: false,
     modelLoading: false,
@@ -36,6 +36,14 @@
     geminiToolsCatalog: null, // from bootstrap / list_gemini_tools
     studioAddToolOpen: false,
     studioEnableTools: false,
+    savedPrompts: [],
+    promptEditor: {
+      selectedId: "",
+      editing: false,
+      snapshotName: "",
+      snapshotBody: "",
+    },
+    studioCaret: { fieldId: "studio-prompt", start: 0, end: 0 },
     appTheme: "light",
     customTheme: {
       desktopColor: "#008080",
@@ -1883,6 +1891,310 @@
     if (field) field.value = text || "";
   }
 
+  function savedPromptById(id) {
+    return (state.savedPrompts || []).find((p) => p && p.id === id) || null;
+  }
+
+  function applySavedPrompts(list) {
+    const items = Array.isArray(list) ? list.slice() : [];
+    items.sort((a, b) =>
+      String(a && a.name ? a.name : "").localeCompare(
+        String(b && b.name ? b.name : ""),
+        undefined,
+        { sensitivity: "base" }
+      )
+    );
+    state.savedPrompts = items;
+    fillSavedPromptSelects();
+  }
+
+  function fillSelectOptions(selectEl, placeholder, selectedId) {
+    if (!selectEl) return;
+    selectEl.innerHTML = "";
+    const blank = document.createElement("option");
+    blank.value = "";
+    blank.textContent = placeholder;
+    selectEl.appendChild(blank);
+    (state.savedPrompts || []).forEach((p) => {
+      if (!p || !p.id) return;
+      const opt = document.createElement("option");
+      opt.value = p.id;
+      opt.textContent = p.name || "Untitled";
+      selectEl.appendChild(opt);
+    });
+    if (selectedId && (state.savedPrompts || []).some((p) => p.id === selectedId)) {
+      selectEl.value = selectedId;
+    } else {
+      selectEl.value = "";
+    }
+  }
+
+  function fillSavedPromptSelects() {
+    fillSelectOptions(
+      $("#studio-saved-prompt"),
+      "Insert saved prompt…",
+      ""
+    );
+    fillSelectOptions(
+      $("#prompt-editor-list"),
+      "Select a prompt…",
+      state.promptEditor.selectedId
+    );
+  }
+
+  async function refreshSavedPrompts() {
+    const a = api();
+    if (!a || typeof a.list_prompts !== "function") return;
+    try {
+      const res = await a.list_prompts();
+      if (res && res.ok && Array.isArray(res.prompts)) {
+        applySavedPrompts(res.prompts);
+        syncPromptEditorUi();
+      }
+    } catch (err) {
+      console.error(err);
+    }
+  }
+
+  function promptEditorFieldValues() {
+    const nameEl = $("#prompt-editor-name");
+    const bodyEl = $("#prompt-editor-text");
+    return {
+      name: nameEl ? nameEl.value : "",
+      body: bodyEl ? bodyEl.value : "",
+    };
+  }
+
+  function promptEditorIsDirty() {
+    const pe = state.promptEditor;
+    if (!pe.editing) return false;
+    const cur = promptEditorFieldValues();
+    return (
+      cur.name !== (pe.snapshotName || "") || cur.body !== (pe.snapshotBody || "")
+    );
+  }
+
+  function setPromptEditorEditing(editing) {
+    state.promptEditor.editing = !!editing;
+    const nameEl = $("#prompt-editor-name");
+    const bodyEl = $("#prompt-editor-text");
+    if (nameEl) nameEl.disabled = !editing;
+    if (bodyEl) bodyEl.disabled = !editing;
+  }
+
+  function loadPromptEditorFields(prompt) {
+    const nameEl = $("#prompt-editor-name");
+    const bodyEl = $("#prompt-editor-text");
+    const name = prompt && prompt.name ? prompt.name : "";
+    const body = prompt && prompt.body ? prompt.body : "";
+    if (nameEl) nameEl.value = name;
+    if (bodyEl) bodyEl.value = body;
+    state.promptEditor.snapshotName = name;
+    state.promptEditor.snapshotBody = body;
+  }
+
+  function resetPromptEditor() {
+    state.promptEditor.selectedId = "";
+    state.promptEditor.editing = false;
+    state.promptEditor.snapshotName = "";
+    state.promptEditor.snapshotBody = "";
+    loadPromptEditorFields(null);
+    setPromptEditorEditing(false);
+    const list = $("#prompt-editor-list");
+    if (list) list.value = "";
+  }
+
+  function syncPromptEditorUi() {
+    const list = $("#prompt-editor-list");
+    if (list) {
+      fillSelectOptions(list, "Select a prompt…", state.promptEditor.selectedId);
+    }
+    const selected = savedPromptById(state.promptEditor.selectedId);
+    if (state.promptEditor.editing) {
+      setPromptEditorEditing(true);
+      return;
+    }
+    if (selected) loadPromptEditorFields(selected);
+    else if (!state.promptEditor.selectedId) loadPromptEditorFields(null);
+    setPromptEditorEditing(false);
+  }
+
+  async function confirmDiscardPromptEdits() {
+    if (!promptEditorIsDirty()) return true;
+    return showConfirm(
+      "Unsaved prompt",
+      "Discard unsaved changes to this prompt?",
+      { yesLabel: "Discard", noLabel: "Keep editing" }
+    );
+  }
+
+  async function startNewPrompt() {
+    if (!(await confirmDiscardPromptEdits())) return;
+    state.promptEditor.selectedId = "";
+    loadPromptEditorFields({ name: "", body: "" });
+    setPromptEditorEditing(true);
+    fillSelectOptions($("#prompt-editor-list"), "Select a prompt…", "");
+    const nameEl = $("#prompt-editor-name");
+    if (nameEl) nameEl.focus();
+  }
+
+  async function editSelectedPrompt() {
+    const id = state.promptEditor.selectedId;
+    const selected = savedPromptById(id);
+    if (!selected) {
+      await startNewPrompt();
+      return;
+    }
+    if (promptEditorIsDirty() && state.promptEditor.editing) {
+      const nameEl = $("#prompt-editor-name");
+      if (nameEl) nameEl.focus();
+      return;
+    }
+    loadPromptEditorFields(selected);
+    setPromptEditorEditing(true);
+    const nameEl = $("#prompt-editor-name");
+    if (nameEl) nameEl.focus();
+  }
+
+  async function saveCurrentPrompt() {
+    if (!state.promptEditor.editing) {
+      showToast("Click Edit or Add before saving.");
+      return;
+    }
+    const cur = promptEditorFieldValues();
+    const name = (cur.name || "").trim();
+    if (!name) {
+      showToast("Name this prompt before saving.");
+      const nameEl = $("#prompt-editor-name");
+      if (nameEl) nameEl.focus();
+      return;
+    }
+    const a = api();
+    if (!a || typeof a.save_prompt !== "function") {
+      showToast("Python bridge not ready.");
+      return;
+    }
+    try {
+      const res = await a.save_prompt({
+        id: state.promptEditor.selectedId || "",
+        name,
+        body: cur.body || "",
+      });
+      if (!res || !res.ok) {
+        showToast((res && res.error) || "Could not save prompt.");
+        return;
+      }
+      applySavedPrompts(res.prompts || []);
+      const saved = res.prompt || {};
+      state.promptEditor.selectedId = saved.id || "";
+      loadPromptEditorFields(saved);
+      setPromptEditorEditing(false);
+      fillSelectOptions(
+        $("#prompt-editor-list"),
+        "Select a prompt…",
+        state.promptEditor.selectedId
+      );
+      showToast("Prompt saved.");
+    } catch (err) {
+      showToast("Could not save prompt: " + err);
+    }
+  }
+
+  async function onPromptEditorListChange() {
+    const list = $("#prompt-editor-list");
+    const nextId = list ? list.value : "";
+    if (nextId === (state.promptEditor.selectedId || "")) return;
+    if (!(await confirmDiscardPromptEdits())) {
+      if (list) list.value = state.promptEditor.selectedId || "";
+      return;
+    }
+    state.promptEditor.selectedId = nextId;
+    const selected = savedPromptById(nextId);
+    loadPromptEditorFields(selected);
+    setPromptEditorEditing(false);
+  }
+
+  function studioInsertField() {
+    const caret = state.studioCaret || {};
+    const byId = caret.fieldId ? document.getElementById(caret.fieldId) : null;
+    const candidates = ["studio-prompt", "studio-tool-use", "studio-search"];
+    const visible = (el) => {
+      if (!el) return false;
+      if (el.disabled) return false;
+      if (el.closest("[hidden]")) return false;
+      const form = $("#create-form");
+      if (form && form.classList.contains("studio-tools-mode") && el.id === "studio-prompt") {
+        return false;
+      }
+      return true;
+    };
+    if (byId && candidates.includes(byId.id) && visible(byId)) return byId;
+    if (studioToolsEnabled()) {
+      const toolUse = $("#studio-tool-use");
+      if (visible(toolUse)) return toolUse;
+      const search = $("#studio-search");
+      if (visible(search)) return search;
+    }
+    return $("#studio-prompt");
+  }
+
+  function rememberStudioCaret(el) {
+    if (!el || typeof el.selectionStart !== "number") return;
+    state.studioCaret = {
+      fieldId: el.id,
+      start: el.selectionStart,
+      end: el.selectionEnd,
+    };
+  }
+
+  function insertSavedPromptAtCursor(promptId) {
+    const prompt = savedPromptById(promptId);
+    if (!prompt) return;
+    const text = String(prompt.body || "");
+    const ta = studioInsertField();
+    if (!ta) {
+      showToast("Open the Prompt field in Creation Studio first.");
+      return;
+    }
+    const caret = state.studioCaret || {};
+    let start =
+      caret.fieldId === ta.id && caret.start != null
+        ? caret.start
+        : ta.selectionStart != null
+          ? ta.selectionStart
+          : ta.value.length;
+    let end =
+      caret.fieldId === ta.id && caret.end != null
+        ? caret.end
+        : ta.selectionEnd != null
+          ? ta.selectionEnd
+          : start;
+    if (start > ta.value.length) start = ta.value.length;
+    if (end > ta.value.length) end = ta.value.length;
+    if (end < start) end = start;
+    const before = ta.value.slice(0, start);
+    const after = ta.value.slice(end);
+    ta.value = before + text + after;
+    const cursor = start + text.length;
+    ta.focus();
+    try {
+      ta.setSelectionRange(cursor, cursor);
+    } catch (_) {
+      /* ignore */
+    }
+    rememberStudioCaret(ta);
+    const studioSel = $("#studio-saved-prompt");
+    if (studioSel) studioSel.value = "";
+    showToast('Inserted "' + (prompt.name || "prompt") + '".');
+  }
+
+  function onStudioSavedPromptChange() {
+    const sel = $("#studio-saved-prompt");
+    const id = sel ? sel.value : "";
+    if (!id) return;
+    insertSavedPromptAtCursor(id);
+  }
+
   /** When Use Tools is on, Search + Tool Use replace the single Prompt field. */
   function getStudioCreateTexts() {
     if (studioToolsEnabled()) {
@@ -2293,6 +2605,10 @@
     if (id === "form") {
       syncStudioToolsPanel();
     }
+    if (id === "prompt-editor") {
+      syncPromptEditorUi();
+      refreshSavedPrompts();
+    }
     if (el && !state.maximized[id]) layoutWindowInWorkArea(el);
     requestAnimationFrame(() => {
       if (el && !state.maximized[id]) layoutWindowInWorkArea(el);
@@ -2628,6 +2944,9 @@
     } else if (id === "video-edit") {
       if (!(await confirmDiscardEditorEdits("video"))) return false;
     }
+    if (id === "prompt-editor") {
+      if (!(await confirmDiscardPromptEdits())) return false;
+    }
     closeWindow(id);
     return true;
   }
@@ -2652,6 +2971,9 @@
       videoEdit.dirty = false;
       resetVideoEditRuntime();
     }
+    if (id === "prompt-editor") {
+      resetPromptEditor();
+    }
     state.open[id] = false;
     state.minimized[id] = false;
     state.maximized[id] = false;
@@ -2672,7 +2994,7 @@
           : null;
       const next =
         preferred ||
-        ["form", "viewer", "library", "control", "image-edit", "video-edit"].find(
+        ["form", "viewer", "library", "control", "image-edit", "video-edit", "prompt-editor"].find(
           (wid) => wid !== id && state.open[wid] && !state.minimized[wid]
         );
       if (next) focusWindow(next);
@@ -3023,8 +3345,9 @@
       control: "Control Panel",
       "image-edit": "Image Editor",
       "video-edit": "Video Editor",
+      "prompt-editor": "Prompt Editor",
     };
-    const ids = ["form", "viewer", "library", "control", "image-edit", "video-edit"].filter(
+    const ids = ["form", "viewer", "library", "control", "image-edit", "video-edit", "prompt-editor"].filter(
       (id) => state.open[id]
     );
     const existing = [...host.querySelectorAll(".task-btn")].map((b) =>
@@ -7696,6 +8019,32 @@
         studioLoadMediaFile("video")
       );
     }
+    if ($("#studio-saved-prompt")) {
+      $("#studio-saved-prompt").addEventListener("change", () =>
+        onStudioSavedPromptChange()
+      );
+    }
+    ["studio-prompt", "studio-search", "studio-tool-use"].forEach((id) => {
+      const el = $("#" + id);
+      if (!el) return;
+      ["keyup", "click", "select", "input", "blur"].forEach((evt) => {
+        el.addEventListener(evt, () => rememberStudioCaret(el));
+      });
+    });
+    if ($("#prompt-editor-list")) {
+      $("#prompt-editor-list").addEventListener("change", () =>
+        onPromptEditorListChange()
+      );
+    }
+    if ($("#btn-prompt-add")) {
+      $("#btn-prompt-add").addEventListener("click", () => startNewPrompt());
+    }
+    if ($("#btn-prompt-edit")) {
+      $("#btn-prompt-edit").addEventListener("click", () => editSelectedPrompt());
+    }
+    if ($("#btn-prompt-save")) {
+      $("#btn-prompt-save").addEventListener("click", () => saveCurrentPrompt());
+    }
     if ($("#btn-studio-clear-basis")) {
       $("#btn-studio-clear-basis").addEventListener("click", () => {
         clearStudioBasis();
@@ -8221,6 +8570,7 @@
         state.geminiToolsCatalog = boot.geminiTools.slice();
       }
       state.creations = boot.creations || [];
+      applySavedPrompts(boot.prompts || []);
       fillCatalogs(boot);
       fillControlPanel(boot);
       renderArchives();

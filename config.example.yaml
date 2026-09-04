@@ -66,6 +66,7 @@ ui:
 paths:
   archives: archives.json
   media: media
+  prompts: prompts.json
 
 google_workspace:
   # OAuth client JSON from Google Cloud Console (Desktop application type)

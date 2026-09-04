@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Retro 98 AI Creator</title>
   <link rel="stylesheet" href="vendor/98.css" />
-  <link rel="stylesheet" href="styles.css?v=editor3" />
+  <link rel="stylesheet" href="styles.css?v=toast1" />
 </head>
 <body>
   <div id="desktop">
@@ -30,6 +30,10 @@
         <button type="button" class="desktop-icon" data-open="video-edit" title="Video Editor">
           <div class="icon-glyph">🎬</div>
           <span>Video Editor</span>
+        </button>
+        <button type="button" class="desktop-icon" data-open="prompt-editor" title="Prompt Editor">
+          <div class="icon-glyph">📝</div>
+          <span>Prompt Editor</span>
         </button>
         <button type="button" class="desktop-icon" data-open="control" title="Control Panel">
           <div class="icon-glyph">⚙️</div>
@@ -74,6 +78,12 @@
                   Toggle tools for this Studio session without opening Control Panel.
                   Requires Gemini. Control Panel → Use Tools is the default on launch.
                 </p>
+                <div id="studio-saved-prompt-wrap" class="field-row-stacked">
+                  <label for="studio-saved-prompt">Saved prompt</label>
+                  <select id="studio-saved-prompt">
+                    <option value="">Insert saved prompt…</option>
+                  </select>
+                </div>
                 <div id="studio-prompt-wrap" class="field-row-stacked">
                   <label for="studio-prompt">Prompt</label>
                   <textarea
@@ -951,6 +961,49 @@
         </div>
       </div>
 
+      <!-- Prompt Editor (named snippets for Creation Studio) -->
+      <div class="window app-window" id="win-prompt-editor" data-window="prompt-editor" hidden style="left:80px;top:30px;width:720px;height:560px;">
+        <div class="title-bar">
+          <div class="title-bar-text">Prompt Editor</div>
+          <div class="title-bar-controls">
+            <button aria-label="Minimize" data-action="minimize"></button>
+            <button aria-label="Maximize" data-action="maximize"></button>
+            <button aria-label="Close" data-action="close"></button>
+          </div>
+        </div>
+        <div class="window-body prompt-editor-body">
+          <div class="field-row-stacked">
+            <label for="prompt-editor-list">Prompts</label>
+            <select id="prompt-editor-list">
+              <option value="">Select a prompt…</option>
+            </select>
+          </div>
+          <div class="form-actions">
+            <button type="button" id="btn-prompt-add">Add</button>
+            <button type="button" id="btn-prompt-edit">Edit</button>
+            <button type="button" id="btn-prompt-save" class="default">Save</button>
+          </div>
+          <div class="field-row-stacked">
+            <label for="prompt-editor-name">Name</label>
+            <input type="text" id="prompt-editor-name" maxlength="120" placeholder="Name this prompt" disabled />
+          </div>
+          <div class="field-row-stacked prompt-editor-text-wrap">
+            <label for="prompt-editor-text">Prompt</label>
+            <textarea
+              id="prompt-editor-text"
+              class="studio-prompt"
+              rows="12"
+              placeholder="Write the prompt text to insert in Creation Studio…"
+              disabled
+            ></textarea>
+          </div>
+          <p class="hint" id="prompt-editor-hint">
+            Add a prompt, give it a name, and Save. In Creation Studio, choose it from
+            Saved prompt to insert the text at the cursor.
+          </p>
+        </div>
+      </div>
+
     </div>
 
     <div id="crt-overlay" hidden></div>
@@ -968,6 +1021,7 @@
       <button type="button" data-open="viewer">👁️ Viewer</button>
       <button type="button" data-open="image-edit">🖼️ Image Editor</button>
       <button type="button" data-open="video-edit">🎬 Video Editor</button>
+      <button type="button" data-open="prompt-editor">📝 Prompt Editor</button>
       <button type="button" data-open="control">⚙️ Control Panel</button>
     </div>
 
@@ -1078,6 +1132,6 @@
   <script src="vendor/jspdf.umd.min.js"></script>
   <script src="catalog.js"></script>
   <script src="image_edit.js"></script>
-  <script src="app.js?v=editor3"></script>
+  <script src="app.js?v=prompt1"></script>
 </body>
 </html>

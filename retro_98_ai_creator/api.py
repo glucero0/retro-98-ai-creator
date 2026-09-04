@@ -28,7 +28,7 @@ from .openrouter_provider import (
     resolve_api_key as resolve_openrouter_key,
 )
 from .presets import CREATION_TYPES, PLATFORM_OPTIONS, PLATFORMS, POPULAR_GAME_PRESETS
-from .storage import ArchiveStore
+from .storage import ArchiveStore, PromptStore
 
 logger = logging.getLogger(__name__)
 
@@ -88,6 +88,7 @@ class Api:
     def __init__(self) -> None:
         self.config = load_config()
         self.store = ArchiveStore()
+        self.prompt_store = PromptStore()
         self._window = None
         self._ui_origin: str | None = None
         self._gen_lock = threading.Lock()
@@ -196,6 +197,7 @@ class Api:
             "creationTypes": CREATION_TYPES,
             "presets": POPULAR_GAME_PRESETS,
             "creations": creations,
+            "prompts": self.prompt_store.load(),
             "modelStatus": provider_status(self.config),
             "geminiTools": self._gemini_tools_catalog(),
         }
@@ -498,6 +500,26 @@ class Api:
 
     def export_creations_json(self) -> str:
         return self.store.export_json()
+
+    def list_prompts(self) -> dict[str, Any]:
+        return {"ok": True, "prompts": self.prompt_store.load()}
+
+    def save_prompt(self, prompt: dict[str, Any] | None = None) -> dict[str, Any]:
+        try:
+            saved = self.prompt_store.upsert(prompt or {})
+        except ValueError as exc:
+            return {"ok": False, "error": str(exc)}
+        except Exception as exc:  # noqa: BLE001
+            logger.exception("save_prompt failed")
+            return {"ok": False, "error": str(exc)}
+        return {"ok": True, "prompt": saved, "prompts": self.prompt_store.load()}
+
+    def delete_prompt(self, prompt_id: str) -> dict[str, Any]:
+        prompt_id = (prompt_id or "").strip()
+        if not prompt_id:
+            return {"ok": False, "error": "No prompt selected"}
+        prompts = self.prompt_store.delete(prompt_id)
+        return {"ok": True, "prompts": prompts}
 
     # ── Generation ────────────────────────────────────────────────────
 
