@@ -1,6 +1,6 @@
 # Retro 98 AI Creator
 
-A Windows 98 desktop studio for general-purpose AI creation: **text**, **images**, and **video** — with built-in editors and an archive of everything you make.
+A Windows 98 desktop studio for general-purpose AI creation: **text**, **images**, and **video** — with built-in editors, an archive of everything you make, and optional Gemini tools for local files, PowerShell, Gmail, Drive, Docs, Calendar, Tasks, and the web.
 
 > **Work in progress.** This project is under active development. Features, APIs, config, and storage formats may change without notice. **Use at your own risk** — there is no warranty of any kind. You are responsible for API costs and any data you generate or store. Do not rely on it for production, critical, or irreversible work.
 
