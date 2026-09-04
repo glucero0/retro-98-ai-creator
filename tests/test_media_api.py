@@ -266,3 +266,59 @@ def test_get_media_payload_image_includes_file_url(tmp_path, monkeypatch):
     assert res["modality"] == "image"
     assert res.get("fileUrl") == "http://127.0.0.1:8765/media/doc_basis.png"
     assert str(res.get("dataUrl") or "").startswith("data:image/")
+
+
+def test_save_binary_file_dialog_forces_png_and_pdf_extension(tmp_path, monkeypatch):
+    api = _api_with_tmp_store(tmp_path, monkeypatch)
+    png_bytes = b"\x89PNG\r\n\x1a\n"
+    png_b64 = base64.b64encode(png_bytes).decode("ascii")
+
+    class _Win:
+        def __init__(self, dest: Path):
+            self.dest = dest
+
+        def create_file_dialog(self, *_args, **_kwargs):
+            return str(self.dest)
+
+    dest = tmp_path / "from-viewer"
+    api._window = _Win(dest)
+    res = api.save_binary_file_dialog("poster.png", png_b64)
+    assert res["ok"] is True
+    assert Path(res["path"]).name == "from-viewer.png"
+    assert Path(res["path"]).read_bytes() == png_bytes
+
+    dest2 = tmp_path / "report.txt"
+    api._window = _Win(dest2)
+    res = api.save_binary_file_dialog("report.pdf", base64.b64encode(b"%PDF").decode("ascii"))
+    assert res["ok"] is True
+    assert Path(res["path"]).suffix == ".pdf"
+    assert Path(res["path"]).read_bytes() == b"%PDF"
+
+
+def test_export_creation_media_forces_mp4_extension(tmp_path, monkeypatch):
+    api = _api_with_tmp_store(tmp_path, monkeypatch)
+    media_dir = tmp_path / "media"
+    media_dir.mkdir(parents=True, exist_ok=True)
+    src = media_dir / "clip.mp4"
+    src.write_bytes(b"ftypisom")
+    creation = build_media_creation(
+        modality="video",
+        prompt="clip",
+        media_path="media/clip.mp4",
+        mime_type="video/mp4",
+        title="Clip",
+        creation_id="clip1",
+    )
+    api.store.upsert(creation)
+
+    dest = tmp_path / "exported"
+    class _Win:
+        def create_file_dialog(self, *_args, **_kwargs):
+            return str(dest)
+
+    api._window = _Win()
+    res = api.export_creation_media(creation)
+    assert res["ok"] is True
+    assert Path(res["path"]).name == "exported.mp4"
+    assert Path(res["path"]).read_bytes() == b"ftypisom"
+

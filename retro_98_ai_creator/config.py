@@ -97,6 +97,7 @@ DEFAULTS: dict[str, Any] = {
         # Relative paths resolve against the project root
         "archives": "archives.json",
         "media": "media",
+        "prompts": "prompts.json",
     },
     "google_workspace": {
         # OAuth client JSON from Google Cloud (Desktop app) — set via Control Panel
@@ -211,6 +212,8 @@ def load_config() -> dict[str, Any]:
         paths["archives"] = DEFAULTS["paths"]["archives"]
     if not paths.get("media"):
         paths["media"] = DEFAULTS["paths"]["media"]
+    if not paths.get("prompts"):
+        paths["prompts"] = DEFAULTS["paths"]["prompts"]
     return cfg
 
 
@@ -293,6 +296,7 @@ def save_config(updates: dict[str, Any], existing: dict[str, Any] | None = None)
         "ui": ui_out,
         "paths": {
             "archives": paths.get("archives") or DEFAULTS["paths"]["archives"],
+            "prompts": paths.get("prompts") or DEFAULTS["paths"]["prompts"],
         },
     }
     with DEFAULT_CONFIG_PATH.open("w", encoding="utf-8") as fh:
@@ -311,6 +315,11 @@ def save_config(updates: dict[str, Any], existing: dict[str, Any] | None = None)
 def archives_path(cfg: dict[str, Any] | None = None) -> Path:
     cfg = cfg or load_config()
     return expand_path(cfg["paths"]["archives"])
+
+
+def prompts_path(cfg: dict[str, Any] | None = None) -> Path:
+    cfg = cfg or load_config()
+    return expand_path(cfg["paths"].get("prompts") or DEFAULTS["paths"]["prompts"])
 
 # Suggested Hugging Face models (local backend) — curated per modality
 SUGGESTED_MODELS: list[dict[str, str]] = [

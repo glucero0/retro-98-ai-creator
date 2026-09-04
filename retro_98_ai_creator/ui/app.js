@@ -7,9 +7,11 @@
     creations: [],
     active: null,
     focused: "form",
-    open: { form: true, viewer: false, library: false, control: false, "image-edit": false, "video-edit": false },
-    minimized: { form: false, viewer: false, library: false, control: false, "image-edit": false, "video-edit": false },
-    maximized: { form: false, viewer: false, library: false, control: false, "image-edit": false, "video-edit": false },
+    open: { form: true, viewer: false, library: false, control: false, "image-edit": false, "video-edit": false, "prompt-editor": false },
+    minimized: { form: false, viewer: false, library: false, control: false, "image-edit": false, "video-edit": false, "prompt-editor": false },
+    maximized: { form: false, viewer: false, library: false, control: false, "image-edit": false, "video-edit": false, "prompt-editor": false },
+    // Back → front. Focus moves a window to the end; others keep their relative order.
+    windowZOrder: ["form", "viewer", "library", "control", "image-edit", "video-edit", "prompt-editor"],
     preMaximizeRect: {},
     generating: false,
     modelLoading: false,
@@ -34,6 +36,14 @@
     geminiToolsCatalog: null, // from bootstrap / list_gemini_tools
     studioAddToolOpen: false,
     studioEnableTools: false,
+    savedPrompts: [],
+    promptEditor: {
+      selectedId: "",
+      editing: false,
+      snapshotName: "",
+      snapshotBody: "",
+    },
+    studioCaret: { fieldId: "studio-prompt", start: 0, end: 0 },
     appTheme: "light",
     customTheme: {
       desktopColor: "#008080",
@@ -1881,6 +1891,343 @@
     if (field) field.value = text || "";
   }
 
+  function savedPromptById(id) {
+    return (state.savedPrompts || []).find((p) => p && p.id === id) || null;
+  }
+
+  function applySavedPrompts(list) {
+    const items = Array.isArray(list) ? list.slice() : [];
+    items.sort((a, b) =>
+      String(a && a.name ? a.name : "").localeCompare(
+        String(b && b.name ? b.name : ""),
+        undefined,
+        { sensitivity: "base" }
+      )
+    );
+    state.savedPrompts = items;
+    fillSavedPromptSelects();
+  }
+
+  function fillSelectOptions(selectEl, placeholder, selectedId) {
+    if (!selectEl) return;
+    selectEl.innerHTML = "";
+    const blank = document.createElement("option");
+    blank.value = "";
+    blank.textContent = placeholder;
+    selectEl.appendChild(blank);
+    (state.savedPrompts || []).forEach((p) => {
+      if (!p || !p.id) return;
+      const opt = document.createElement("option");
+      opt.value = p.id;
+      opt.textContent = p.name || "Untitled";
+      selectEl.appendChild(opt);
+    });
+    if (selectedId && (state.savedPrompts || []).some((p) => p.id === selectedId)) {
+      selectEl.value = selectedId;
+    } else {
+      selectEl.value = "";
+    }
+  }
+
+  function fillSavedPromptSelects() {
+    fillSelectOptions(
+      $("#studio-saved-prompt"),
+      "Insert saved prompt…",
+      ""
+    );
+    fillSelectOptions(
+      $("#prompt-editor-list"),
+      "Select a prompt…",
+      state.promptEditor.selectedId
+    );
+  }
+
+  async function refreshSavedPrompts() {
+    const a = api();
+    if (!a || typeof a.list_prompts !== "function") return;
+    try {
+      const res = await a.list_prompts();
+      if (res && res.ok && Array.isArray(res.prompts)) {
+        applySavedPrompts(res.prompts);
+        syncPromptEditorUi();
+      }
+    } catch (err) {
+      console.error(err);
+    }
+  }
+
+  function promptEditorFieldValues() {
+    const nameEl = $("#prompt-editor-name");
+    const bodyEl = $("#prompt-editor-text");
+    return {
+      name: nameEl ? nameEl.value : "",
+      body: bodyEl ? bodyEl.value : "",
+    };
+  }
+
+  function promptEditorIsDirty() {
+    const pe = state.promptEditor;
+    if (!pe.editing) return false;
+    const cur = promptEditorFieldValues();
+    return (
+      cur.name !== (pe.snapshotName || "") || cur.body !== (pe.snapshotBody || "")
+    );
+  }
+
+  function setPromptEditorEditing(editing) {
+    state.promptEditor.editing = !!editing;
+    const nameEl = $("#prompt-editor-name");
+    const bodyEl = $("#prompt-editor-text");
+    if (nameEl) nameEl.disabled = !editing;
+    if (bodyEl) bodyEl.disabled = !editing;
+  }
+
+  function loadPromptEditorFields(prompt) {
+    const nameEl = $("#prompt-editor-name");
+    const bodyEl = $("#prompt-editor-text");
+    const name = prompt && prompt.name ? prompt.name : "";
+    const body = prompt && prompt.body ? prompt.body : "";
+    if (nameEl) nameEl.value = name;
+    if (bodyEl) bodyEl.value = body;
+    state.promptEditor.snapshotName = name;
+    state.promptEditor.snapshotBody = body;
+  }
+
+  function resetPromptEditor() {
+    state.promptEditor.selectedId = "";
+    state.promptEditor.editing = false;
+    state.promptEditor.snapshotName = "";
+    state.promptEditor.snapshotBody = "";
+    loadPromptEditorFields(null);
+    setPromptEditorEditing(false);
+    const list = $("#prompt-editor-list");
+    if (list) list.value = "";
+  }
+
+  function syncPromptEditorUi() {
+    const list = $("#prompt-editor-list");
+    if (list) {
+      fillSelectOptions(list, "Select a prompt…", state.promptEditor.selectedId);
+    }
+    const selected = savedPromptById(state.promptEditor.selectedId);
+    if (state.promptEditor.editing) {
+      setPromptEditorEditing(true);
+      return;
+    }
+    if (selected) loadPromptEditorFields(selected);
+    else if (!state.promptEditor.selectedId) loadPromptEditorFields(null);
+    setPromptEditorEditing(false);
+  }
+
+  async function confirmDiscardPromptEdits() {
+    if (!promptEditorIsDirty()) return true;
+    return showConfirm(
+      "Unsaved prompt",
+      "Discard unsaved changes to this prompt?",
+      { yesLabel: "Discard", noLabel: "Keep editing" }
+    );
+  }
+
+  async function startNewPrompt() {
+    if (!(await confirmDiscardPromptEdits())) return;
+    state.promptEditor.selectedId = "";
+    loadPromptEditorFields({ name: "", body: "" });
+    setPromptEditorEditing(true);
+    fillSelectOptions($("#prompt-editor-list"), "Select a prompt…", "");
+    const nameEl = $("#prompt-editor-name");
+    if (nameEl) nameEl.focus();
+  }
+
+  async function editSelectedPrompt() {
+    const id = state.promptEditor.selectedId;
+    const selected = savedPromptById(id);
+    if (!selected) {
+      await startNewPrompt();
+      return;
+    }
+    if (promptEditorIsDirty() && state.promptEditor.editing) {
+      const nameEl = $("#prompt-editor-name");
+      if (nameEl) nameEl.focus();
+      return;
+    }
+    loadPromptEditorFields(selected);
+    setPromptEditorEditing(true);
+    const nameEl = $("#prompt-editor-name");
+    if (nameEl) nameEl.focus();
+  }
+
+  async function saveCurrentPrompt() {
+    if (!state.promptEditor.editing) {
+      showToast("Click Edit or Add before saving.");
+      return;
+    }
+    const cur = promptEditorFieldValues();
+    const name = (cur.name || "").trim();
+    if (!name) {
+      showToast("Name this prompt before saving.");
+      const nameEl = $("#prompt-editor-name");
+      if (nameEl) nameEl.focus();
+      return;
+    }
+    const a = api();
+    if (!a || typeof a.save_prompt !== "function") {
+      showToast("Python bridge not ready.");
+      return;
+    }
+    try {
+      const res = await a.save_prompt({
+        id: state.promptEditor.selectedId || "",
+        name,
+        body: cur.body || "",
+      });
+      if (!res || !res.ok) {
+        showToast((res && res.error) || "Could not save prompt.");
+        return;
+      }
+      applySavedPrompts(res.prompts || []);
+      const saved = res.prompt || {};
+      state.promptEditor.selectedId = saved.id || "";
+      loadPromptEditorFields(saved);
+      setPromptEditorEditing(false);
+      fillSelectOptions(
+        $("#prompt-editor-list"),
+        "Select a prompt…",
+        state.promptEditor.selectedId
+      );
+      showToast("Prompt saved.");
+    } catch (err) {
+      showToast("Could not save prompt: " + err);
+    }
+  }
+
+  async function deleteCurrentPrompt() {
+    const id = state.promptEditor.selectedId || "";
+    const selected = savedPromptById(id);
+    if (!id || !selected) {
+      showToast("Select a saved prompt to delete.");
+      return;
+    }
+    const name = selected.name || "this prompt";
+    const go = await showConfirm(
+      "Delete prompt",
+      'Delete "' + name + '"? This cannot be undone.',
+      { yesLabel: "Delete", noLabel: "Cancel" }
+    );
+    if (!go) return;
+    const a = api();
+    if (!a || typeof a.delete_prompt !== "function") {
+      showToast("Python bridge not ready.");
+      return;
+    }
+    try {
+      const res = await a.delete_prompt(id);
+      if (!res || !res.ok) {
+        showToast((res && res.error) || "Could not delete prompt.");
+        return;
+      }
+      applySavedPrompts(res.prompts || []);
+      resetPromptEditor();
+      showToast('Deleted "' + name + '".');
+    } catch (err) {
+      showToast("Could not delete prompt: " + err);
+    }
+  }
+
+  async function onPromptEditorListChange() {
+    const list = $("#prompt-editor-list");
+    const nextId = list ? list.value : "";
+    if (nextId === (state.promptEditor.selectedId || "")) return;
+    if (!(await confirmDiscardPromptEdits())) {
+      if (list) list.value = state.promptEditor.selectedId || "";
+      return;
+    }
+    state.promptEditor.selectedId = nextId;
+    const selected = savedPromptById(nextId);
+    loadPromptEditorFields(selected);
+    setPromptEditorEditing(false);
+  }
+
+  function studioInsertField() {
+    const caret = state.studioCaret || {};
+    const byId = caret.fieldId ? document.getElementById(caret.fieldId) : null;
+    const candidates = ["studio-prompt", "studio-tool-use", "studio-search"];
+    const visible = (el) => {
+      if (!el) return false;
+      if (el.disabled) return false;
+      if (el.closest("[hidden]")) return false;
+      const form = $("#create-form");
+      if (form && form.classList.contains("studio-tools-mode") && el.id === "studio-prompt") {
+        return false;
+      }
+      return true;
+    };
+    if (byId && candidates.includes(byId.id) && visible(byId)) return byId;
+    if (studioToolsEnabled()) {
+      const toolUse = $("#studio-tool-use");
+      if (visible(toolUse)) return toolUse;
+      const search = $("#studio-search");
+      if (visible(search)) return search;
+    }
+    return $("#studio-prompt");
+  }
+
+  function rememberStudioCaret(el) {
+    if (!el || typeof el.selectionStart !== "number") return;
+    state.studioCaret = {
+      fieldId: el.id,
+      start: el.selectionStart,
+      end: el.selectionEnd,
+    };
+  }
+
+  function insertSavedPromptAtCursor(promptId) {
+    const prompt = savedPromptById(promptId);
+    if (!prompt) return;
+    const text = String(prompt.body || "");
+    const ta = studioInsertField();
+    if (!ta) {
+      showToast("Open the Prompt field in Creation Studio first.");
+      return;
+    }
+    const caret = state.studioCaret || {};
+    let start =
+      caret.fieldId === ta.id && caret.start != null
+        ? caret.start
+        : ta.selectionStart != null
+          ? ta.selectionStart
+          : ta.value.length;
+    let end =
+      caret.fieldId === ta.id && caret.end != null
+        ? caret.end
+        : ta.selectionEnd != null
+          ? ta.selectionEnd
+          : start;
+    if (start > ta.value.length) start = ta.value.length;
+    if (end > ta.value.length) end = ta.value.length;
+    if (end < start) end = start;
+    const before = ta.value.slice(0, start);
+    const after = ta.value.slice(end);
+    ta.value = before + text + after;
+    const cursor = start + text.length;
+    ta.focus();
+    try {
+      ta.setSelectionRange(cursor, cursor);
+    } catch (_) {
+      /* ignore */
+    }
+    rememberStudioCaret(ta);
+    const studioSel = $("#studio-saved-prompt");
+    if (studioSel) studioSel.value = "";
+    showToast('Inserted "' + (prompt.name || "prompt") + '".');
+  }
+
+  function onStudioSavedPromptChange() {
+    const sel = $("#studio-saved-prompt");
+    const id = sel ? sel.value : "";
+    if (!id) return;
+    insertSavedPromptAtCursor(id);
+  }
+
   /** When Use Tools is on, Search + Tool Use replace the single Prompt field. */
   function getStudioCreateTexts() {
     if (studioToolsEnabled()) {
@@ -1991,6 +2338,26 @@
     );
   }
 
+  async function sendCreationToCreator(creation) {
+    if (!creation) {
+      showToast("Open or select a creation first.");
+      return false;
+    }
+    const mod = creationModality(creation);
+    if (mod !== "image" && mod !== "video") {
+      showToast("Save and Send to Creator is for images and videos.");
+      return false;
+    }
+    const ok = await setStudioBasisFromCreation(creation, { anonymous: true });
+    if (!ok) return false;
+    openWindow("form");
+    showToast(
+      (mod === "image" ? "Image" : "Video") +
+        " sent to Creation Studio — describe the change, then CREATE. The new result is saved as its own Archive item."
+    );
+    return true;
+  }
+
   function clearStudioBasis() {
     state.studioBasis = null;
     renderStudioBasisPanel();
@@ -2042,16 +2409,22 @@
       preview.appendChild(img);
     }
     if (label) {
-      label.textContent =
-        (basis.modality === "video" ? "Video basis: " : "Image basis: ") +
-        (basis.title || basis.creationId || "media");
+      if (basis.title) {
+        label.textContent =
+          (basis.modality === "video" ? "Video basis: " : "Image basis: ") +
+          basis.title;
+      } else {
+        label.textContent =
+          basis.modality === "video" ? "Video basis" : "Image basis";
+      }
     }
     requestAnimationFrame(() => syncDesktopScrollExtent());
   }
 
-  async function setStudioBasisFromCreation(creation) {
+  async function setStudioBasisFromCreation(creation, opts) {
     const a = api();
     if (!a || !creation) return false;
+    const anonymous = !!(opts && opts.anonymous);
     const mod = creationModality(creation);
     if (mod !== "image" && mod !== "video") {
       showToast("Only image or video can be a media basis.");
@@ -2069,18 +2442,20 @@
       modality: mod,
       fileUrl: previewUrl,
       mimeType: payload.mimeType || creation.mimeType || "",
-      title: creationTitle(creation),
+      title: anonymous ? "" : creationTitle(creation),
       mediaPath: creation.mediaPath || "",
     };
-    if (!(getStudioPrompt() || "").trim() && (creation.prompt || "").trim()) {
-      setStudioPrompt(creation.prompt.trim());
-    }
-    if (
-      studioToolsEnabled() &&
-      !(getStudioSearch() || "").trim() &&
-      (creation.prompt || "").trim()
-    ) {
-      setStudioSearch(creation.prompt.trim());
+    if (!anonymous) {
+      if (!(getStudioPrompt() || "").trim() && (creation.prompt || "").trim()) {
+        setStudioPrompt(creation.prompt.trim());
+      }
+      if (
+        studioToolsEnabled() &&
+        !(getStudioSearch() || "").trim() &&
+        (creation.prompt || "").trim()
+      ) {
+        setStudioSearch(creation.prompt.trim());
+      }
     }
     renderStudioBasisPanel();
     return true;
@@ -2191,8 +2566,44 @@
   }
 
   // ── Window manager ─────────────────────────────────────────────────
+  let windowZTop = 20;
+
+  function windowsLayer() {
+    return document.getElementById("windows-layer") || document.getElementById("desktop");
+  }
+
+  function adoptWindowsIntoLayer() {
+    const layer = document.getElementById("windows-layer");
+    if (!layer) return;
+    document.querySelectorAll(".app-window").forEach((el) => {
+      if (el.parentElement !== layer) layer.appendChild(el);
+    });
+  }
+
+  function bringWindowToFront(id) {
+    if (!id) return;
+    const order = (state.windowZOrder || []).filter((w) => w !== id);
+    order.push(id);
+    state.windowZOrder = order;
+    const el = document.getElementById("win-" + id);
+    if (!el) return;
+    const layer = windowsLayer();
+    // Reparenting/restacking during mousedown cancels the following click, so
+    // leave a window that is already front-most alone.
+    if (layer && layer.lastElementChild === el) return;
+    windowZTop += 1;
+    el.style.setProperty("z-index", String(windowZTop), "important");
+    if (layer) layer.appendChild(el);
+  }
+
   function focusWindow(id) {
+    if (!id) return;
+    const already = state.focused === id;
     state.focused = id;
+    bringWindowToFront(id);
+    if (already && document.querySelector(".app-window.focused")?.dataset.window === id) {
+      return;
+    }
     document.querySelectorAll(".app-window").forEach((w) => {
       const title = w.querySelector(".title-bar");
       if (w.dataset.window === id) {
@@ -2215,8 +2626,6 @@
       el.classList.remove("minimized");
     }
     focusWindow(id);
-    // Let layout settle (esp. Control Panel height:auto) then extend scroll area
-    requestAnimationFrame(() => syncDesktopScrollExtent());
     if (id === "control") {
       syncControlPanelWidth();
     }
@@ -2229,6 +2638,15 @@
     if (id === "form") {
       syncStudioToolsPanel();
     }
+    if (id === "prompt-editor") {
+      syncPromptEditorUi();
+      refreshSavedPrompts();
+    }
+    if (el && !state.maximized[id]) layoutWindowInWorkArea(el);
+    requestAnimationFrame(() => {
+      if (el && !state.maximized[id]) layoutWindowInWorkArea(el);
+      syncDesktopScrollExtent();
+    });
   }
 
   let _geminiModelsRefreshSeq = 0;
@@ -2468,17 +2886,30 @@
     const desktop = $("#desktop");
     const layer = $("#windows-layer");
     if (!desktop || !layer) return;
-    // With document zoom, layout sizes are already in zoomed CSS pixels.
-    let maxBottom = window.innerHeight;
+    // Desktop is a fixed logical screen (DPI zoom). Do not grow a page scrollbar.
+    desktop.style.minHeight = "";
+    layer.style.minHeight = "";
+    clampWindowsToDesktop();
+  }
+
+  function clampWindowsToDesktop() {
+    const bounds = getDesktopBounds();
     document.querySelectorAll(".app-window").forEach((win) => {
       if (win.hidden || win.classList.contains("minimized")) return;
-      const top = parseFloat(win.style.top);
-      const y = Number.isFinite(top) ? top : win.offsetTop || 0;
+      if (win.classList.contains("maximized")) return;
+      let left = parseFloat(win.style.left);
+      let top = parseFloat(win.style.top);
+      if (!Number.isFinite(left)) left = win.offsetLeft || 0;
+      if (!Number.isFinite(top)) top = win.offsetTop || 0;
+      const w = win.offsetWidth || 0;
       const h = win.offsetHeight || 0;
-      maxBottom = Math.max(maxBottom, y + h + 24);
+      if (w < bounds.width) left = Math.min(Math.max(left, 0), bounds.width - w);
+      else left = 0;
+      if (h < bounds.height) top = Math.min(Math.max(top, 0), bounds.height - h);
+      else top = 0;
+      win.style.left = left + "px";
+      win.style.top = top + "px";
     });
-    layer.style.minHeight = maxBottom + "px";
-    desktop.style.minHeight = Math.max(window.innerHeight, maxBottom + 40) + "px";
   }
 
   async function cancelControlPanel() {
@@ -2546,6 +2977,9 @@
     } else if (id === "video-edit") {
       if (!(await confirmDiscardEditorEdits("video"))) return false;
     }
+    if (id === "prompt-editor") {
+      if (!(await confirmDiscardPromptEdits())) return false;
+    }
     closeWindow(id);
     return true;
   }
@@ -2570,6 +3004,9 @@
       videoEdit.dirty = false;
       resetVideoEditRuntime();
     }
+    if (id === "prompt-editor") {
+      resetPromptEditor();
+    }
     state.open[id] = false;
     state.minimized[id] = false;
     state.maximized[id] = false;
@@ -2590,7 +3027,7 @@
           : null;
       const next =
         preferred ||
-        ["form", "viewer", "library", "control", "image-edit", "video-edit"].find(
+        ["form", "viewer", "library", "control", "image-edit", "video-edit", "prompt-editor"].find(
           (wid) => wid !== id && state.open[wid] && !state.minimized[wid]
         );
       if (next) focusWindow(next);
@@ -2623,14 +3060,18 @@
   // Snapshot the window's current on-screen geometry (relative to the
   // windows layer) so maximize can be undone later.
   function captureWindowGeometry(win, layerRect) {
-    const rect = win.getBoundingClientRect();
     const left = parseFloat(win.style.left);
     const top = parseFloat(win.style.top);
+    const scale = uiZoomFactor();
     return {
-      left: Number.isFinite(left) ? left : rect.left - layerRect.left,
-      top: Number.isFinite(top) ? top : rect.top - layerRect.top,
-      width: win.style.width || rect.width + "px",
-      height: win.style.height || rect.height + "px",
+      left: Number.isFinite(left)
+        ? left
+        : (win.getBoundingClientRect().left - layerRect.left) / scale,
+      top: Number.isFinite(top)
+        ? top
+        : (win.getBoundingClientRect().top - layerRect.top) / scale,
+      width: win.style.width || win.offsetWidth + "px",
+      height: win.style.height || win.offsetHeight + "px",
     };
   }
 
@@ -2684,25 +3125,63 @@
   let dragState = null;
 
   function getDesktopBounds() {
-    const layer = $("#windows-layer") || $("#desktop");
-    const rect = layer.getBoundingClientRect();
+    const layer = windowsLayer();
     return {
-      left: rect.left,
-      top: rect.top,
-      right: rect.right,
-      bottom: rect.bottom,
-      width: rect.width,
-      height: rect.height,
+      width: layer ? layer.clientWidth : window.innerWidth,
+      height: layer ? layer.clientHeight : window.innerHeight,
     };
+  }
+
+  function getDesktopWorkArea() {
+    const bounds = getDesktopBounds();
+    const icons = document.getElementById("desktop-icons");
+    const pad = 12;
+    let left = pad;
+    if (icons) left = Math.round(icons.offsetLeft + icons.offsetWidth + pad);
+    const top = pad;
+    let width = bounds.width - left - pad;
+    let height = bounds.height - top - pad;
+    if (width < 320) {
+      left = pad;
+      width = Math.max(0, bounds.width - pad * 2);
+    }
+    height = Math.max(0, height);
+    return { left, top, width, height };
+  }
+
+  function layoutWindowInWorkArea(el) {
+    if (!el || el.classList.contains("maximized")) return;
+    const area = getDesktopWorkArea();
+    el.style.left = area.left + "px";
+    el.style.top = area.top + "px";
+    el.style.width = area.width + "px";
+    el.style.height = area.height + "px";
+    el.style.right = "auto";
+    el.style.maxWidth = "none";
+    el.style.maxHeight = "none";
+    el.style.minWidth = "0";
+    el.style.minHeight = "0";
+  }
+
+  function layoutOpenWindowsInWorkArea() {
+    document.querySelectorAll(".app-window").forEach((el) => {
+      const id = el.dataset.window;
+      if (!id || !state.open[id] || state.minimized[id] || state.maximized[id]) {
+        return;
+      }
+      if (el.hidden) return;
+      layoutWindowInWorkArea(el);
+    });
   }
 
   function clampWindowPosition(win, left, top) {
     const bounds = getDesktopBounds();
-    const rect = win.getBoundingClientRect();
+    const w = win.offsetWidth || 0;
+    const h = win.offsetHeight || 0;
     const minVisible = 48;
     const maxLeft = bounds.width - minVisible;
     const maxTop = Math.max(0, bounds.height - minVisible);
-    const minLeft = -(rect.width - minVisible);
+    const minLeft = -(w - minVisible);
     left = Math.min(Math.max(left, minLeft), maxLeft);
     top = Math.min(Math.max(top, 0), maxTop);
     return { left, top };
@@ -2721,28 +3200,32 @@
       if (id && state.maximized[id]) restoreWindow(id);
       if (id) focusWindow(id);
 
-      const rect = win.getBoundingClientRect();
-      const layer = $("#windows-layer") || $("#desktop");
-      const layerRect = layer.getBoundingClientRect();
-      // Position is relative to windows-layer
-      const startLeft = rect.left - layerRect.left;
-      const startTop = rect.top - layerRect.top;
+      const startLeft = parseFloat(win.style.left);
+      const startTop = parseFloat(win.style.top);
 
       dragState = {
         win,
         startX: e.clientX,
         startY: e.clientY,
-        origLeft: startLeft,
-        origTop: startTop,
+        origLeft: Number.isFinite(startLeft) ? startLeft : win.offsetLeft || 0,
+        origTop: Number.isFinite(startTop) ? startTop : win.offsetTop || 0,
+        scale: uiZoomFactor(),
+        dragging: false,
       };
-      win.classList.add("dragging");
-      e.preventDefault();
     });
 
     document.addEventListener("mousemove", (e) => {
       if (!dragState) return;
-      const dx = e.clientX - dragState.startX;
-      const dy = e.clientY - dragState.startY;
+      if (!dragState.dragging) {
+        const adx = e.clientX - dragState.startX;
+        const ady = e.clientY - dragState.startY;
+        if (adx * adx + ady * ady < 16) return;
+        dragState.dragging = true;
+        dragState.win.classList.add("dragging");
+      }
+      const scale = dragState.scale || 1;
+      const dx = (e.clientX - dragState.startX) / scale;
+      const dy = (e.clientY - dragState.startY) / scale;
       const next = clampWindowPosition(
         dragState.win,
         dragState.origLeft + dx,
@@ -2771,10 +3254,13 @@
   let resizeState = null;
 
   function uiZoomFactor() {
-    const fromStyle = Number(document.documentElement.style.zoom);
-    if (Number.isFinite(fromStyle) && fromStyle > 0) return fromStyle;
     const fromState = Number(state.uiScale);
-    return Number.isFinite(fromState) && fromState > 0 ? fromState : 1;
+    if (Number.isFinite(fromState) && fromState > 0) return fromState;
+    const fromVar = Number(
+      getComputedStyle(document.documentElement).getPropertyValue("--ui-scale")
+    );
+    if (Number.isFinite(fromVar) && fromVar > 0) return fromVar;
+    return 1;
   }
 
   function enableWindowResizing() {
@@ -2833,20 +3319,26 @@
       if (!resizeState || e.pointerId !== resizeState.pointerId) return;
       const layer = $("#windows-layer") || $("#desktop");
       const scale = resizeState.scale || 1;
-      // clientWidth is in the same CSS-px space as offsetWidth under document zoom
       const deskW = layer ? layer.clientWidth : window.innerWidth;
       const deskH = layer ? layer.clientHeight : window.innerHeight;
-      const minW =
+      const roomW = Math.max(160, deskW - resizeState.origLeft - 8);
+      const roomH = Math.max(120, deskH - resizeState.origTop - 8);
+      const minW = Math.min(
+        roomW,
         resizeState.win.id === "win-form"
           ? resizeState.win.classList.contains("has-studio-basis")
             ? 720
             : 400
-          : 320;
-      const minH = resizeState.win.id === "win-form" ? 400 : 180;
+          : 320
+      );
+      const minH = Math.min(
+        roomH,
+        resizeState.win.id === "win-form" ? 400 : 180
+      );
       let nextW = resizeState.origW + (e.clientX - resizeState.startX) / scale;
       let nextH = resizeState.origH + (e.clientY - resizeState.startY) / scale;
-      nextW = Math.max(minW, Math.min(nextW, deskW - resizeState.origLeft - 8));
-      nextH = Math.max(minH, Math.min(nextH, deskH - resizeState.origTop - 8));
+      nextW = Math.max(minW, Math.min(nextW, roomW));
+      nextH = Math.max(minH, Math.min(nextH, roomH));
       resizeState.win.style.width = Math.round(nextW) + "px";
       resizeState.win.style.height = Math.round(nextH) + "px";
     });
@@ -2879,33 +3371,54 @@
   function renderTaskbar() {
     const host = $("#taskbar-windows");
     if (!host) return;
-    host.innerHTML = "";
     const titles = {
       form: "Creation Studio",
       viewer: state.active ? "Viewer — " + creationTitle(state.active) : "Viewer",
       library: "Archives",
       control: "Control Panel",
-      "image-edit": "Image Edit",
-      "video-edit": "Video Edit",
+      "image-edit": "Image Editor",
+      "video-edit": "Video Editor",
+      "prompt-editor": "Prompt Editor",
     };
-    ["form", "viewer", "library", "control", "image-edit", "video-edit"].forEach((id) => {
-      if (!state.open[id]) return;
-      const btn = document.createElement("button");
-      btn.type = "button";
-      btn.className =
-        "task-btn" + (state.focused === id && !state.minimized[id] ? " active" : "");
-      btn.textContent = titles[id];
-      btn.addEventListener("click", (e) => {
-        e.stopPropagation();
-        if (state.minimized[id]) {
-          state.minimized[id] = false;
-          const win = document.getElementById("win-" + id);
-          if (win) win.classList.remove("minimized");
-        }
-        focusWindow(id);
-        toggleStartMenu(false);
+    const ids = ["form", "viewer", "library", "control", "image-edit", "video-edit", "prompt-editor"].filter(
+      (id) => state.open[id]
+    );
+    const existing = [...host.querySelectorAll(".task-btn")].map((b) =>
+      b.getAttribute("data-window")
+    );
+    const sameSet =
+      existing.length === ids.length && existing.every((id, i) => id === ids[i]);
+    if (!sameSet) {
+      host.innerHTML = "";
+      ids.forEach((id) => {
+        const btn = document.createElement("button");
+        btn.type = "button";
+        btn.className = "task-btn";
+        btn.setAttribute("data-window", id);
+        const activate = (e) => {
+          e.stopPropagation();
+          e.preventDefault();
+          if (state.minimized[id]) {
+            state.minimized[id] = false;
+            const win = document.getElementById("win-" + id);
+            if (win) win.classList.remove("minimized");
+          }
+          focusWindow(id);
+          toggleStartMenu(false);
+        };
+        btn.addEventListener("mousedown", activate);
+        btn.addEventListener("click", activate);
+        host.appendChild(btn);
       });
-      host.appendChild(btn);
+    }
+    ids.forEach((id) => {
+      const btn = host.querySelector('.task-btn[data-window="' + id + '"]');
+      if (!btn) return;
+      btn.textContent = titles[id];
+      btn.classList.toggle(
+        "active",
+        state.focused === id && !state.minimized[id]
+      );
     });
   }
 
@@ -3848,6 +4361,11 @@
         tr.appendChild(tdType);
         tr.appendChild(tdDate);
         tr.appendChild(tdActions);
+        tr.addEventListener("dblclick", (e) => {
+          if (e.target.closest(".arch-col-actions")) return;
+          e.preventDefault();
+          renderDocument(c);
+        });
         list.appendChild(tr);
       });
   }
@@ -4155,6 +4673,9 @@
     }
     if ($("#btn-edit-image")) $("#btn-edit-image").hidden = !showEditImage;
     if ($("#btn-edit-video")) $("#btn-edit-video").hidden = !showEditVideo;
+    if ($("#btn-viewer-send-creator")) {
+      $("#btn-viewer-send-creator").hidden = !(showEditImage || showEditVideo);
+    }
     if ($("#btn-copy-ascii")) $("#btn-copy-ascii").hidden = !showAscii;
     if ($("#btn-voice")) $("#btn-voice").hidden = !showVoice;
     if ($("#btn-export-json")) {
@@ -4766,11 +5287,15 @@
     const s = Number(scale);
     const clamped = Number.isFinite(s) ? Math.min(2, Math.max(0.75, s)) : 1;
     state.uiScale = clamped;
-    // Chromium / WebView2 zoom scales fonts, chrome, and layout together
-    document.documentElement.style.zoom = String(clamped);
+    // DPI-style scale: logical desktop is viewport/scale, then zoomed to fill the screen.
+    document.documentElement.style.setProperty("--ui-scale", String(clamped));
+    document.documentElement.style.zoom = "";
     const label = $("#ui-scale-label");
     if (label) label.textContent = Math.round(clamped * 100) + "%";
-    requestAnimationFrame(() => syncDesktopScrollExtent());
+    requestAnimationFrame(() => {
+      layoutOpenWindowsInWorkArea();
+      syncDesktopScrollExtent();
+    });
   }
 
   function setControlTab(tab) {
@@ -4795,12 +5320,6 @@
     const ai = state.controlTab !== "display";
     win.classList.toggle("control-tab-ai", ai);
     win.classList.toggle("control-tab-display", !ai);
-    // Keep inline style in sync so open/drag layout matches CSS
-    win.style.width = ai ? "820px" : "600px";
-    // Drop any leftover resize height so the panel sizes to content / max-height
-    win.style.height = "";
-    win.style.maxHeight = "";
-    win.style.maxWidth = "";
   }
 
   function applyDisplaySettingsFromControls() {
@@ -5552,11 +6071,12 @@
     if ($("#btn-edit-save")) $("#btn-edit-save").hidden = !imageEdit.standalone;
     // Save As is always available once an image is loaded (Archives Apply or desktop editor)
     if ($("#btn-edit-save-as")) $("#btn-edit-save-as").hidden = false;
+    if ($("#btn-edit-send-creator")) $("#btn-edit-send-creator").hidden = false;
     const hint = $("#image-edit-hint");
     if (hint) {
       hint.textContent = imageEdit.standalone
-        ? "Load an image to begin. At 0° rotation, drag to set a crop, then drag the box or handles to adjust. Save writes Archives; Save As… exports a file."
-        : "At 0° rotation, drag on the image to set a crop. Drag the yellow box to move, or use the handles to resize. Clear Crop to reset. Apply saves to Archives; Save As… exports a file.";
+        ? "Load an image to begin. At 0° rotation, drag to set a crop, then drag the box or handles to adjust. Save writes Archives; Save As… exports a file. Save and Send to Creator hands the current image to Creation Studio without the original filename."
+        : "At 0° rotation, drag on the image to set a crop. Drag the yellow box to move, or use the handles to resize. Clear Crop to reset. Apply saves to Archives; Save As… exports a file. Save and Send to Creator hands the current image to Creation Studio without the original filename.";
     }
   }
 
@@ -5607,7 +6127,7 @@
       }
       rememberImportedCreation(res.creation);
       await openImageEditor(res.creation, { standalone: true });
-      showToast("Image loaded into Image Edit");
+      showToast("Image loaded into Image Editor");
     } catch (err) {
       showToast("Load failed: " + err);
     } finally {
@@ -6054,6 +6574,24 @@
     }
   }
 
+  async function saveImageEditorAndSendToCreator() {
+    if (!imageEdit.sourceImg || !window.R98ImageEdit) {
+      showToast("Load an image first.");
+      return;
+    }
+    beginBusy("Sending to Creator", "Saving the edited image…", { delayMs: 0 });
+    try {
+      const saved = await persistEditedImageToArchives();
+      if (!saved) return;
+      await reloadImageEditorFromCreation(saved);
+      await sendCreationToCreator(saved);
+    } catch (err) {
+      showToast("Send to Creator failed: " + err);
+    } finally {
+      endBusy("Ready");
+    }
+  }
+
   function closeImageEditor() {
     closeWindow("image-edit");
   }
@@ -6297,6 +6835,11 @@
         saveImageEditorAs();
       });
     }
+    if ($("#btn-edit-send-creator")) {
+      $("#btn-edit-send-creator").addEventListener("click", () => {
+        saveImageEditorAndSendToCreator();
+      });
+    }
     setupImageEditCropInteraction();
   }
 
@@ -6338,11 +6881,12 @@
     if ($("#btn-vedit-save")) $("#btn-vedit-save").hidden = !videoEdit.standalone;
     // Save As is always available once a video is loaded
     if ($("#btn-vedit-save-as")) $("#btn-vedit-save-as").hidden = false;
+    if ($("#btn-vedit-send-creator")) $("#btn-vedit-send-creator").hidden = false;
     const hint = $("#video-edit-hint");
     if (hint) {
       hint.textContent = videoEdit.standalone
-        ? "Load a video to begin. Sliders preview live on the player (play, scrub, and timeline keep working). Save writes Archives; Save As… exports MP4 (ffmpeg required)."
-        : "Sliders preview live on the player while you play and edit the timeline. Apply rebuilds the video in Archives; Save As… exports MP4 (requires ffmpeg on PATH). Drag a paused frame (0°) to crop. Timeline starts at 0.00s.";
+        ? "Load a video to begin. Sliders preview live on the player (play, scrub, and timeline keep working). Save writes Archives; Save As… exports MP4 (ffmpeg required). Save and Send to Creator hands the current video to Creation Studio without the original filename."
+        : "Sliders preview live on the player while you play and edit the timeline. Apply rebuilds the video in Archives; Save As… exports MP4 (requires ffmpeg on PATH). Drag a paused frame (0°) to crop. Timeline starts at 0.00s. Save and Send to Creator hands the current video to Creation Studio without the original filename.";
     }
   }
 
@@ -6367,7 +6911,7 @@
       }
       rememberImportedCreation(res.creation);
       await openVideoEditor(res.creation, { standalone: true });
-      showToast("Video loaded into Video Edit");
+      showToast("Video loaded into Video Editor");
     } catch (err) {
       showToast("Load failed: " + err);
     } finally {
@@ -7110,32 +7654,38 @@
     return ops;
   }
 
-  async function applyVideoEditor() {
+  async function persistEditedVideoToArchives() {
     if (!videoEdit.creationId) {
       showToast("Load a video first.");
-      return;
+      return null;
     }
     if (!videoEdit.segments.length) {
       showToast("Keep at least one segment.");
-      return;
+      return null;
     }
     const a = api();
-    if (!a) return;
+    if (!a) return null;
+    const res = await a.edit_video(videoEdit.creationId, buildVideoEditOps());
+    if (!res || !res.ok) {
+      showToast((res && res.error) || "Failed to save edited video");
+      return null;
+    }
+    const saved = res.creation;
+    state.creations = [saved].concat(
+      state.creations.filter((c) => c.id !== saved.id)
+    );
+    state.active = saved;
+    renderArchives();
+    return saved;
+  }
+
+  async function applyVideoEditor() {
     beginBusy("Saving video edit", "Cutting and assembling segments…", {
       delayMs: 0,
     });
     try {
-      const res = await a.edit_video(videoEdit.creationId, buildVideoEditOps());
-      if (!res || !res.ok) {
-        showToast((res && res.error) || "Failed to save edited video");
-        return;
-      }
-      const saved = res.creation;
-      state.creations = [saved].concat(
-        state.creations.filter((c) => c.id !== saved.id)
-      );
-      state.active = saved;
-      renderArchives();
+      const saved = await persistEditedVideoToArchives();
+      if (!saved) return;
       renderDocument(saved);
       closeVideoEditor();
       showToast("Video edit applied");
@@ -7147,36 +7697,34 @@
   }
 
   async function saveVideoEditor() {
-    if (!videoEdit.creationId) {
-      showToast("Load a video first.");
-      return;
-    }
-    if (!videoEdit.segments.length) {
-      showToast("Keep at least one segment.");
-      return;
-    }
-    const a = api();
-    if (!a) return;
     const keepStandalone = videoEdit.standalone;
     beginBusy("Saving video", "Cutting and assembling segments…", {
       delayMs: 0,
     });
     try {
-      const res = await a.edit_video(videoEdit.creationId, buildVideoEditOps());
-      if (!res || !res.ok) {
-        showToast((res && res.error) || "Failed to save edited video");
-        return;
-      }
-      const saved = res.creation;
-      state.creations = [saved].concat(
-        state.creations.filter((c) => c.id !== saved.id)
-      );
-      state.active = saved;
-      renderArchives();
+      const saved = await persistEditedVideoToArchives();
+      if (!saved) return;
       await openVideoEditor(saved, { standalone: keepStandalone });
       showToast("Video saved");
     } catch (err) {
       showToast("Save failed: " + err);
+    } finally {
+      endBusy("Ready");
+    }
+  }
+
+  async function saveVideoEditorAndSendToCreator() {
+    const keepStandalone = videoEdit.standalone;
+    beginBusy("Sending to Creator", "Saving the edited video…", {
+      delayMs: 0,
+    });
+    try {
+      const saved = await persistEditedVideoToArchives();
+      if (!saved) return;
+      await openVideoEditor(saved, { standalone: keepStandalone });
+      await sendCreationToCreator(saved);
+    } catch (err) {
+      showToast("Send to Creator failed: " + err);
     } finally {
       endBusy("Ready");
     }
@@ -7409,17 +7957,27 @@
     if ($("#btn-vedit-save-as")) {
       $("#btn-vedit-save-as").addEventListener("click", () => saveVideoEditorAs());
     }
+    if ($("#btn-vedit-send-creator")) {
+      $("#btn-vedit-send-creator").addEventListener("click", () => {
+        saveVideoEditorAndSendToCreator();
+      });
+    }
     setupVideoEditCropInteraction();
   }
 
   function wireEvents() {
+    const activateLauncher = (openEl, e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      openWindow(openEl.getAttribute("data-open"));
+      toggleStartMenu(false);
+    };
+
     // Desktop icons + Start menu items (event delegation)
     document.addEventListener("click", (e) => {
       const openEl = e.target.closest("[data-open]");
       if (openEl) {
-        e.preventDefault();
-        openWindow(openEl.getAttribute("data-open"));
-        toggleStartMenu(false);
+        activateLauncher(openEl, e);
         return;
       }
 
@@ -7454,9 +8012,19 @@
       }
     });
 
+    document.addEventListener("dblclick", (e) => {
+      const openEl = e.target.closest("[data-open]");
+      if (openEl) activateLauncher(openEl, e);
+    });
+
     document.addEventListener("mousedown", (e) => {
+      if (e.target.closest("[data-open], .task-btn, #taskbar, #start-menu, #start-btn")) {
+        return;
+      }
       const win = e.target.closest(".app-window");
-      if (win && win.dataset.window) focusWindow(win.dataset.window);
+      if (win && win.dataset.window && state.focused !== win.dataset.window) {
+        focusWindow(win.dataset.window);
+      }
     });
 
     $("#create-form").addEventListener("submit", async (e) => {
@@ -7484,6 +8052,35 @@
         studioLoadMediaFile("video")
       );
     }
+    if ($("#studio-saved-prompt")) {
+      $("#studio-saved-prompt").addEventListener("change", () =>
+        onStudioSavedPromptChange()
+      );
+    }
+    ["studio-prompt", "studio-search", "studio-tool-use"].forEach((id) => {
+      const el = $("#" + id);
+      if (!el) return;
+      ["keyup", "click", "select", "input", "blur"].forEach((evt) => {
+        el.addEventListener(evt, () => rememberStudioCaret(el));
+      });
+    });
+    if ($("#prompt-editor-list")) {
+      $("#prompt-editor-list").addEventListener("change", () =>
+        onPromptEditorListChange()
+      );
+    }
+    if ($("#btn-prompt-add")) {
+      $("#btn-prompt-add").addEventListener("click", () => startNewPrompt());
+    }
+    if ($("#btn-prompt-edit")) {
+      $("#btn-prompt-edit").addEventListener("click", () => editSelectedPrompt());
+    }
+    if ($("#btn-prompt-save")) {
+      $("#btn-prompt-save").addEventListener("click", () => saveCurrentPrompt());
+    }
+    if ($("#btn-prompt-delete")) {
+      $("#btn-prompt-delete").addEventListener("click", () => deleteCurrentPrompt());
+    }
     if ($("#btn-studio-clear-basis")) {
       $("#btn-studio-clear-basis").addEventListener("click", () => {
         clearStudioBasis();
@@ -7493,6 +8090,11 @@
     if ($("#btn-use-basis")) {
       $("#btn-use-basis").addEventListener("click", () =>
         useCreationAsBasis(state.active)
+      );
+    }
+    if ($("#btn-viewer-send-creator")) {
+      $("#btn-viewer-send-creator").addEventListener("click", () =>
+        sendCreationToCreator(state.active)
       );
     }
     if ($("#btn-iedit-load")) {
@@ -7973,15 +8575,21 @@
     applyUiFont(state.uiFont || "inter");
     applyAppTheme(state.appTheme || "light");
     syncControlPanelWidth();
+    adoptWindowsIntoLayer();
     wireEvents();
     enableWindowDragging();
     enableWindowResizing();
     tickClock();
     setInterval(tickClock, 15000);
+    layoutWindowInWorkArea(document.getElementById("win-form"));
     focusWindow("form");
     renderTaskbar();
+    layoutOpenWindowsInWorkArea();
     syncDesktopScrollExtent();
-    window.addEventListener("resize", () => syncDesktopScrollExtent());
+    window.addEventListener("resize", () => {
+      layoutOpenWindowsInWorkArea();
+      syncDesktopScrollExtent();
+    });
 
     const a = await waitForApi();
     if (!a) {
@@ -7998,6 +8606,7 @@
         state.geminiToolsCatalog = boot.geminiTools.slice();
       }
       state.creations = boot.creations || [];
+      applySavedPrompts(boot.prompts || []);
       fillCatalogs(boot);
       fillControlPanel(boot);
       renderArchives();

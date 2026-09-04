@@ -5,40 +5,44 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Retro 98 AI Creator</title>
   <link rel="stylesheet" href="vendor/98.css" />
-  <link rel="stylesheet" href="styles.css" />
+  <link rel="stylesheet" href="styles.css?v=prompt2" />
 </head>
 <body>
   <div id="desktop">
-    <div class="desktop-icons" id="desktop-icons">
-      <button type="button" class="desktop-icon" data-open="form" title="Creation Studio">
-        <div class="icon-glyph">✨</div>
-        <span>Creation Studio</span>
-      </button>
-      <button type="button" class="desktop-icon" data-open="library" title="Archives">
-        <div class="icon-glyph">📁</div>
-        <span>Archives</span>
-      </button>
-      <button type="button" class="desktop-icon" data-open="viewer" title="Viewer">
-        <div class="icon-glyph">👁️</div>
-        <span>Viewer</span>
-      </button>
-      <button type="button" class="desktop-icon" data-open="image-edit" title="Image Edit">
-        <div class="icon-glyph">🖼️</div>
-        <span>Image Edit</span>
-      </button>
-      <button type="button" class="desktop-icon" data-open="video-edit" title="Video Edit">
-        <div class="icon-glyph">🎬</div>
-        <span>Video Edit</span>
-      </button>
-      <button type="button" class="desktop-icon" data-open="control" title="Control Panel">
-        <div class="icon-glyph">⚙️</div>
-        <span>Control Panel</span>
-      </button>
-    </div>
-
     <div id="windows-layer">
+      <div class="desktop-icons" id="desktop-icons">
+        <button type="button" class="desktop-icon" data-open="form" title="Creation Studio">
+          <div class="icon-glyph">✨</div>
+          <span>Creation Studio</span>
+        </button>
+        <button type="button" class="desktop-icon" data-open="library" title="Archives">
+          <div class="icon-glyph">📁</div>
+          <span>Archives</span>
+        </button>
+        <button type="button" class="desktop-icon" data-open="viewer" title="Viewer">
+          <div class="icon-glyph">👁️</div>
+          <span>Viewer</span>
+        </button>
+        <button type="button" class="desktop-icon" data-open="image-edit" title="Image Editor">
+          <div class="icon-glyph">🖼️</div>
+          <span>Image Editor</span>
+        </button>
+        <button type="button" class="desktop-icon" data-open="video-edit" title="Video Editor">
+          <div class="icon-glyph">🎬</div>
+          <span>Video Editor</span>
+        </button>
+        <button type="button" class="desktop-icon" data-open="prompt-editor" title="Prompt Editor">
+          <div class="icon-glyph">📝</div>
+          <span>Prompt Editor</span>
+        </button>
+        <button type="button" class="desktop-icon" data-open="control" title="Control Panel">
+          <div class="icon-glyph">⚙️</div>
+          <span>Control Panel</span>
+        </button>
+      </div>
+
       <!-- Creation Studio -->
-      <div class="window app-window" id="win-form" data-window="form" style="left:24px;top:24px;width:440px;height:640px;">
+      <div class="window app-window" id="win-form" data-window="form" style="left:100px;top:12px;width:720px;height:560px;">
         <div class="title-bar">
           <div class="title-bar-text">Creation Studio</div>
           <div class="title-bar-controls">
@@ -74,6 +78,12 @@
                   Toggle tools for this Studio session without opening Control Panel.
                   Requires Gemini. Control Panel → Use Tools is the default on launch.
                 </p>
+                <div id="studio-saved-prompt-wrap" class="field-row-stacked">
+                  <label for="studio-saved-prompt">Saved prompt</label>
+                  <select id="studio-saved-prompt">
+                    <option value="">Insert saved prompt…</option>
+                  </select>
+                </div>
                 <div id="studio-prompt-wrap" class="field-row-stacked">
                   <label for="studio-prompt">Prompt</label>
                   <textarea
@@ -187,6 +197,7 @@
             <button type="button" id="btn-edit-image" hidden>Edit</button>
             <button type="button" id="btn-edit-video" hidden>Edit</button>
             <button type="button" id="btn-use-basis">Use as Basis</button>
+            <button type="button" id="btn-viewer-send-creator" hidden>Save and Send to Creator</button>
             <button type="button" id="btn-copy-ascii">Copy ASCII</button>
             <button type="button" id="btn-voice">Voice Reader</button>
           </div>
@@ -595,7 +606,7 @@
                     <label for="opt-crt">CRT scanlines</label>
                   </div>
                   <div class="field-row-stacked">
-                    <label for="ui-scale">UI scale (fonts, windows, desktop)</label>
+                    <label for="ui-scale">Display scaling (DPI)</label>
                     <div class="field-row scale-row">
                       <select id="ui-scale">
                         <option value="0.75">75%</option>
@@ -610,11 +621,13 @@
                       <span id="ui-scale-label" class="hint">100%</span>
                     </div>
                     <p class="hint">
-                      Scales the entire desktop UI. Useful on high-DPI displays or if text feels small.
+                      Like Windows display scaling: fonts, windows, and chrome grow together,
+                      and the desktop still fills the screen. Maximize a window to use the
+                      leftover space — its contents reflow instead of scrolling the desktop.
                     </p>
                   </div>
                   <p class="hint">
-                    Video Edit requires a <strong>current ffmpeg</strong> on PATH
+                    Video Editor requires a <strong>current ffmpeg</strong> on PATH
                     (https://ffmpeg.org/ or <code>winget install ffmpeg</code>).
                     Avoid outdated copies under <code>Python\Scripts</code>
                     (see <code>config.example.yaml</code>).
@@ -630,130 +643,10 @@
           </div>
         </div>
       </div>
-    </div>
-
-    <div id="crt-overlay" hidden></div>
-
-    <div id="taskbar">
-      <button type="button" id="start-btn">Start</button>
-      <div id="taskbar-windows"></div>
-      <div id="taskbar-clock"></div>
-    </div>
-
-    <div id="start-menu" hidden>
-      <div class="start-banner">Start Here</div>
-      <button type="button" data-open="form">✨ Creation Studio</button>
-      <button type="button" data-open="library">📁 Archives</button>
-      <button type="button" data-open="viewer">👁️ Viewer</button>
-      <button type="button" data-open="image-edit">🖼️ Image Edit</button>
-      <button type="button" data-open="video-edit">🎬 Video Edit</button>
-      <button type="button" data-open="control">⚙️ Control Panel</button>
-    </div>
-
-    <div id="busy-overlay" hidden>
-      <div class="window" id="busy-window" role="dialog" aria-live="polite" aria-busy="true">
-        <div class="title-bar">
-          <div class="title-bar-text" id="busy-title">Please wait…</div>
-        </div>
-        <div class="window-body">
-          <p id="busy-message">Working…</p>
-          <div class="progress-indicator segmented" id="busy-indicator">
-            <span class="progress-indicator-bar" id="busy-bar"></span>
-          </div>
-          <div class="busy-meta">
-            <span id="busy-elapsed">0:00</span>
-            <span id="busy-percent-label"></span>
-          </div>
-          <p class="busy-hint" id="busy-hint">Creating text, an image, or video from your prompt. You can cancel anytime.</p>
-          <div class="form-actions busy-actions" id="busy-actions" hidden>
-            <button type="button" id="busy-cancel">Cancel</button>
-          </div>
-        </div>
-      </div>
-    </div>
-
-    <div id="confirm-overlay" hidden>
-      <div class="window" id="confirm-window" role="dialog" aria-modal="true">
-        <div class="title-bar">
-          <div class="title-bar-text" id="confirm-title">Confirm</div>
-        </div>
-        <div class="window-body">
-          <p id="confirm-message"></p>
-          <div class="form-actions confirm-actions">
-            <button type="button" id="confirm-yes" class="default">Yes</button>
-            <button type="button" id="confirm-no">No</button>
-          </div>
-        </div>
-      </div>
-    </div>
-
-    <div id="recommend-models-overlay" hidden>
-      <div class="window" id="recommend-models-window" role="dialog" aria-modal="true" aria-labelledby="recommend-models-title">
-        <div class="title-bar">
-          <div class="title-bar-text" id="recommend-models-title">Recommend Models</div>
-        </div>
-        <div class="window-body">
-          <p id="recommend-models-message">
-            Choose how to pick Text, Image, and Video models for the active provider.
-            The app will query the live catalog (not only the current picker lists).
-          </p>
-          <fieldset class="recommend-models-options">
-            <legend>Recommendation</legend>
-            <div class="field-row">
-              <input type="radio" name="recommend-criteria" id="recommend-economical" value="economical" />
-              <label for="recommend-economical">Economical</label>
-            </div>
-            <div class="field-row">
-              <input type="radio" name="recommend-criteria" id="recommend-balanced" value="balanced" checked />
-              <label for="recommend-balanced">Balanced</label>
-            </div>
-            <div class="field-row">
-              <input type="radio" name="recommend-criteria" id="recommend-quality" value="quality" />
-              <label for="recommend-quality">Maximum quality</label>
-            </div>
-          </fieldset>
-          <div class="form-actions confirm-actions">
-            <button type="button" id="recommend-models-ok" class="default">OK</button>
-            <button type="button" id="recommend-models-cancel">Cancel</button>
-          </div>
-        </div>
-      </div>
-    </div>
-
-    <div id="search-results-overlay" hidden>
-      <div class="window" id="search-results-window" role="dialog" aria-modal="true" aria-labelledby="search-results-title">
-        <div class="title-bar">
-          <div class="title-bar-text" id="search-results-title">Search Results</div>
-        </div>
-        <div class="window-body">
-          <p id="search-results-message"></p>
-          <ul id="search-results-list" class="search-results-list" role="listbox" aria-label="Matching games"></ul>
-          <div class="form-actions confirm-actions">
-            <button type="button" id="search-results-cancel">Cancel</button>
-          </div>
-        </div>
-      </div>
-    </div>
-
-    <div id="studio-add-tool-overlay" hidden>
-      <div class="window" id="studio-add-tool-window" role="dialog" aria-modal="true" aria-labelledby="studio-add-tool-title">
-        <div class="title-bar">
-          <div class="title-bar-text" id="studio-add-tool-title">Add Tool</div>
-        </div>
-        <div class="window-body">
-          <p id="studio-add-tool-message">Choose a built-in tool to attach for this generation.</p>
-          <ul id="studio-add-tool-list" class="search-results-list" role="listbox" aria-label="Available tools"></ul>
-          <div class="form-actions confirm-actions">
-            <button type="button" id="studio-add-tool-cancel">Cancel</button>
-          </div>
-        </div>
-      </div>
-    </div>
-
       <!-- Image Edit (ReFrame-style adjustments) -->
       <div class="window app-window" id="win-image-edit" data-window="image-edit" hidden style="left:80px;top:30px;width:920px;height:640px;">
         <div class="title-bar">
-          <div class="title-bar-text">Image Edit</div>
+          <div class="title-bar-text">Image Editor</div>
           <div class="title-bar-controls">
             <button aria-label="Minimize" data-action="minimize"></button>
             <button aria-label="Maximize" data-action="maximize"></button>
@@ -898,6 +791,7 @@
                 <button type="button" id="btn-edit-apply" class="default">Apply</button>
                 <button type="button" id="btn-edit-save" class="default" hidden>Save</button>
                 <button type="button" id="btn-edit-save-as">Save As…</button>
+                <button type="button" id="btn-edit-send-creator">Save and Send to Creator</button>
               </div>
             </div>
           </div>
@@ -907,7 +801,7 @@
       <!-- Video Edit (ffmpeg filters + trim/split/splice) -->
       <div class="window app-window" id="win-video-edit" data-window="video-edit" hidden style="left:60px;top:20px;width:960px;height:680px;">
         <div class="title-bar">
-          <div class="title-bar-text">Video Edit</div>
+          <div class="title-bar-text">Video Editor</div>
           <div class="title-bar-controls">
             <button aria-label="Minimize" data-action="minimize"></button>
             <button aria-label="Maximize" data-action="maximize"></button>
@@ -1060,11 +954,178 @@
                 <button type="button" id="btn-vedit-apply" class="default">Apply</button>
                 <button type="button" id="btn-vedit-save" class="default" hidden>Save</button>
                 <button type="button" id="btn-vedit-save-as">Save As…</button>
+                <button type="button" id="btn-vedit-send-creator">Save and Send to Creator</button>
               </div>
             </div>
           </div>
         </div>
       </div>
+
+      <!-- Prompt Editor (named snippets for Creation Studio) -->
+      <div class="window app-window" id="win-prompt-editor" data-window="prompt-editor" hidden style="left:80px;top:30px;width:720px;height:560px;">
+        <div class="title-bar">
+          <div class="title-bar-text">Prompt Editor</div>
+          <div class="title-bar-controls">
+            <button aria-label="Minimize" data-action="minimize"></button>
+            <button aria-label="Maximize" data-action="maximize"></button>
+            <button aria-label="Close" data-action="close"></button>
+          </div>
+        </div>
+        <div class="window-body prompt-editor-body">
+          <div class="field-row-stacked">
+            <label for="prompt-editor-list">Prompts</label>
+            <select id="prompt-editor-list">
+              <option value="">Select a prompt…</option>
+            </select>
+          </div>
+          <div class="form-actions">
+            <button type="button" id="btn-prompt-add">Add</button>
+            <button type="button" id="btn-prompt-edit">Edit</button>
+            <button type="button" id="btn-prompt-save" class="default">Save</button>
+            <button type="button" id="btn-prompt-delete">Delete</button>
+          </div>
+          <div class="field-row-stacked">
+            <label for="prompt-editor-name">Name</label>
+            <input type="text" id="prompt-editor-name" maxlength="120" placeholder="Name this prompt" disabled />
+          </div>
+          <div class="field-row-stacked prompt-editor-text-wrap">
+            <label for="prompt-editor-text">Prompt</label>
+            <textarea
+              id="prompt-editor-text"
+              class="studio-prompt"
+              rows="12"
+              placeholder="Write the prompt text to insert in Creation Studio…"
+              disabled
+            ></textarea>
+          </div>
+          <p class="hint" id="prompt-editor-hint">
+            Add a prompt, give it a name, and Save. Delete removes the selected
+            prompt. In Creation Studio, choose it from Saved prompt to insert the
+            text at the cursor.
+          </p>
+        </div>
+      </div>
+
+    </div>
+
+    <div id="crt-overlay" hidden></div>
+
+    <div id="taskbar">
+      <button type="button" id="start-btn">Start</button>
+      <div id="taskbar-windows"></div>
+      <div id="taskbar-clock"></div>
+    </div>
+
+    <div id="start-menu" hidden>
+      <div class="start-banner">Start Here</div>
+      <button type="button" data-open="form">✨ Creation Studio</button>
+      <button type="button" data-open="library">📁 Archives</button>
+      <button type="button" data-open="viewer">👁️ Viewer</button>
+      <button type="button" data-open="image-edit">🖼️ Image Editor</button>
+      <button type="button" data-open="video-edit">🎬 Video Editor</button>
+      <button type="button" data-open="prompt-editor">📝 Prompt Editor</button>
+      <button type="button" data-open="control">⚙️ Control Panel</button>
+    </div>
+
+    <div id="busy-overlay" hidden>
+      <div class="window" id="busy-window" role="dialog" aria-live="polite" aria-busy="true">
+        <div class="title-bar">
+          <div class="title-bar-text" id="busy-title">Please wait…</div>
+        </div>
+        <div class="window-body">
+          <p id="busy-message">Working…</p>
+          <div class="progress-indicator segmented" id="busy-indicator">
+            <span class="progress-indicator-bar" id="busy-bar"></span>
+          </div>
+          <div class="busy-meta">
+            <span id="busy-elapsed">0:00</span>
+            <span id="busy-percent-label"></span>
+          </div>
+          <p class="busy-hint" id="busy-hint">Creating text, an image, or video from your prompt. You can cancel anytime.</p>
+          <div class="form-actions busy-actions" id="busy-actions" hidden>
+            <button type="button" id="busy-cancel">Cancel</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div id="confirm-overlay" hidden>
+      <div class="window" id="confirm-window" role="dialog" aria-modal="true">
+        <div class="title-bar">
+          <div class="title-bar-text" id="confirm-title">Confirm</div>
+        </div>
+        <div class="window-body">
+          <p id="confirm-message"></p>
+          <div class="form-actions confirm-actions">
+            <button type="button" id="confirm-yes" class="default">Yes</button>
+            <button type="button" id="confirm-no">No</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div id="recommend-models-overlay" hidden>
+      <div class="window" id="recommend-models-window" role="dialog" aria-modal="true" aria-labelledby="recommend-models-title">
+        <div class="title-bar">
+          <div class="title-bar-text" id="recommend-models-title">Recommend Models</div>
+        </div>
+        <div class="window-body">
+          <p id="recommend-models-message">
+            Choose how to pick Text, Image, and Video models for the active provider.
+            The app will query the live catalog (not only the current picker lists).
+          </p>
+          <fieldset class="recommend-models-options">
+            <legend>Recommendation</legend>
+            <div class="field-row">
+              <input type="radio" name="recommend-criteria" id="recommend-economical" value="economical" />
+              <label for="recommend-economical">Economical</label>
+            </div>
+            <div class="field-row">
+              <input type="radio" name="recommend-criteria" id="recommend-balanced" value="balanced" checked />
+              <label for="recommend-balanced">Balanced</label>
+            </div>
+            <div class="field-row">
+              <input type="radio" name="recommend-criteria" id="recommend-quality" value="quality" />
+              <label for="recommend-quality">Maximum quality</label>
+            </div>
+          </fieldset>
+          <div class="form-actions confirm-actions">
+            <button type="button" id="recommend-models-ok" class="default">OK</button>
+            <button type="button" id="recommend-models-cancel">Cancel</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div id="search-results-overlay" hidden>
+      <div class="window" id="search-results-window" role="dialog" aria-modal="true" aria-labelledby="search-results-title">
+        <div class="title-bar">
+          <div class="title-bar-text" id="search-results-title">Search Results</div>
+        </div>
+        <div class="window-body">
+          <p id="search-results-message"></p>
+          <ul id="search-results-list" class="search-results-list" role="listbox" aria-label="Matching games"></ul>
+          <div class="form-actions confirm-actions">
+            <button type="button" id="search-results-cancel">Cancel</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div id="studio-add-tool-overlay" hidden>
+      <div class="window" id="studio-add-tool-window" role="dialog" aria-modal="true" aria-labelledby="studio-add-tool-title">
+        <div class="title-bar">
+          <div class="title-bar-text" id="studio-add-tool-title">Add Tool</div>
+        </div>
+        <div class="window-body">
+          <p id="studio-add-tool-message">Choose a built-in tool to attach for this generation.</p>
+          <ul id="studio-add-tool-list" class="search-results-list" role="listbox" aria-label="Available tools"></ul>
+          <div class="form-actions confirm-actions">
+            <button type="button" id="studio-add-tool-cancel">Cancel</button>
+          </div>
+        </div>
+      </div>
+    </div>
 
       <div id="error-toast" hidden></div>
   </div>
@@ -1073,6 +1134,6 @@
   <script src="vendor/jspdf.umd.min.js"></script>
   <script src="catalog.js"></script>
   <script src="image_edit.js"></script>
-  <script src="app.js"></script>
+  <script src="app.js?v=prompt2"></script>
 </body>
 </html>

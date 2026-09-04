@@ -12,6 +12,7 @@ from retro_98_ai_creator.config import (
     load_config,
     normalize_google_workspace_cfg,
     normalize_huggingface_cfg,
+    prompts_path,
 )
 from retro_98_ai_creator.creation_utils import extract_json_object
 from retro_98_ai_creator.gemini_provider import normalize_gemini_model
@@ -85,6 +86,12 @@ def test_normalize_google_workspace_prefers_new_section():
 def test_archives_path_is_in_project():
     path = archives_path(load_config())
     assert path == (PROJECT_ROOT / "archives.json").resolve()
+
+
+def test_prompts_path_is_in_project():
+    path = prompts_path(load_config())
+    assert path == (PROJECT_ROOT / "prompts.json").resolve()
+    assert DEFAULTS["paths"]["prompts"] == "prompts.json"
 
 
 def test_relative_expand_path_uses_project_root():

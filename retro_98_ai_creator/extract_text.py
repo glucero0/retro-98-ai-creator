@@ -338,7 +338,7 @@ def _extract_video(
     if len(clip) > MAX_INLINE_BYTES:
         raise RuntimeError(
             "Video is too large to analyze without audio. "
-            "Trim it in Video Edit, or use a clip with a spoken track."
+            "Trim it in Video Editor, or use a clip with a spoken track."
         )
     if provider == "gemini":
         text, model = _gemini_multimodal(

@@ -202,7 +202,7 @@ def ffmpeg_available() -> dict[str, Any]:
             "ffprobe": ffprobe,
             "version": version,
             "error": (
-                "ffmpeg is too old for Video Edit"
+                "ffmpeg is too old for Video Editor"
                 + (f" ({version})" if version else "")
                 + ". Install a current build from https://ffmpeg.org/ "
                 "or `winget install ffmpeg`, and remove outdated copies "
