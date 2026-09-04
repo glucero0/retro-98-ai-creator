@@ -1,6 +1,6 @@
 # Retro 98 AI Creator
 
-A Windows 98–themed desktop studio for general-purpose AI creation: **text**, **images**, and **video** — with built-in editors, an archive of everything you make, and a fully skinnable retro desktop.
+A Windows 98 desktop studio for general-purpose AI creation: **text**, **images**, and **video** — with built-in editors and an archive of everything you make.
 
 > **Work in progress.** This project is under active development. Features, APIs, config, and storage formats may change without notice. **Use at your own risk** — there is no warranty of any kind. You are responsible for API costs and any data you generate or store. Do not rely on it for production, critical, or irreversible work.
 
@@ -17,7 +17,7 @@ A Windows 98–themed desktop studio for general-purpose AI creation: **text**, 
 - **Archives** — every creation (and its prompt/model metadata) is saved automatically; search, import/export JSON, or import existing text/image/video files
 - **Viewer** — displays the active creation (document, image, or video) with export buttons, **Edit** into the image/video editors, **Use as Basis**, and **Save and Send to Creator** for the current image or video
 - **Image Editor** and **Video Editor** — standalone editors (and reachable via Viewer → Edit) for crop/rotate, color/filter adjustments, and (for video) a segment timeline for splitting/reordering/trimming clips. Each has **Save and Send to Creator** for the current edited frame or timeline.
-- **Control Panel** — Gemini model pickers, Google Workspace OAuth, display themes, UI font, sound, CRT overlay, and UI scale
+- **Control Panel** — Gemini model pickers, Google Workspace OAuth, Light/Dark appearance, UI font, sound, CRT overlay, and UI scale
 - Cancel a generation in progress
 - **Use as Basis** / **Load…** — start a new creation from the Viewer’s Archive item or an imported file. **Save and Send to Creator** (Viewer, Image Editor, Video Editor) sends the current image or video into Studio as an anonymous media basis so the next **CREATE** is saved as its own Archive item.
 
@@ -115,7 +115,7 @@ Use a reasonably current build (roughly ffmpeg 4+). Very old copies on `PATH` (f
 | **Image Editor** | Crop, rotate, and adjust (brightness/contrast/saturation/hue/sepia/blur/exposure/gamma/vignette/tint, grayscale, threshold, sharpen, background removal). Opened standalone or via Viewer → Edit. **Save and Send to Creator** applies the current edit and loads it into Studio as a new basis. |
 | **Video Editor** | Same filter/crop/rotate toolset plus a **segment timeline**: split at the playhead, delete/reorder segments, then re-render. Requires ffmpeg. Opened standalone or via Viewer → Edit. **Save and Send to Creator** applies the current edit and loads it into Studio as a new basis. |
 | **Prompt Editor** | Named prompt snippets (Add / Edit / Save / Delete). Creation Studio’s **Saved prompt** dropdown inserts the selected body at the text cursor. Stored in `prompts.json` (gitignored). |
-| **Control Panel** | Gemini model pickers, **Recommend Models…**, Gemini search/tools toggles, Google Workspace OAuth, display theme, UI font, sound, CRT scanlines, UI scale. **Save** writes `config.yaml` and resets Studio’s **Enable Tools** checkbox to the saved **Use Tools** default (search field visibility and model labels also update). |
+| **Control Panel** | Gemini model pickers, **Recommend Models…**, Gemini search/tools toggles, Google Workspace OAuth, Light/Dark appearance, UI font, sound, CRT scanlines, UI scale. **Save** writes `config.yaml` and resets Studio’s **Enable Tools** checkbox to the saved **Use Tools** default (search field visibility and model labels also update). |
 
 ### Prompt Editor and Saved prompt
 
@@ -250,7 +250,7 @@ All paths for file tools must be **absolute** (e.g. `C:\data\step1.json`). The m
 
 Control Panel → **Display & Sound**:
 
-- **Appearance**: Light, Dark, or Customize (pick a solid desktop color, window color, title bar color, text color, and font — no patterned wallpaper)
+- **Appearance**: **Light Mode (Day)** or **Dark Mode (Night)** — both stay Windows 98 chrome; Dark inverts the palette.
 - **UI font**: Inter by default; Retro Pixel for the classic Win98 look (open-source fonts load from the network the first time you pick them)
 - **Sound effects** on/off
 - **CRT scanlines** overlay on/off
@@ -287,7 +287,7 @@ prompt:
   extra_instructions: ""
 
 ui:
-  app_theme: light    # light | dark | custom
+  app_theme: light    # light | dark
   sound_enabled: true
   crt_enabled: false
   ui_scale: 1.0
