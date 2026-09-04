@@ -10,6 +10,8 @@
     open: { form: true, viewer: false, library: false, control: false, "image-edit": false, "video-edit": false },
     minimized: { form: false, viewer: false, library: false, control: false, "image-edit": false, "video-edit": false },
     maximized: { form: false, viewer: false, library: false, control: false, "image-edit": false, "video-edit": false },
+    // Back → front. Focus moves a window to the end; others keep their relative order.
+    windowZOrder: ["form", "viewer", "library", "control", "image-edit", "video-edit"],
     preMaximizeRect: {},
     generating: false,
     modelLoading: false,
@@ -2191,8 +2193,27 @@
   }
 
   // ── Window manager ─────────────────────────────────────────────────
+  const WINDOW_Z_BASE = 10;
+
+  function bringWindowToFront(id) {
+    if (!id) return;
+    const order = (state.windowZOrder || []).filter((w) => w !== id);
+    order.push(id);
+    state.windowZOrder = order;
+    applyWindowZOrder();
+  }
+
+  function applyWindowZOrder() {
+    (state.windowZOrder || []).forEach((wid, i) => {
+      const el = document.getElementById("win-" + wid);
+      if (el) el.style.zIndex = String(WINDOW_Z_BASE + i);
+    });
+  }
+
   function focusWindow(id) {
+    if (!id) return;
     state.focused = id;
+    bringWindowToFront(id);
     document.querySelectorAll(".app-window").forEach((w) => {
       const title = w.querySelector(".title-bar");
       if (w.dataset.window === id) {
