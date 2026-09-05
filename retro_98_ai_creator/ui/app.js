@@ -511,11 +511,11 @@
     },
     dark: {
       themeName: "Dark Mode (Night)",
-      bgColor: "#12151a",
-      cardBg: "#2a2f38",
-      textColor: "#e8eaed",
-      accentColor: "#5b9bd5",
-      headerBg: "#1a3358",
+      bgColor: "#181818",
+      cardBg: "#2c2c2c",
+      textColor: "#e6e6e6",
+      accentColor: "#4e8ec8",
+      headerBg: "#242424",
       fontStyle: "sans",
     },
   };
@@ -671,34 +671,54 @@
     const text = t.textColor || "#222222";
     const title = t.headerBg || t.accentColor || "#000080";
     const accent = t.accentColor || "#000080";
-    const titleMid = _mixHex(title, accent, 0.4);
-    const titleText = _luminance(title) > 0.55 ? "#111111" : "#ffffff";
-    const titleInactive = _mixHex(title, "#808080", 0.55);
-    const titleInactiveMid = _mixHex(titleInactive, "#ffffff", 0.18);
-    const titleTextInactive =
-      _luminance(titleInactive) > 0.55 ? "#333333" : "#d4d4d4";
+    const titleText = _luminance(title) > 0.55 ? "#111111" : "#e6e6e6";
     const lightWin = _luminance(windowBg) > 0.45;
-    const buttonFace = lightWin
-      ? _mixHex(windowBg, "#dfdfdf", 0.25)
-      : _mixHex(windowBg, "#ffffff", 0.12);
-    const buttonText = _luminance(buttonFace) > 0.5 ? "#222222" : "#f0f0f0";
+    let titleMid;
+    let titleInactive;
+    let titleInactiveMid;
+    let buttonFace;
+    let inputBg;
+    let muted;
+    let taskbar;
+    let highlight;
+    let borderLight;
+    let borderMid;
+    let borderDark;
+    let borderDarker;
+    if (lightWin) {
+      titleMid = _mixHex(title, accent, 0.4);
+      titleInactive = _mixHex(title, "#808080", 0.55);
+      titleInactiveMid = _mixHex(titleInactive, "#ffffff", 0.18);
+      buttonFace = _mixHex(windowBg, "#dfdfdf", 0.25);
+      inputBg = _mixHex(windowBg, "#ffffff", 0.65);
+      muted = _mixHex(text, windowBg, 0.42);
+      taskbar = _mixHex(windowBg, "#b0b0b0", 0.2);
+      highlight = _mixHex("#ffffd0", accent, 0.12);
+      borderLight = "#ffffff";
+      borderMid = "#dfdfdf";
+      borderDark = "#808080";
+      borderDarker = "#0a0a0a";
+    } else {
+      // Quiet dark chrome: depth from tone, not chalky 98.css highlights.
+      titleMid = _mixHex(title, "#ffffff", 0.06);
+      titleInactive = _mixHex(title, "#000000", 0.22);
+      titleInactiveMid = _mixHex(titleInactive, "#ffffff", 0.05);
+      buttonFace = _mixHex(windowBg, "#ffffff", 0.07);
+      inputBg = _mixHex(windowBg, "#000000", 0.16);
+      muted = _mixHex(text, windowBg, 0.26);
+      taskbar = _mixHex(windowBg, "#000000", 0.12);
+      highlight = _mixHex(windowBg, accent, 0.12);
+      borderLight = _mixHex(windowBg, "#ffffff", 0.13);
+      borderMid = _mixHex(windowBg, "#ffffff", 0.07);
+      borderDark = _mixHex(windowBg, "#000000", 0.32);
+      borderDarker = _mixHex(windowBg, "#000000", 0.5);
+    }
+    const titleTextInactive =
+      _luminance(titleInactive) > 0.55 ? "#333333" : "#bdbdbd";
+    const buttonText = _luminance(buttonFace) > 0.5 ? "#222222" : "#e6e6e6";
     const darkButtons = _luminance(buttonFace) <= 0.5;
-    const inputBg = lightWin
-      ? _mixHex(windowBg, "#ffffff", 0.65)
-      : _mixHex(windowBg, "#000000", 0.25);
     const inputText = _luminance(inputBg) > 0.5 ? "#111111" : text;
-    const muted = _mixHex(text, windowBg, 0.42);
-    const taskbar = lightWin
-      ? _mixHex(windowBg, "#b0b0b0", 0.2)
-      : _mixHex(windowBg, "#ffffff", 0.08);
     const accentText = _luminance(accent) > 0.55 ? "#111111" : "#ffffff";
-    const highlight = lightWin
-      ? _mixHex("#ffffd0", accent, 0.12)
-      : _mixHex(windowBg, accent, 0.28);
-    const borderLight = lightWin ? "#ffffff" : _mixHex(windowBg, "#ffffff", 0.38);
-    const borderMid = lightWin ? "#dfdfdf" : _mixHex(windowBg, "#ffffff", 0.2);
-    const borderDark = lightWin ? "#808080" : _mixHex(windowBg, "#000000", 0.35);
-    const borderDarker = lightWin ? "#0a0a0a" : _mixHex(windowBg, "#000000", 0.7);
 
     root.style.setProperty("--desktop-bg", t.bgColor);
     root.style.setProperty("--desktop-bg-mid", mid);
@@ -736,6 +756,7 @@
     root.style.setProperty("--ui-border-mid", borderMid);
     root.style.setProperty("--ui-border-dark", borderDark);
     root.style.setProperty("--ui-border-darker", borderDarker);
+    root.style.setProperty("--ui-shadow", borderDark);
 
     applyUiFont(state.uiFont || "inter");
 
@@ -745,6 +766,12 @@
     document.documentElement.setAttribute(
       "data-ui-button-dark",
       darkButtons ? "1" : "0"
+    );
+    const readingDark =
+      key === "dark" || (key === "custom" && !lightDesktop);
+    document.documentElement.setAttribute(
+      "data-reading-surface",
+      readingDark ? "dark" : "light"
     );
 
     if ($("#app-theme") && [...$("#app-theme").options].some((o) => o.value === key)) {
@@ -3553,22 +3580,9 @@
     return !t || /^response$/i.test(t);
   }
 
-  function renderDocTab(creation, theme) {
+  function renderDocTab(creation) {
     const meta = creation.meta || {};
-    const title = creationTitle(creation);
     let html = "";
-    html +=
-      '<div class="doc-header" style="background:' +
-      escapeHtml(theme.headerBg || "#000080") +
-      ';color:#fff;padding:8px 10px;margin:-12px -12px 12px;">';
-    html += "<h2>" + escapeHtml(title) + "</h2>";
-    html +=
-      "<div>" +
-      escapeHtml(creation.creationType || "Text") +
-      (creation.platform && creation.platform !== "General"
-        ? " — " + escapeHtml(creation.platform)
-        : "") +
-      "</div></div>";
 
     if (creation.prompt) {
       html +=
@@ -3577,8 +3591,7 @@
         "</p>";
     }
 
-    html += '<div class="doc-meta">';
-    [
+    const metaRows = [
       ["Year", meta.releaseYear],
       ["Developer", meta.developer],
       ["Publisher", meta.publisher],
@@ -3586,16 +3599,19 @@
       ["Genre", meta.genre],
       ["Media", meta.mediaFormat],
       ["Hardware", meta.systemRequirements],
-    ].forEach(([label, val]) => {
-      if (!val) return;
-      html +=
-        "<div><strong>" +
-        escapeHtml(label) +
-        ":</strong> " +
-        escapeHtml(val) +
-        "</div>";
-    });
-    html += "</div>";
+    ].filter(([, val]) => val);
+    if (metaRows.length) {
+      html += '<div class="doc-meta">';
+      metaRows.forEach(([label, val]) => {
+        html +=
+          "<div><strong>" +
+          escapeHtml(label) +
+          ":</strong> " +
+          escapeHtml(val) +
+          "</div>";
+      });
+      html += "</div>";
+    }
 
     const overview = String(creation.overview || "").trim();
     if (overview && !overviewIsTruncatedBody(creation)) {
@@ -3606,12 +3622,7 @@
       const secTitle = String(sec.title || "").trim();
       html += '<div class="doc-section">';
       if (!shouldHideSectionHeading(secTitle)) {
-        html +=
-          '<h3 style="color:' +
-          escapeHtml(theme.accentColor || "#000080") +
-          '">' +
-          escapeHtml(secTitle) +
-          "</h3>";
+        html += "<h3>" + escapeHtml(secTitle) + "</h3>";
       }
       html +=
         '<div class="doc-section-body">' +
@@ -3853,7 +3864,7 @@
 
     if (!creation) {
       stopSpeech();
-      canvas.classList.remove("tab-ascii");
+      canvas.classList.remove("tab-ascii", "doc-canvas-reading");
       canvas.style.background = "";
       canvas.style.color = "";
       canvas.style.fontFamily = "";
@@ -3869,7 +3880,6 @@
 
     syncViewerChrome(creation);
     const modality = creationModality(creation);
-    const theme = resolveTheme(creation);
     const sources = creation.groundingSources || [];
     if (groundingTab) groundingTab.textContent = "Sources (" + sources.length + ")";
 
@@ -3887,6 +3897,7 @@
 
     const tab = state.viewerTab || (modality === "text" ? "doc" : "media");
     canvas.classList.toggle("tab-ascii", tab === "ascii");
+    canvas.classList.remove("doc-canvas-reading");
 
     if (modality === "image" || modality === "video") {
       canvas.style.background = "#111";
@@ -3925,10 +3936,11 @@
       canvas.style.fontFamily = "var(--ui-font)";
       canvas.innerHTML = renderPrintTab(creation);
     } else {
-      canvas.style.background = theme.cardBg || "#fff";
-      canvas.style.color = theme.textColor || "#000";
+      canvas.classList.add("doc-canvas-reading");
+      canvas.style.background = "";
+      canvas.style.color = "";
       canvas.style.fontFamily = "var(--ui-font)";
-      canvas.innerHTML = renderDocTab(creation, theme);
+      canvas.innerHTML = renderDocTab(creation);
     }
 
     openWindow("viewer");
