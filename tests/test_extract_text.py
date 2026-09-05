@@ -170,26 +170,3 @@ def test_extract_creation_text_job_persists(tmp_path, monkeypatch):
     assert get_extracted_text(job["result"]) == "OCR RESULT"
     stored = next(c for c in api.store.load() if c["id"] == "doc_img2")
     assert get_extracted_text(stored) == "OCR RESULT"
-
-
-def test_extract_rejects_huggingface(tmp_path, monkeypatch):
-    api = _api_with_tmp_store(tmp_path, monkeypatch)
-    api.config["backend"] = {"provider": "huggingface"}
-    media_dir = tmp_path / "media"
-    media_dir.mkdir(parents=True, exist_ok=True)
-    (media_dir / "doc_img3.png").write_bytes(b"\x89PNG\r\n\x1a\nfake")
-    creation = build_media_creation(
-        modality="image",
-        prompt="sign",
-        media_path="media/doc_img3.png",
-        mime_type="image/png",
-        title="Shot",
-        creation_id="doc_img3",
-    )
-    api.store.upsert(creation)
-
-    res = api.extract_creation_text("doc_img3")
-    assert res["ok"] is True
-    job = _wait_job(api, res["job_id"])
-    assert job["status"] == "error"
-    assert "Gemini or OpenRouter" in (job.get("error") or "")

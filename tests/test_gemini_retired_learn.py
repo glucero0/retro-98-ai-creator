@@ -23,7 +23,7 @@ def test_detect_retired_404_message():
 
 
 def test_detect_ignores_unrelated_errors():
-    assert not is_retired_gemini_error("OpenRouter HTTP 400: bad request")
+    assert not is_retired_gemini_error("HTTP 400: bad request")
     assert not is_retired_gemini_error("network timeout")
 
 
@@ -42,8 +42,6 @@ def test_learn_retired_persists_and_switches_slot(tmp_path, monkeypatch):
         "ui": {},
         "paths": {"archives": str(tmp_path / "archives.json")},
         "prompt": {},
-        "openrouter": {},
-        "huggingface": {},
     }
 
     info = learn_retired_gemini_model(cfg, "gemini-mystery-flash")
@@ -94,8 +92,6 @@ def test_bootstrap_exposes_retired_and_keeps_veo_fast(tmp_path, monkeypatch):
         "ui": {},
         "paths": {"archives": str(tmp_path / "archives.json")},
         "prompt": {},
-        "openrouter": {},
-        "huggingface": {},
     }
     monkeypatch.setattr(api_mod, "load_config", lambda: cfg)
     api = Api()

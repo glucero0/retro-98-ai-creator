@@ -256,6 +256,51 @@ html[data-ui-button-dark="1"] .title-bar-controls button[aria-label].close {
   z-index: 100;
 }
 
+/* Native caret + Windows text-cursor indicator paint above sibling windows.
+   Hide them; #ime-caret is clipped inside the field's window instead. */
+.app-window input,
+.app-window textarea,
+.app-window [contenteditable="true"] {
+  caret-color: transparent !important;
+}
+
+#ime-focus {
+  position: fixed;
+  left: -40px;
+  top: 0;
+  width: 4px;
+  height: 4px;
+  margin: 0;
+  padding: 0;
+  overflow: hidden;
+  opacity: 0.01;
+  border: 0;
+  background: transparent;
+  outline: none;
+  z-index: 0;
+}
+
+.ime-caret-host {
+  position: relative;
+}
+
+#ime-caret {
+  position: absolute;
+  width: 2px;
+  margin: 0;
+  padding: 0;
+  background: var(--ui-input-text, #000);
+  pointer-events: none;
+  z-index: 5;
+  animation: ime-caret-blink 1.05s step-end infinite;
+}
+
+@keyframes ime-caret-blink {
+  50% {
+    background: transparent;
+  }
+}
+
 .app-window.minimized {
   display: none !important;
 }
@@ -2099,18 +2144,12 @@ code {
   padding-top: 10px;
 }
 
-.control-pane fieldset > .hint,
-.control-pane fieldset > .hf-setup-hint {
+.control-pane fieldset > .hint {
   display: block;
   position: relative;
   margin: 4px 0 12px;
   line-height: 1.4;
   clear: both;
-}
-
-.hf-setup-hint {
-  max-width: 100%;
-  word-break: break-word;
 }
 
 /* Control Panel — fills the desktop work area; pane content scrolls. */
