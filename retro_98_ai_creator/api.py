@@ -340,15 +340,6 @@ class Api:
         else:
             gemini["api_key_set"] = bool(resolve_gemini_key(cfg.get("gemini") or {}))
 
-        openrouter = dict(cfg.get("openrouter") or {})
-        if openrouter.get("api_key"):
-            openrouter["api_key_set"] = True
-            openrouter["api_key"] = ""
-        else:
-            openrouter["api_key_set"] = bool(
-                resolve_openrouter_key(cfg.get("openrouter") or {})
-            )
-
         from .media_store import media_dir
 
         paths = dict(cfg.get("paths") or {})
@@ -441,7 +432,7 @@ class Api:
         self.config = save_config(updates, existing=self.config)
         self._apply_media_http_root()
 
-        return {
+        result: dict[str, Any] = {
             "ok": True,
             "config": self._public_config(),
             "modelStatus": provider_status(self.config),
@@ -463,6 +454,7 @@ class Api:
                         }
         except Exception:  # noqa: BLE001
             logger.debug("Could not preview media folder move", exc_info=True)
+        return result
 
     def preload_model(self) -> dict[str, Any]:
         """Gemini uses the cloud API — nothing to download locally."""

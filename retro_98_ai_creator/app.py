@@ -265,19 +265,6 @@ def main() -> int:
             gemini.get("video_model"),
             gemini.get("audio_model"),
         )
-    elif provider == "openrouter":
-        logger.info(
-            "OpenRouter text model: %s",
-            (cfg.get("openrouter") or {}).get("text_model"),
-        )
-    else:
-        hf = cfg.get("huggingface") or {}
-        logger.info(
-            "HF models: text=%s image=%s video=%s",
-            hf.get("text_model") or hf.get("repo_id"),
-            hf.get("image_model"),
-            hf.get("video_model"),
-        )
     try:
         webview.start(debug=bool(ui_cfg.get("debug")))
     finally:

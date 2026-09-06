@@ -17,14 +17,18 @@ DEFAULT_GEMINI_TEXT_MODEL = "gemini-2.5-flash"
 DEFAULT_GEMINI_IMAGE_MODEL = "gemini-2.5-flash-image"
 DEFAULT_GEMINI_VIDEO_MODEL = "veo-2.0-generate-001"
 DEFAULT_GEMINI_AUDIO_MODEL = "lyria-3-clip-preview"
-DEFAULT_OPENROUTER_TEXT_MODEL = "google/gemini-2.5-flash"
-DEFAULT_OPENROUTER_IMAGE_MODEL = "google/gemini-2.5-flash-image"
-DEFAULT_OPENROUTER_VIDEO_MODEL = "google/veo-2.0"
-DEFAULT_HF_TEXT_MODEL = "microsoft/Phi-3.5-mini-instruct"
-DEFAULT_HF_IMAGE_MODEL = "stable-diffusion-v1-5/stable-diffusion-v1-5"
-DEFAULT_HF_VIDEO_MODEL = "ali-vilab/text-to-video-ms-1.7b"
-# Back-compat alias (older configs / imports used a single text repo)
-DEFAULT_HF_MODEL = DEFAULT_HF_TEXT_MODEL
+
+_DEPRECATED_BACKENDS = frozenset(
+    {
+        "openrouter",
+        "open-router",
+        "or",
+        "huggingface",
+        "hf",
+        "local",
+        "phi",
+    }
+)
 
 DEFAULTS: dict[str, Any] = {
     "backend": {

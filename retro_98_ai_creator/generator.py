@@ -114,72 +114,16 @@ def generate_creation(
 
 def provider_status(config: dict[str, Any]) -> dict[str, Any]:
     """Status line for Control Panel / Studio."""
-    backend = ((config.get("backend") or {}).get("provider") or "gemini").lower()
-    if backend in ("gemini", "google", "google-gemini"):
-        from .gemini_provider import resolve_api_key
+    from .gemini_provider import resolve_api_key
 
-        g = config.get("gemini") or {}
-        has_key = bool(resolve_api_key(g))
-        text_m = g.get("text_model")
-        image_m = g.get("image_model")
-        video_m = g.get("video_model")
-        audio_m = g.get("audio_model")
-        detail = (
-            f"Gemini ready · text {text_m} · image {image_m} · video {video_m} · audio {audio_m}"
-            if has_key
-            else "Paste your Gemini API key in Control Panel"
-        )
-        return {
-            "state": "ready" if has_key else "needs_key",
-            "detail": detail,
-            "provider": "gemini",
-            "loaded_repo": text_m,
-            "textModel": text_m,
-            "imageModel": image_m,
-            "videoModel": video_m,
-            "audioModel": audio_m,
-            "modality": "multi",
-            "device": "api",
-        }
-
-    if backend in ("openrouter", "open-router", "or"):
-        from .openrouter_provider import resolve_api_key
-
-        o = config.get("openrouter") or {}
-        has_key = bool(resolve_api_key(o))
-        text_m = o.get("text_model")
-        image_m = o.get("image_model")
-        video_m = o.get("video_model")
-        detail = (
-            f"OpenRouter ready · text {text_m} · image {image_m} · video {video_m}"
-            if has_key
-            else "Paste your OpenRouter API key in Control Panel"
-        )
-        return {
-            "state": "ready" if has_key else "needs_key",
-            "detail": detail,
-            "provider": "openrouter",
-            "loaded_repo": text_m,
-            "textModel": text_m,
-            "imageModel": image_m,
-            "videoModel": video_m,
-            "modality": "multi",
-            "device": "api",
-        }
-
-    from .config import normalize_huggingface_cfg
-    from .hf_media import local_media_manager
-    from .llm import model_manager
-
-    hf = normalize_huggingface_cfg(config.get("huggingface"))
-    text_m = hf.get("text_model")
-    image_m = hf.get("image_model")
-    video_m = hf.get("video_model")
-    text_status = dict(model_manager.status)
-    media_status = dict(local_media_manager.status)
-    loaded = text_status.get("loaded_repo") or media_status.get("loaded_repo")
+    g = config.get("gemini") or {}
+    has_key = bool(resolve_api_key(g))
+    text_m = g.get("text_model")
+    image_m = g.get("image_model")
+    video_m = g.get("video_model")
+    audio_m = g.get("audio_model")
     detail = (
-        f"Gemini ready · text {text_m} · image {image_m} · video {video_m}"
+        f"Gemini ready · text {text_m} · image {image_m} · video {video_m} · audio {audio_m}"
         if has_key
         else "Paste your Gemini API key in Control Panel"
     )
@@ -191,6 +135,7 @@ def provider_status(config: dict[str, Any]) -> dict[str, Any]:
         "textModel": text_m,
         "imageModel": image_m,
         "videoModel": video_m,
+        "audioModel": audio_m,
         "modality": "multi",
         "device": "api",
     }

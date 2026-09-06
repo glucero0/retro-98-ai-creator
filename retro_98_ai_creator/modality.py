@@ -321,81 +321,11 @@ def check_prompt_model_compatibility(
     """
     Compare prompt intent with Gemini's modality slots.
 
-    Gemini / OpenRouter / Hugging Face: modality slots — Studio routes by
-    prompt intent to the matching configured model. Audio (Lyria) is Gemini-only.
+    Studio routes by prompt intent to the matching configured Gemini model
+    (text, image, video, or Lyria audio).
     """
     prompt_mod = infer_prompt_modality(prompt)
-    provider_l = (provider or "gemini").lower().strip()
-
-    if prompt_mod == "audio" and provider_l not in {"gemini", "google", "google-gemini"}:
-        return {
-            "ok": False,
-            "error": (
-                "This prompt looks like a music request, but music generation "
-                "(Lyria) is only available with the Gemini backend. Open Control "
-                "Panel and switch Provider to Google Gemini."
-            ),
-            "promptModality": "audio",
-            "modelModality": "text",
-            "model": (model_id or "").strip(),
-            "suggestions": suggested_model_ids_for_modality("audio"),
-        }
-
-    if provider_l in {"gemini", "google", "google-gemini"}:
-        from .gemini_provider import resolve_gemini_model_for_modality
-
-        routed_mod = prompt_mod or "text"
-        model = resolve_gemini_model_for_modality(gemini_cfg, routed_mod)
-        return {
-            "ok": True,
-            "promptModality": prompt_mod,
-            "modelModality": routed_mod,
-            "model": model,
-            "routed": True,
-        }
-
-    if provider_l in {"openrouter", "open-router", "or"}:
-        from .openrouter_provider import resolve_openrouter_model_for_modality
-
-        routed_mod = prompt_mod or "text"
-        model = resolve_openrouter_model_for_modality(openrouter_cfg, routed_mod)
-        return {
-            "ok": True,
-            "promptModality": prompt_mod,
-            "modelModality": routed_mod,
-            "model": model,
-            "routed": True,
-        }
-
-    if provider_l in {"huggingface", "hf", "local", "phi"}:
-        from .hf_provider import resolve_hf_model_for_modality
-
-        routed_mod = prompt_mod or "text"
-        model = resolve_hf_model_for_modality(huggingface_cfg, routed_mod)
-        return {
-            "ok": True,
-            "promptModality": prompt_mod,
-            "modelModality": routed_mod,
-            "model": model,
-            "routed": True,
-        }
-
-    model_mod = classify_model_modality(model_id) or "text"
-    if prompt_mod is None or prompt_mod == model_mod:
-        return {
-            "ok": True,
-            "promptModality": prompt_mod,
-            "modelModality": model_mod,
-            "model": (model_id or "").strip(),
-        }
-
-    suggestions = suggested_model_ids_for_modality(prompt_mod)
-    suggest_txt = (
-        ", ".join(suggestions[:3])
-        if suggestions
-        else f"a {modality_label(prompt_mod)}-capable model"
-    )
-    where = f"Open Control Panel and switch to {suggest_txt}"
+    from .gemini_provider import resolve_gemini_model_for_modality
 
     routed_mod = prompt_mod or "text"
     model = resolve_gemini_model_for_modality(gemini_cfg, routed_mod)
