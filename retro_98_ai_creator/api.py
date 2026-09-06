@@ -79,6 +79,28 @@ def _ensure_save_suffix(path: Path, suffix: str) -> Path:
         return path.with_suffix(want)
     return path
 
+
+def _safe_dialog_save_path(dialog_result: Any, suffix: str) -> Path:
+    """Rebuild a save-dialog path from resolved parent + sanitized filename.
+
+    Native dialogs return a user-chosen location. Writing that string directly
+    is a path-injection sink (CodeQL py/path-injection). Only the basename is
+    kept; the file must stay inside the resolved parent folder.
+    """
+    raw = dialog_result if isinstance(dialog_result, str) else dialog_result[0]
+    picked = Path(str(raw or "").strip())
+    if not picked.name or ".." in picked.parts:
+        raise ValueError("Invalid save path")
+    parent = picked.expanduser().resolve().parent
+    if not parent.is_dir():
+        raise ValueError("Save folder does not exist")
+    name = _ensure_save_suffix(Path(picked.name), suffix).name
+    if not name or name in {".", ".."} or "/" in name or "\\" in name:
+        raise ValueError("Invalid save filename")
+    dest = (parent / name).resolve()
+    dest.relative_to(parent)
+    return dest
+
 class Api:
     """Methods on this class are callable from window.pywebview.api in the UI."""
 
@@ -1211,10 +1233,7 @@ class Api:
             )
             if not result:
                 return {"ok": False, "cancelled": True}
-            out = _ensure_save_suffix(
-                Path(result if isinstance(result, str) else result[0]),
-                ".mp4",
-            )
+            out = _safe_dialog_save_path(result, ".mp4")
             out.write_bytes(dest.read_bytes())
             return {"ok": True, "path": str(out)}
         except Exception as exc:  # noqa: BLE001
@@ -1369,10 +1388,10 @@ class Api:
         )
         if not result:
             return {"ok": False, "cancelled": True}
-        dest = _ensure_save_suffix(
-            Path(result if isinstance(result, str) else result[0]),
-            ext,
-        )
+        try:
+            dest = _safe_dialog_save_path(result, ext)
+        except ValueError as exc:
+            return {"ok": False, "error": str(exc)}
         dest.write_bytes(path.read_bytes())
         return {"ok": True, "path": str(dest)}
 
@@ -1387,10 +1406,10 @@ class Api:
         )
         if not result:
             return {"ok": False, "cancelled": True}
-        path = _ensure_save_suffix(
-            Path(result if isinstance(result, str) else result[0]),
-            Path(default_name).suffix,
-        )
+        try:
+            path = _safe_dialog_save_path(result, Path(default_name).suffix)
+        except ValueError as exc:
+            return {"ok": False, "error": str(exc)}
         path.write_text(content, encoding="utf-8")
         return {"ok": True, "path": str(path)}
 
@@ -1420,10 +1439,10 @@ class Api:
         )
         if not result:
             return {"ok": False, "cancelled": True}
-        path = _ensure_save_suffix(
-            Path(result if isinstance(result, str) else result[0]),
-            Path(default_name).suffix,
-        )
+        try:
+            path = _safe_dialog_save_path(result, Path(default_name).suffix)
+        except ValueError as exc:
+            return {"ok": False, "error": str(exc)}
         path.write_bytes(raw)
         return {"ok": True, "path": str(path)}
 

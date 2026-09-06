@@ -4,7 +4,7 @@ A Windows 98–themed desktop studio for general-purpose AI creation: **text**, 
 
 > **Work in progress.** This project is under active development. Features, APIs, config, and storage formats may change without notice. **Use at your own risk** — there is no warranty of any kind. You are responsible for API costs and any data you generate or store. Do not rely on it for production, critical, or irreversible work.
 
-**Default backend: Google Gemini** — text, image, Veo video, and Lyria music via separate model pickers. **OpenRouter** and optional **local Hugging Face** support three modality slots (text / image / video). Music generation is Gemini-only.
+**Backend: Google Gemini** — text, image, Veo video, and Lyria music via separate model pickers in Control Panel.
 
 ## Features
 
@@ -13,12 +13,10 @@ A Windows 98–themed desktop studio for general-purpose AI creation: **text**, 
 - **Gemini Use Tools** (optional) — attach built-in tools (`read_json`, `write_json`, `read_text`, `write_text`, `execute_powershell`, `search_gmail`, `search_drive`, `create_drive_file`, `read_google_doc`, `create_google_doc`, `edit_google_doc`, `list_calendar_events`, `create_calendar_event`, `edit_calendar_event`, `list_tasks`, `create_task`, `edit_task`, `browse_web`) and describe steps in natural language; Gemini calls them via function calling (text generations only, Windows for PowerShell)
 - **Google Search enrichment** (optional, Gemini text) — when Search runs, the app can OCR images and pull YouTube captions from cited results before the tool or document pass
 - **Gemini** text, image, video, and music generation with separate model pickers per modality. Music uses **Lyria** (Clip for 30-second previews, **Lyria 3.5 / Lyria Pro** for full songs). Tracks are SynthID-watermarked by Google. Use an image as a Studio basis to compose from a picture; an existing MP3 cannot be sent as audio input.
-- **OpenRouter** — text, image, and video slots (Studio routes by prompt intent)
-- Optional **local Hugging Face** — text (causal LM), image (Diffusers), and video (Diffusers T2V) with separate pickers; Studio media basis uses local img2img (and I2V when the video model supports it)
 - **Archives** — every creation is saved automatically: text/lyrics/metadata in `archives.json`, binaries in the media folder; search, import/export JSON, or import existing text/image/video/audio files
 - **Viewer** — displays the active creation (document, image, video, or audio) with optional export buttons (already-saved work does not need to be exported) and a jump into editing
 - **Image Edit** and **Video Edit** — standalone editors (and reachable via Viewer → Edit) for crop/rotate, color/filter adjustments, and (for video) a segment timeline for splitting/reordering/trimming clips
-- **Control Panel** — backend/model selection, Google Workspace OAuth, media folder, display themes, sound, CRT overlay, and UI scale
+- **Control Panel** — Gemini model pickers, Google Workspace OAuth, media folder, display themes, sound, CRT overlay, and UI scale
 - Cancel a generation in progress
 - "Use as Basis" / "Load…" — start a new creation from the Viewer's active item or an imported file, without touching the original. For songs this reloads the prompt and lyrics (Lyria cannot take an MP3 as input).
 
@@ -115,7 +113,7 @@ Use a reasonably current build (roughly ffmpeg 4+). Very old copies on `PATH` (f
 | **Viewer** | Shows the active creation — rendered document, image, video, or audio — with optional export buttons (TXT/JSON/PNG/PDF/MP4/MP3 depending on type) and an **Edit** shortcut into Image Edit or Video Edit. |
 | **Image Edit** | Crop, rotate, and adjust (brightness/contrast/saturation/hue/sepia/blur/exposure/gamma/vignette/tint, grayscale, threshold, sharpen, background removal). Opened standalone or via Viewer → Edit. |
 | **Video Edit** | Same filter/crop/rotate toolset plus a **segment timeline**: split at the playhead, delete/reorder segments, then re-render. Requires ffmpeg. Opened standalone or via Viewer → Edit. |
-| **Control Panel** | AI backend + model pickers, Gemini search/tools toggles, **Storage** / media folder picker, display theme, sound, CRT scanlines, UI scale. **Save** writes `config.yaml` and resets Studio’s **Enable Tools** checkbox to the saved **Use Tools** default (search field visibility and model labels also update). |
+| **Control Panel** | Gemini model pickers, Gemini search/tools toggles, **Storage** / media folder picker, display theme, sound, CRT scanlines, UI scale. **Save** writes `config.yaml` and resets Studio’s **Enable Tools** checkbox to the saved **Use Tools** default (search field visibility and model labels also update). |
 
 ### Prompt Editor and Saved prompt
 
@@ -145,7 +143,6 @@ After **Save**, these settings apply on the next **Create** (no app restart):
 
 | Setting | Effect on Studio |
 | --- | --- |
-| **Provider** | Gemini vs OpenRouter vs Hugging Face — only **Gemini** supports Google Search, Use Tools, and enrichment |
 | **Text / Image / Video / Audio models** | Shown on the Studio model field; routing still follows prompt intent (e.g. “generate a video” uses Veo, “compose a song” uses the Lyria Audio slot) |
 | **Google Search grounding (text)** | When on, an optional **Search** field appears in tools mode. When off, Search is hidden and no web research pass runs |
 | **Two-pass verify** | Gemini text only, when Google Search is on and tools are off — extract with sources, then verify at temperature 0 |
@@ -158,7 +155,7 @@ After **Save**, these settings apply on the next **Create** (no app restart):
 
 ## Lyria music generation (Gemini)
 
-Music is a fourth Gemini slot (alongside text, image, and Veo). Studio routes prompts such as “compose a song”, “generate a music clip”, or “background music, instrumental only” to the **Audio (Lyria)** model. OpenRouter and Hugging Face have no music slot.
+Music is a fourth Gemini slot (alongside text, image, and Veo). Studio routes prompts such as “compose a song”, “generate a music clip”, or “background music, instrumental only” to the **Audio (Lyria)** model.
 
 Enable the music models for your Gemini API key in [Google AI Studio](https://aistudio.google.com/) or the Google Cloud project tied to that key, then Control Panel → **Refresh…** so they appear in the Audio picker.
 
@@ -321,7 +318,7 @@ Viewer **Export TXT** / **Export Lyrics** / **Export Metadata** dump what is alr
 
 Changing the media folder does not move files by itself. After **Save**, the app can offer to move existing images/video/audio; declining leaves them in place. Leftover files in the project `media/` folder still open. Text and lyrics are unaffected — they stay in `archives.json`.
 
-Everything above is local. Nothing is uploaded except your prompts (and any image basis) to the selected AI backend.
+Everything above is local. Nothing is uploaded except your prompts (and any image basis) to Gemini.
 
 ## config.yaml (excerpt)
 

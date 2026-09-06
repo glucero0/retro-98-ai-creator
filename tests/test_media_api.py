@@ -8,7 +8,7 @@ from unittest.mock import MagicMock
 
 import pytest
 
-from retro_98_ai_creator.api import Api
+from retro_98_ai_creator.api import Api, _safe_dialog_save_path
 from retro_98_ai_creator.creation_utils import build_media_creation
 from retro_98_ai_creator.storage import ArchiveStore
 
@@ -293,6 +293,29 @@ def test_save_binary_file_dialog_forces_png_and_pdf_extension(tmp_path, monkeypa
     assert res["ok"] is True
     assert Path(res["path"]).suffix == ".pdf"
     assert Path(res["path"]).read_bytes() == b"%PDF"
+
+
+def test_safe_dialog_save_path_stays_in_parent(tmp_path):
+    dest = _safe_dialog_save_path(str(tmp_path / "shot"), ".png")
+    assert dest.parent == tmp_path.resolve()
+    assert dest.name == "shot.png"
+
+
+def test_safe_dialog_save_path_rejects_parent_escape(tmp_path):
+    with pytest.raises(ValueError):
+        _safe_dialog_save_path(str(tmp_path / ".." / "outside.png"), ".png")
+
+    class _Win:
+        def create_file_dialog(self, *_args, **_kwargs):
+            return str(tmp_path / ".." / "escape")
+
+    api = Api()
+    api._window = _Win()
+    res = api.save_binary_file_dialog(
+        "x.png", base64.b64encode(b"\x89PNG").decode("ascii")
+    )
+    assert res["ok"] is False
+    assert "Invalid" in (res.get("error") or "")
 
 
 def test_export_creation_media_forces_mp4_extension(tmp_path, monkeypatch):
