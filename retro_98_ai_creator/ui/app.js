@@ -1154,6 +1154,12 @@
         models,
         "video"
       );
+      fillGeminiModalitySelect(
+        $("#gemini-audio-model"),
+        picks.audio,
+        models,
+        "audio"
+      );
       updateStudioBackendLabel({
         config: {
           backend: { provider: "gemini" },
@@ -1161,6 +1167,7 @@
             text_model: picks.text,
             image_model: picks.image,
             video_model: picks.video,
+            audio_model: picks.audio,
           },
         },
       });
@@ -1453,13 +1460,13 @@
     if (loadHint) {
       if (!enabled) {
         loadHint.textContent =
-          "Load Text into the prompt. Load Image / Video sets a media basis shown on the right — then describe the change and CREATE. To reuse something already in Archives, open it in the Viewer and choose Use as Basis.";
+          "Load Text into the prompt. Load Image / Video sets a media basis shown on the right — then describe the change and CREATE. To reuse something already in Archives, open it in the Viewer and choose Use as Basis. For a song, that reloads the prompt and lyrics as text — not the MP3.";
       } else if (searchOn) {
         loadHint.textContent =
-          "Load Text into Search (optional). Load Image / Video sets a media basis shown on the right — then describe the change and CREATE. To reuse something already in Archives, open it in the Viewer and choose Use as Basis.";
+          "Load Text into Search (optional). Load Image / Video sets a media basis shown on the right — then describe the change and CREATE. To reuse something already in Archives, open it in the Viewer and choose Use as Basis. For a song, that reloads the prompt and lyrics as text — not the MP3.";
       } else {
         loadHint.textContent =
-          "Google Search is off — only Tool Use runs. Load Image / Video sets a media basis shown on the right — then describe the change and CREATE. To reuse something already in Archives, open it in the Viewer and choose Use as Basis.";
+          "Google Search is off — only Tool Use runs. Load Image / Video sets a media basis shown on the right — then describe the change and CREATE. To reuse something already in Archives, open it in the Viewer and choose Use as Basis. For a song, that reloads the prompt and lyrics as text — not the MP3.";
       }
     }
     renderStudioToolsList();
@@ -1691,6 +1698,40 @@
     // Always close Control Panel after a successful Save.
     closeWindow("control");
     showToast(res.message || "Saved");
+
+    const mediaMove = res.mediaMove;
+    if (res.ok && mediaMove && mediaMove.offered && mediaMove.count > 0) {
+      const go = await showConfirm(
+        "Move existing media?",
+        "Settings were saved.\n\n" +
+          "Move " +
+          mediaMove.count +
+          " existing media file(s) into the new folder?\n\n" +
+          "Yes — move the files and update Archives so Viewer still finds them.\n" +
+          "No — leave them where they are. New creations will use the new folder."
+      );
+      if (go) {
+        const moved = await a.relocate_media_files(mediaMove.source);
+        if (!moved.ok) {
+          showToast(moved.error || "Could not move media files");
+        } else {
+          if (Array.isArray(moved.creations)) {
+            state.creations = moved.creations;
+            if (state.active && state.active.id) {
+              const next = state.creations.find((c) => c.id === state.active.id);
+              if (next) renderDocument(next);
+            }
+            renderArchives();
+          }
+          showToast(
+            moved.moved
+              ? "Moved " + moved.moved + " media file(s)."
+              : "No media files needed moving."
+          );
+        }
+      }
+    }
+
     if (!offerDownload) return;
 
     const go = await showConfirm(
@@ -2286,8 +2327,33 @@
   }
 
   /**
+   * Turn Clip timestamped lyrics ([0.0:4.7] LINE) into [Verse] lines.
+   * Lyria accepts [Verse]/[Chorus] tags; re-sending timestamps as a
+   * “new version” can look like recitation to Pro safety filters.
+   */
+  function formatSongBasisLyrics(lyrics) {
+    const text = String(lyrics || "").trim();
+    if (!text) return "";
+    const timestampRe = /^\s*\[(\d+(?:\.\d+)?)\s*:\s*(\d+(?:\.\d+)?)\]\s*(.*)$/;
+    let hasTimestamps = false;
+    const converted = text.split(/\r?\n/).map((line) => {
+      const match = line.match(timestampRe);
+      if (!match) return line;
+      hasTimestamps = true;
+      return String(match[3] || "").trim();
+    });
+    const body = converted.join("\n").replace(/\n{3,}/g, "\n\n").trim();
+    if (!body) return "";
+    if (hasTimestamps && !/^\s*\[(verse|chorus|bridge|intro|outro|hook)\b/i.test(body)) {
+      return "[Verse]\n" + body;
+    }
+    return body;
+  }
+
+  /**
    * Use an existing creation as the basis for new work of the same modality.
-   * Text → Studio prompt. Image/video → Studio media-basis panel (not the editors).
+   * Text/audio → Studio prompt (songs: prompt + lyrics only, never the MP3).
+   * Image/video → Studio media-basis panel (not the editors).
    */
   async function useCreationAsBasis(creation) {
     if (!creation) {
@@ -2301,17 +2367,22 @@
       return;
     }
 
-    if (mod === "text") {
+    if (mod === "text" || mod === "audio") {
       const prompt = (creation.prompt || "").trim();
-      const body = extractCreationTextBody(creation);
+      const extra =
+        mod === "audio"
+          ? formatSongBasisLyrics(creationLyrics(creation))
+          : extractCreationTextBody(creation);
       let seeded = "";
-      if (prompt && body && body !== prompt) {
+      if (prompt && extra && extra !== prompt) {
         seeded =
           prompt +
-          "\n\nBased on this existing text, create an improved version:\n\n" +
-          body;
+          (mod === "audio"
+            ? "\n\nLyrics — use [Verse] / [Chorus] / [Bridge] tags for structure:\n\n"
+            : "\n\nBased on this existing text, create an improved version:\n\n") +
+          extra;
       } else {
-        seeded = prompt || body || creationTitle(creation);
+        seeded = prompt || extra || creationTitle(creation);
       }
       clearStudioBasis();
       setStudioPrompt(seeded);
@@ -2320,7 +2391,11 @@
         setStudioToolUse("");
       }
       openWindow("form");
-      showToast("Text loaded into Studio as basis — edit the prompt, then CREATE.");
+      showToast(
+        mod === "audio"
+          ? "Song prompt and lyrics loaded into Studio (text only — the MP3 is not attached). Edit, then CREATE."
+          : "Text loaded into Studio as basis — edit the prompt, then CREATE."
+      );
       return;
     }
 
@@ -2540,7 +2615,8 @@
   async function archivesImportMedia(modality) {
     const a = api();
     if (!a) return;
-    const kind = modality === "video" ? "video" : "image";
+    const kind =
+      modality === "video" ? "video" : modality === "audio" ? "audio" : "image";
     beginBusy("Importing " + kind, "Copying into Archives…", { delayMs: 0 });
     try {
       const res = await a.import_media_file(kind);
@@ -2556,7 +2632,8 @@
       }
       openWindow("library");
       showToast(
-        (kind === "image" ? "Image" : "Video") + " imported into Archives"
+        (kind === "image" ? "Image" : kind === "audio" ? "Audio" : "Video") +
+          " imported into Archives"
       );
     } catch (err) {
       showToast("Import failed: " + err);
@@ -2658,13 +2735,15 @@
     const textSel = $("#gemini-text-model");
     const imageSel = $("#gemini-image-model");
     const videoSel = $("#gemini-video-model");
-    if (!a || !textSel || !imageSel || !videoSel) return;
+    const audioSel = $("#gemini-audio-model");
+    if (!a || !textSel || !imageSel || !videoSel || !audioSel) return;
 
     const seq = ++_geminiModelsRefreshSeq;
     const prev = {
       text: textSel.value,
       image: imageSel.value,
       video: videoSel.value,
+      audio: audioSel.value,
     };
     beginBusy(
       "Refreshing Gemini models",
@@ -2684,6 +2763,7 @@
       fillGeminiModalitySelect(textSel, prev.text, models, "text");
       fillGeminiModalitySelect(imageSel, prev.image, models, "image");
       fillGeminiModalitySelect(videoSel, prev.video, models, "video");
+      fillGeminiModalitySelect(audioSel, prev.audio, models, "audio");
       if (res && res.ok) {
         updateBusy(
           "Loaded " +
@@ -2708,6 +2788,7 @@
             text_model: textSel.value,
             image_model: imageSel.value,
             video_model: videoSel.value,
+            audio_model: audioSel.value,
           },
         },
       });
@@ -2984,8 +3065,24 @@
     return true;
   }
 
+  function stopViewerMedia() {
+    const root = $("#win-viewer");
+    if (!root) return;
+    root.querySelectorAll("audio, video").forEach((el) => {
+      try {
+        el.pause();
+        el.currentTime = 0;
+      } catch (_) {
+        /* ignore unseekable / already torn-down elements */
+      }
+    });
+  }
+
   function closeWindow(id) {
-    if (id === "viewer") stopSpeech();
+    if (id === "viewer") {
+      stopSpeech();
+      stopViewerMedia();
+    }
     if (id === "image-edit") {
       imageEdit.sourceImg = null;
       imageEdit.creationId = null;
@@ -3701,6 +3798,38 @@
             showToast("Video failed to load" + detail + ". Try Save MP4… or restart the app.");
           });
         }
+      } else if (modality === "audio" || res.modality === "audio") {
+        const src = res.fileUrl || res.dataUrl || "";
+        if (!src) {
+          canvas.innerHTML =
+            '<p class="muted">Audio URL missing — restart the app and try again.</p>';
+          return;
+        }
+        const lyrics = creationLyrics(creation);
+        canvas.innerHTML =
+          '<div class="media-pane">' +
+          '<audio class="media-audio" controls preload="metadata" src="' +
+          escapeHtml(src) +
+          '">' +
+          "Your WebView could not play this audio." +
+          "</audio>" +
+          (creation.prompt
+            ? '<p class="media-caption">' + escapeHtml(creation.prompt) + "</p>"
+            : "") +
+          (lyrics
+            ? '<pre class="media-lyrics">' + escapeHtml(lyrics) + "</pre>"
+            : "") +
+          "</div>";
+        const audioEl = canvas.querySelector("audio.media-audio");
+        if (audioEl) {
+          audioEl.addEventListener("error", () => {
+            const err = audioEl.error;
+            const detail = err ? " (code " + err.code + ")" : "";
+            showToast(
+              "Audio failed to load" + detail + ". Try Save MP3… or restart the app."
+            );
+          });
+        }
       } else {
         const src = res.fileUrl || res.dataUrl || "";
         if (!src) {
@@ -3888,7 +4017,7 @@
     const tab = state.viewerTab || (modality === "text" ? "doc" : "media");
     canvas.classList.toggle("tab-ascii", tab === "ascii");
 
-    if (modality === "image" || modality === "video") {
+    if (isMediaModality(modality)) {
       canvas.style.background = "#111";
       canvas.style.color = "#eee";
       canvas.style.fontFamily = "var(--ui-font)";
@@ -4214,6 +4343,7 @@
     const m = creationModality(creation);
     if (m === "image") return "Image";
     if (m === "video") return "Video";
+    if (m === "audio") return "Audio";
     return "Text";
   }
 
@@ -4338,7 +4468,9 @@
         basis.textContent = isMedia ? "Edit…" : "Basis";
         basis.title = isMedia
           ? "Open a copy in the " + mod + " editor"
-          : "Use as basis for a new text creation";
+          : mod === "audio"
+            ? "Use as basis for a new song"
+            : "Use as basis for a new text creation";
         basis.addEventListener("click", () => {
           useCreationAsBasis(c);
         });
@@ -4499,6 +4631,7 @@
       text: "gemini-2.5-flash",
       image: "gemini-2.5-flash-image",
       video: "veo-2.0-generate-001",
+      audio: "lyria-3-clip-preview",
     };
     const retired = new Set(
       (state.retiredGeminiModels || []).map((id) => String(id || "").toLowerCase())
@@ -4581,13 +4714,28 @@
   function creationModality(creation) {
     if (!creation) return "text";
     const m = String(creation.modality || "").toLowerCase();
-    if (m === "image" || m === "video" || m === "text") return m;
+    if (m === "image" || m === "video" || m === "text" || m === "audio") return m;
     if (creation.mediaPath) {
       const mime = String(creation.mimeType || "").toLowerCase();
       if (mime.startsWith("video/")) return "video";
+      if (mime.startsWith("audio/")) return "audio";
       return "image";
     }
     return "text";
+  }
+
+  function creationLyrics(creation) {
+    const sections = (creation && creation.sections) || [];
+    const parts = [];
+    sections.forEach((sec) => {
+      const content = String((sec && sec.content) || "").trim();
+      if (content) parts.push(content);
+    });
+    return parts.join("\n\n").trim();
+  }
+
+  function isMediaModality(modality) {
+    return modality === "image" || modality === "video" || modality === "audio";
   }
 
   function creationTitle(creation) {
@@ -4602,8 +4750,9 @@
 
   function syncViewerChrome(creation) {
     const modality = creation ? creationModality(creation) : "";
-    const isMedia = modality === "image" || modality === "video";
+    const isMedia = isMediaModality(modality);
     const extracted = getExtractedText(creation);
+    const lyrics = modality === "audio" ? creationLyrics(creation) : "";
 
     const tabDoc = $("#tab-doc");
     const tabMedia = $("#tab-media");
@@ -4614,10 +4763,11 @@
     if (tabDoc) tabDoc.hidden = isMedia;
     if (tabMedia) {
       tabMedia.hidden = !isMedia;
-      tabMedia.textContent = modality === "video" ? "Video" : "Image";
+      tabMedia.textContent =
+        modality === "video" ? "Video" : modality === "audio" ? "Audio" : "Image";
     }
     if (tabExtracted) {
-      tabExtracted.hidden = !isMedia;
+      tabExtracted.hidden = !isMedia || modality === "audio";
       const kind =
         creation &&
         creation.meta &&
@@ -4632,21 +4782,25 @@
       tabGrounding.hidden = !creation || (isMedia && !sources.length);
     }
 
-    const showTxt = modality === "text" || (isMedia && !!extracted);
+    const showTxt = modality === "text" || (isMedia && !!extracted) || !!lyrics;
     const showPng = modality === "text" || modality === "image";
     const showPdf = modality === "text" || modality === "image";
-    const showMp4 = modality === "video";
+    const showMp4 = modality === "video" || modality === "audio";
     const showAscii = modality === "text";
     const showVoice = modality === "text";
     const showEditImage = modality === "image";
     const showEditVideo = modality === "video";
-    const showExtract = isMedia;
+    const showExtract = isMedia && modality !== "audio";
     const showMetadata = !!creation;
 
     if ($("#btn-export-txt")) {
       $("#btn-export-txt").hidden = !showTxt;
       $("#btn-export-txt").textContent =
-        isMedia && extracted ? "Export Extracted TXT" : "Export TXT";
+        modality === "audio" && lyrics
+          ? "Export Lyrics"
+          : isMedia && extracted
+            ? "Export Extracted TXT"
+            : "Export TXT";
     }
     if ($("#btn-export-png")) {
       $("#btn-export-png").hidden = !showPng;
@@ -4659,9 +4813,10 @@
         modality === "image" ? "Save PDF" : "Export PDF";
     }
     if ($("#btn-export-media")) {
-      // Video native file only — images use Save PNG / Save PDF
+      // Native media file — images use Save PNG / Save PDF
       $("#btn-export-media").hidden = !showMp4;
-      $("#btn-export-media").textContent = "Save MP4…";
+      $("#btn-export-media").textContent =
+        modality === "audio" ? "Save MP3…" : "Save MP4…";
     }
     if ($("#btn-extract-text")) {
       $("#btn-extract-text").hidden = !showExtract;
@@ -4689,6 +4844,22 @@
     if (!isMedia && (state.viewerTab === "media" || state.viewerTab === "extracted")) {
       state.viewerTab = "doc";
     }
+  }
+
+  function fillMediaFolderControls(paths) {
+    const input = $("#media-folder-path");
+    const hint = $("#media-folder-hint");
+    const cfg = paths || {};
+    const stored = (cfg.media || "media").trim() || "media";
+    if (input) input.value = stored;
+    if (!hint) return;
+    const resolved = (cfg.media_resolved || "").trim();
+    hint.textContent =
+      "Only image, video, and song files go here (PNG, MP4, MP3). " +
+      "Text, lyrics, prompts, and metadata stay in archives.json — you do not need to Export to keep them. " +
+      "Default is the media folder next to the app. After Save you can move existing media files into the new folder; " +
+      "declining leaves them where they are. Archives still opens items left in the old project media folder." +
+      (resolved ? " Currently: " + resolved + "." : "");
   }
 
   function fillControlPanel(boot) {
@@ -4740,6 +4911,8 @@
     }
     void refreshGoogleWorkspaceAuthStatus();
 
+    fillMediaFolderControls(boot.config && boot.config.paths);
+
     const suggested = boot.suggestedGeminiModels || [];
     fillGeminiModalitySelect(
       $("#gemini-text-model"),
@@ -4758,6 +4931,12 @@
       gemini.video_model || "veo-2.0-generate-001",
       suggested,
       "video"
+    );
+    fillGeminiModalitySelect(
+      $("#gemini-audio-model"),
+      gemini.audio_model || "lyria-3-clip-preview",
+      suggested,
+      "audio"
     );
 
     if ($("#openrouter-temp")) {
@@ -4933,13 +5112,19 @@
         g.video_model ||
         ($("#gemini-video-model") && $("#gemini-video-model").value) ||
         "veo-2.0-generate-001";
+      const audioM =
+        g.audio_model ||
+        ($("#gemini-audio-model") && $("#gemini-audio-model").value) ||
+        "lyria-3-clip-preview";
       modelField.textContent =
         "Backend: Gemini · text " +
         textM +
         " · image " +
         imageM +
         " · video " +
-        videoM;
+        videoM +
+        " · audio " +
+        audioM;
     }
   }
 
@@ -5145,6 +5330,9 @@
       video_model:
         ($("#gemini-video-model") && $("#gemini-video-model").value) ||
         "veo-2.0-generate-001",
+      audio_model:
+        ($("#gemini-audio-model") && $("#gemini-audio-model").value) ||
+        "lyria-3-clip-preview",
     };
   }
 
@@ -5197,6 +5385,9 @@
         video_model:
           ($("#gemini-video-model") && $("#gemini-video-model").value.trim()) ||
           "veo-2.0-generate-001",
+        audio_model:
+          ($("#gemini-audio-model") && $("#gemini-audio-model").value.trim()) ||
+          "lyria-3-clip-preview",
         api_key: ($("#gemini-key") && $("#gemini-key").value.trim()) || "",
         google_search: $("#gemini-search") ? $("#gemini-search").checked : true,
         two_pass_verify: $("#gemini-two-pass") ? $("#gemini-two-pass").checked : true,
@@ -5249,6 +5440,11 @@
             $("#google-workspace-credentials-path").value.trim()) ||
           null,
         token_path: ".retro-98-ai-creator/google_workspace_token.json",
+      },
+      paths: {
+        media:
+          ($("#media-folder-path") && $("#media-folder-path").value.trim()) ||
+          "media",
       },
       ui: {
         sound_enabled: $("#opt-sound").checked,
@@ -5497,6 +5693,9 @@
     }
     if ($("#gemini-video-model") && gemini.video_model) {
       $("#gemini-video-model").value = gemini.video_model;
+    }
+    if ($("#gemini-audio-model") && gemini.audio_model) {
+      $("#gemini-audio-model").value = gemini.audio_model;
     }
     try {
       await refreshGeminiModelsForControlPanel();
@@ -5851,6 +6050,16 @@
       let wantsMedia = false;
       if (basisId && state.studioBasis) {
         const lower = prompt.toLowerCase();
+        const wantsAudio =
+          /\b(create|generate|make|compose|produce|write|score)\b[\s\S]{0,48}\b(music|song|soundtrack|jingle|melody|tune|instrumental|chiptune)\b/.test(
+            lower
+          ) ||
+          /\b(music|song|soundtrack|jingle|melody|chiptune)\s+(of|about|for|in)\b/.test(
+            lower
+          ) ||
+          /\blyria\b/.test(lower) ||
+          /\binstrumental\s+only\b/.test(lower) ||
+          /\b(background|game)\s+(music|soundtrack)\b/.test(lower);
         const wantsVideo =
           /\b(create|generate|make|render|produce|shoot|film)\b[\s\S]{0,48}\b(video|clip|animation|footage|movie|cinematic)\b/.test(
             lower
@@ -5864,7 +6073,10 @@
           /\b(create|generate|make|render|draw|paint|illustrate)\b[\s\S]{0,40}\b(image|picture|photo|illustration|drawing)\b/.test(
             lower
           ) || /\b(image|picture|photo)\s+of\b/.test(lower);
-        if (wantsVideo) {
+        if (wantsAudio) {
+          compatPrompt = "Generate music: " + prompt;
+          wantsMedia = true;
+        } else if (wantsVideo) {
           compatPrompt = "Generate a video: " + prompt;
           wantsMedia = true;
         } else if (wantsImage) {
@@ -5889,7 +6101,9 @@
           }
           if (
             compat &&
-            (compat.promptModality === "image" || compat.promptModality === "video")
+            (compat.promptModality === "image" ||
+              compat.promptModality === "video" ||
+              compat.promptModality === "audio")
           ) {
             wantsMedia = true;
           }
@@ -8155,12 +8369,17 @@
         archivesImportMedia("video")
       );
     }
+    if ($("#btn-import-audio")) {
+      $("#btn-import-audio").addEventListener("click", () =>
+        archivesImportMedia("audio")
+      );
+    }
 
     $("#btn-export-txt").addEventListener("click", async () => {
       if (!state.active) return;
       const modality = creationModality(state.active);
       const extracted = getExtractedText(state.active);
-      if (modality !== "text" && !extracted) {
+      if (modality !== "text" && !extracted && !(modality === "audio" && creationLyrics(state.active))) {
         showToast("Run Extract Text… first, or open a text creation.");
         return;
       }
@@ -8173,7 +8392,9 @@
             ? "_transcript.txt"
             : modality === "image"
               ? "_ocr.txt"
-              : ".txt";
+              : modality === "audio"
+                ? "_lyrics.txt"
+                : ".txt";
         const name =
           modality === "text"
             ? exportBaseName(state.active) + ".txt"
@@ -8233,7 +8454,9 @@
           showToast(
             creationModality(state.active) === "video"
               ? "Saved MP4"
-              : "Saved media file"
+              : creationModality(state.active) === "audio"
+                ? "Saved audio"
+                : "Saved media file"
           );
         } else if (!res.cancelled) {
           showToast(res.error || "Media save failed");
@@ -8284,7 +8507,12 @@
       });
     });
 
-    ["gemini-text-model", "gemini-image-model", "gemini-video-model"].forEach(
+    [
+      "gemini-text-model",
+      "gemini-image-model",
+      "gemini-video-model",
+      "gemini-audio-model",
+    ].forEach(
       (id) => {
         const el = $("#" + id);
         if (!el) return;
@@ -8409,6 +8637,33 @@
     if ($("#btn-gemini-refresh-models")) {
       $("#btn-gemini-refresh-models").addEventListener("click", () => {
         void refreshGeminiModelsForControlPanel();
+      });
+    }
+
+    if ($("#btn-pick-media-folder")) {
+      $("#btn-pick-media-folder").addEventListener("click", async () => {
+        const a = api();
+        if (!a) {
+          showToast("Python bridge not ready.");
+          return;
+        }
+        const res = await a.pick_media_folder();
+        if (res.cancelled) return;
+        if (!res.ok) {
+          showToast(res.error || "Could not pick a media folder");
+          return;
+        }
+        if ($("#media-folder-path")) {
+          $("#media-folder-path").value = res.path || "media";
+        }
+      });
+    }
+
+    if ($("#btn-reset-media-folder")) {
+      $("#btn-reset-media-folder").addEventListener("click", () => {
+        if ($("#media-folder-path")) {
+          $("#media-folder-path").value = "media";
+        }
       });
     }
 

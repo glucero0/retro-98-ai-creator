@@ -5,6 +5,7 @@ from __future__ import annotations
 import base64
 import mimetypes
 import re
+import shutil
 from pathlib import Path
 from typing import Any
 
@@ -21,6 +22,12 @@ EXT_FOR_MIME: dict[str, str] = {
     "video/mp4": ".mp4",
     "video/webm": ".webm",
     "video/quicktime": ".mov",
+    "audio/mpeg": ".mp3",
+    "audio/mp3": ".mp3",
+    "audio/wav": ".wav",
+    "audio/x-wav": ".wav",
+    "audio/wave": ".wav",
+    "audio/ogg": ".ogg",
 }
 
 MIME_FOR_EXT: dict[str, str] = {
@@ -32,6 +39,9 @@ MIME_FOR_EXT: dict[str, str] = {
     ".mp4": "video/mp4",
     ".webm": "video/webm",
     ".mov": "video/quicktime",
+    ".mp3": "audio/mpeg",
+    ".wav": "audio/wav",
+    ".ogg": "audio/ogg",
 }
 
 
@@ -45,18 +55,45 @@ def media_dir(config: dict[str, Any] | None = None) -> Path:
     return path.resolve()
 
 
+def default_media_dir() -> Path:
+    """Built-in project `media/` folder (used as a read fallback)."""
+    return (PROJECT_ROOT / "media").resolve()
+
+
+def media_read_roots(config: dict[str, Any] | None = None) -> list[Path]:
+    """Folders allowed when opening an Archive media file."""
+    current = media_dir(config)
+    roots = [current]
+    legacy = default_media_dir()
+    if legacy != current:
+        roots.append(legacy)
+    return roots
+
+
+def _resolve_within_roots(
+    candidate: Path, roots: list[Path], *, must_exist: bool
+) -> Path | None:
+    try:
+        resolved = candidate.resolve()
+    except OSError:
+        return None
+    for root in roots:
+        try:
+            resolved.relative_to(root)
+        except ValueError:
+            continue
+        if must_exist and (not resolved.exists() or not resolved.is_file()):
+            continue
+        return resolved
+    return None
+
+
 def _resolve_within_media_root(
     candidate: Path, config: dict[str, Any] | None = None, *, must_exist: bool
 ) -> Path | None:
-    root = media_dir(config).resolve()
-    resolved = candidate.resolve()
-    try:
-        resolved.relative_to(root)
-    except ValueError:
-        return None
-    if must_exist and (not resolved.exists() or not resolved.is_file()):
-        return None
-    return resolved
+    return _resolve_within_roots(
+        candidate, [media_dir(config).resolve()], must_exist=must_exist
+    )
 
 
 def _safe_stem(creation_id: str) -> str:
@@ -80,6 +117,182 @@ def mime_for_path(path: Path) -> str:
     return guessed or "application/octet-stream"
 
 
+_SKIP_RELOCATE_NAMES = {
+    "archives.json",
+    "prompts.json",
+    "config.yaml",
+    "config.local.yaml",
+}
+
+
+def stored_media_path(dest: Path) -> str:
+    """Portable relative path under the project, otherwise absolute."""
+    try:
+        return dest.resolve().relative_to(PROJECT_ROOT.resolve()).as_posix()
+    except ValueError:
+        return dest.resolve().as_posix()
+
+
+def unique_media_filename(dest_dir: Path, filename: str) -> str:
+    """Pick a name in dest_dir that does not already exist."""
+    name = Path(filename).name
+    if not name or name in {".", ".."} or ".." in Path(name).parts:
+        name = "media.bin"
+    dest_dir = dest_dir.resolve()
+    if not (dest_dir / name).exists():
+        return name
+    stem = Path(name).stem or "media"
+    suffix = Path(name).suffix
+    n = 1
+    while n <= 10_000:
+        candidate = f"{stem}_{n}{suffix}"
+        if not (dest_dir / candidate).exists():
+            return candidate
+        n += 1
+    raise ValueError("Could not pick a unique media filename")
+
+
+def resolve_path_under_folder(media_path: str | None, folder: Path) -> Path | None:
+    """Resolve an Archive mediaPath if it sits inside folder."""
+    if not media_path:
+        return None
+    raw = Path(str(media_path).strip())
+    if ".." in raw.parts:
+        return None
+    try:
+        root = folder.expanduser().resolve()
+    except OSError:
+        return None
+    candidates: list[Path] = []
+    if raw.is_absolute():
+        candidates.append(raw)
+    else:
+        candidates.append(PROJECT_ROOT / raw)
+        if raw.parts and raw.parts[0].lower() == "media":
+            candidates.append(root / Path(*raw.parts[1:]))
+        if raw.name:
+            candidates.append(root / raw.name)
+    seen: set[str] = set()
+    for cand in candidates:
+        key = str(cand)
+        if key in seen:
+            continue
+        seen.add(key)
+        try:
+            resolved = cand.expanduser().resolve()
+            resolved.relative_to(root)
+        except (OSError, ValueError):
+            continue
+        if resolved.is_file():
+            return resolved
+    return None
+
+
+def collect_relocatable_media(
+    source: Path,
+    dest: Path,
+    creations: list[dict[str, Any]] | None = None,
+) -> list[Path]:
+    """Media files in source (by extension or Archive record) to move into dest."""
+    try:
+        source = source.expanduser().resolve()
+        dest = dest.expanduser().resolve()
+    except OSError:
+        return []
+    if source == dest or not source.is_dir():
+        return []
+
+    found: dict[str, Path] = {}
+    for child in source.iterdir():
+        if not child.is_file():
+            continue
+        if child.name.lower() in _SKIP_RELOCATE_NAMES:
+            continue
+        if child.suffix.lower() not in MIME_FOR_EXT:
+            continue
+        try:
+            resolved = child.resolve()
+            resolved.relative_to(source)
+        except (OSError, ValueError):
+            continue
+        found[str(resolved)] = resolved
+
+    for creation in creations or []:
+        resolved = resolve_path_under_folder(creation.get("mediaPath"), source)
+        if resolved is None:
+            continue
+        found[str(resolved)] = resolved
+    return list(found.values())
+
+
+def relocate_media_to_folder(
+    source: Path,
+    dest: Path,
+    creations: list[dict[str, Any]],
+) -> tuple[list[dict[str, Any]], dict[str, int]]:
+    """Move media files from source into dest and rewrite Archive mediaPath values."""
+    try:
+        source = source.expanduser().resolve()
+        dest = dest.expanduser().resolve()
+    except OSError as exc:
+        raise ValueError(f"Cannot use that folder: {exc}") from exc
+    dest.mkdir(parents=True, exist_ok=True)
+    files = collect_relocatable_media(source, dest, creations)
+    old_by_creation: dict[str, Path] = {}
+    for creation in creations:
+        cid = str(creation.get("id") or "")
+        resolved = resolve_path_under_folder(creation.get("mediaPath"), source)
+        if cid and resolved is not None:
+            old_by_creation[cid] = resolved
+
+    moved_map: dict[str, str] = {}
+    moved = 0
+    skipped = 0
+    for src_file in files:
+        try:
+            src_resolved = src_file.resolve()
+            src_resolved.relative_to(source)
+        except (OSError, ValueError):
+            skipped += 1
+            continue
+        try:
+            src_resolved.relative_to(dest)
+            skipped += 1
+            continue
+        except ValueError:
+            pass
+        new_name = unique_media_filename(dest, src_resolved.name)
+        dest_file = dest / new_name
+        try:
+            dest_resolved = dest_file.resolve()
+            dest_resolved.relative_to(dest)
+        except (OSError, ValueError):
+            skipped += 1
+            continue
+        if ".." in Path(new_name).parts:
+            skipped += 1
+            continue
+        try:
+            shutil.move(str(src_resolved), str(dest_resolved))
+        except OSError:
+            skipped += 1
+            continue
+        moved_map[str(src_resolved)] = stored_media_path(dest_resolved)
+        moved += 1
+
+    updated = 0
+    new_creations: list[dict[str, Any]] = []
+    for creation in creations:
+        item = dict(creation)
+        cid = str(item.get("id") or "")
+        old = old_by_creation.get(cid)
+        if old is not None and str(old) in moved_map:
+            item["mediaPath"] = moved_map[str(old)]
+            updated += 1
+        new_creations.append(item)
+    return new_creations, {"moved": moved, "updated": updated, "skipped": skipped}
+
+
 def write_media_bytes(
     creation_id: str,
     data: bytes,
@@ -100,21 +313,47 @@ def write_media_bytes(
     if dest is None:
         raise ValueError("Invalid media destination path")
     dest.write_bytes(data)
-    # Store path relative to project root for portability
-    try:
-        rel = dest.resolve().relative_to(PROJECT_ROOT.resolve()).as_posix()
-    except ValueError:
-        rel = dest.resolve().as_posix()
-    return {"mediaPath": rel, "mimeType": mime_type or mime_for_path(dest)}
+    return {
+        "mediaPath": stored_media_path(dest),
+        "mimeType": mime_type or mime_for_path(dest),
+    }
 
 
 def resolve_media_path(media_path: str | None, config: dict[str, Any] | None = None) -> Path | None:
     if not media_path:
         return None
-    p = Path(str(media_path).strip())
-    if not p.is_absolute():
-        p = PROJECT_ROOT / p
-    return _resolve_within_media_root(p, config, must_exist=True)
+    raw = Path(str(media_path).strip())
+    current = media_dir(config)
+    roots = media_read_roots(config)
+    candidates: list[Path] = []
+    if raw.is_absolute():
+        candidates.append(raw)
+    else:
+        candidates.append(PROJECT_ROOT / raw)
+        if raw.parts and raw.parts[0].lower() == "media":
+            candidates.append(current / Path(*raw.parts[1:]))
+    if raw.name:
+        for root in roots:
+            candidates.append(root / raw.name)
+
+    seen: set[str] = set()
+    for cand in candidates:
+        key = str(cand)
+        if key in seen:
+            continue
+        seen.add(key)
+        found = _resolve_within_roots(cand, roots, must_exist=True)
+        if found:
+            return found
+    # Trusted Archive absolute path (previous custom folder) still on disk.
+    if raw.is_absolute():
+        try:
+            resolved = raw.resolve()
+        except OSError:
+            return None
+        if resolved.is_file():
+            return resolved
+    return None
 
 
 def read_media_bytes(media_path: str | None, config: dict[str, Any] | None = None) -> bytes | None:

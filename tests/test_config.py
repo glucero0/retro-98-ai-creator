@@ -1,6 +1,9 @@
 """Basic config merge / defaults."""
 
+import copy
 from pathlib import Path
+
+import yaml
 
 from retro_98_ai_creator.config import (
     DEFAULT_HF_MODEL,
@@ -12,7 +15,9 @@ from retro_98_ai_creator.config import (
     load_config,
     normalize_google_workspace_cfg,
     normalize_huggingface_cfg,
+    normalize_media_folder,
     prompts_path,
+    save_config,
 )
 from retro_98_ai_creator.creation_utils import extract_json_object
 from retro_98_ai_creator.gemini_provider import normalize_gemini_model
@@ -21,6 +26,7 @@ from retro_98_ai_creator.gemini_provider import normalize_gemini_model
 def test_default_backend_is_gemini():
     assert DEFAULTS["backend"]["provider"] == "gemini"
     assert DEFAULTS["gemini"]["text_model"] == "gemini-2.5-flash"
+    assert DEFAULTS["gemini"]["audio_model"] == "lyria-3-clip-preview"
     assert DEFAULTS["gemini"]["use_tools"] is False
     assert DEFAULTS["openrouter"]["text_model"] == "google/gemini-2.5-flash"
 
@@ -97,6 +103,44 @@ def test_prompts_path_is_in_project():
 def test_relative_expand_path_uses_project_root():
     assert expand_path("archives.json") == (PROJECT_ROOT / "archives.json").resolve()
     assert expand_path(str(Path.home() / "x.json")).is_absolute()
+
+
+def test_normalize_media_folder_maps_project_media_to_portable():
+    assert normalize_media_folder(None) == "media"
+    assert normalize_media_folder("") == "media"
+    assert normalize_media_folder("media") == "media"
+    assert normalize_media_folder(str(PROJECT_ROOT / "media")) == "media"
+    assert normalize_media_folder(str(PROJECT_ROOT / "media") + "/") == "media"
+
+
+def test_normalize_media_folder_keeps_other_absolute(tmp_path):
+    other = (tmp_path / "custom-media").resolve()
+    other.mkdir()
+    assert normalize_media_folder(str(other)) == str(other)
+
+
+def test_save_config_persists_paths_media(tmp_path, monkeypatch):
+    dest = tmp_path / "config.yaml"
+    monkeypatch.setattr("retro_98_ai_creator.config.DEFAULT_CONFIG_PATH", dest)
+    custom = (tmp_path / "my-media").resolve()
+    existing = copy.deepcopy(DEFAULTS)
+    out = save_config(
+        {"paths": {"media": str(custom), "media_resolved": "should-not-write"}},
+        existing=existing,
+    )
+    assert out["paths"]["media"] == str(custom)
+    assert "media_resolved" not in (out.get("paths") or {})
+    written = yaml.safe_load(dest.read_text(encoding="utf-8"))
+    assert written["paths"]["media"] == str(custom)
+    assert "media_resolved" not in (written.get("paths") or {})
+
+    out2 = save_config(
+        {"paths": {"media": str(PROJECT_ROOT / "media")}},
+        existing=existing,
+    )
+    written2 = yaml.safe_load(dest.read_text(encoding="utf-8"))
+    assert out2["paths"]["media"] == "media"
+    assert written2["paths"]["media"] == "media"
 
 
 def test_extract_json_still_works():

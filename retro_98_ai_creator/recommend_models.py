@@ -1,4 +1,4 @@
-"""Recommend Text / Image / Video models for Control Panel from live catalogs."""
+"""Recommend Text / Image / Video / Audio models for Control Panel from live catalogs."""
 
 from __future__ import annotations
 
@@ -29,6 +29,11 @@ _GEMINI_PREFS: dict[str, dict[str, tuple[str, ...]]] = {
             "veo-2.0-generate-exp",
             "veo-3.0-generate-001",
         ),
+        "audio": (
+            "lyria-3-clip-preview",
+            "lyria-3.5",
+            "lyria-3-pro-preview",
+        ),
     },
     "balanced": {
         "text": (
@@ -48,6 +53,11 @@ _GEMINI_PREFS: dict[str, dict[str, tuple[str, ...]]] = {
             "veo-3.0-generate-001",
             "veo-3.1-generate-preview",
         ),
+        "audio": (
+            "lyria-3.5",
+            "lyria-3-pro-preview",
+            "lyria-3-clip-preview",
+        ),
     },
     "quality": {
         "text": (
@@ -66,6 +76,11 @@ _GEMINI_PREFS: dict[str, dict[str, tuple[str, ...]]] = {
             "veo-3.1-generate-preview",
             "veo-3.0-generate-001",
             "veo-2.0-generate-001",
+        ),
+        "audio": (
+            "lyria-3.5",
+            "lyria-3-pro-preview",
+            "lyria-3-clip-preview",
         ),
     },
 }
@@ -197,7 +212,12 @@ def recommend_models_for_config(
 
 
 def _by_modality(models: list[dict[str, str]]) -> dict[str, list[dict[str, str]]]:
-    out: dict[str, list[dict[str, str]]] = {"text": [], "image": [], "video": []}
+    out: dict[str, list[dict[str, str]]] = {
+        "text": [],
+        "image": [],
+        "video": [],
+        "audio": [],
+    }
     for item in models:
         mod = str(item.get("modality") or "text").lower()
         if mod in out:
@@ -249,6 +269,7 @@ def _ensure_pick_in_models(
 
 def _recommend_gemini(config: dict[str, Any], criteria: str) -> dict[str, Any]:
     from .gemini_provider import (
+        DEFAULT_GEMINI_AUDIO_MODEL,
         DEFAULT_GEMINI_IMAGE_MODEL,
         DEFAULT_GEMINI_TEXT_MODEL,
         DEFAULT_GEMINI_VIDEO_MODEL,
@@ -287,10 +308,11 @@ def _recommend_gemini(config: dict[str, Any], criteria: str) -> dict[str, Any]:
         "text": DEFAULT_GEMINI_TEXT_MODEL,
         "image": DEFAULT_GEMINI_IMAGE_MODEL,
         "video": DEFAULT_GEMINI_VIDEO_MODEL,
+        "audio": DEFAULT_GEMINI_AUDIO_MODEL,
     }
     picks: dict[str, str] = {}
     labels: dict[str, str] = {}
-    for mod in ("text", "image", "video"):
+    for mod in ("text", "image", "video", "audio"):
         row = _pick_from_prefs(buckets[mod], prefs[mod])
         mid = normalize_gemini_model(
             (row or {}).get("repo_id") or defaults[mod],
@@ -571,4 +593,9 @@ def _summary_message(provider: str, criteria: str, labels: dict[str, str]) -> st
         f"text {labels.get('text') or '—'}, "
         f"image {labels.get('image') or '—'}, "
         f"video {labels.get('video') or '—'}"
+        + (
+            f", audio {labels.get('audio') or '—'}"
+            if labels.get("audio")
+            else ""
+        )
     )

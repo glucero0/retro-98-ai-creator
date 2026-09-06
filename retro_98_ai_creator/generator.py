@@ -91,6 +91,8 @@ def generate_creation(
         prompt_for_compat = f"Create an image: {prompt_for_compat}"
     elif forced_modality == "video" and not infer_prompt_modality(prompt_for_compat):
         prompt_for_compat = f"Generate a video: {prompt_for_compat}"
+    elif forced_modality == "audio" and not infer_prompt_modality(prompt_for_compat):
+        prompt_for_compat = f"Generate music: {prompt_for_compat}"
 
     model_id, provider = _active_model_and_provider(config)
     compat = check_prompt_model_compatibility(
@@ -178,8 +180,9 @@ def provider_status(config: dict[str, Any]) -> dict[str, Any]:
         text_m = g.get("text_model")
         image_m = g.get("image_model")
         video_m = g.get("video_model")
+        audio_m = g.get("audio_model")
         detail = (
-            f"Gemini ready · text {text_m} · image {image_m} · video {video_m}"
+            f"Gemini ready · text {text_m} · image {image_m} · video {video_m} · audio {audio_m}"
             if has_key
             else "Paste your Gemini API key in Control Panel"
         )
@@ -191,6 +194,7 @@ def provider_status(config: dict[str, Any]) -> dict[str, Any]:
             "textModel": text_m,
             "imageModel": image_m,
             "videoModel": video_m,
+            "audioModel": audio_m,
             "modality": "multi",
             "device": "api",
         }

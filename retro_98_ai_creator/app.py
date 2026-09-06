@@ -29,10 +29,11 @@ _api_bridge: Api | None = None
 
 
 class _AppRequestHandler(SimpleHTTPRequestHandler):
-    """Serve the 98.css UI and project media/ over the same localhost origin."""
+    """Serve the 98.css UI and configured media folder over the same localhost origin."""
 
     ui_root: Path = UI_DIR
     media_root: Path = PROJECT_ROOT / "media"
+    fallback_media_root: Path | None = None
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, directory=str(self.ui_root), **kwargs)
@@ -44,16 +45,23 @@ class _AppRequestHandler(SimpleHTTPRequestHandler):
         parsed = urlparse(path).path
         parsed = unquote(parsed)
         if parsed.startswith("/media/") or parsed == "/media":
-            root = self.media_root.resolve()
             rel = parsed[len("/media") :].lstrip("/")
+            roots = [self.media_root]
+            if self.fallback_media_root is not None:
+                roots.append(self.fallback_media_root)
+            denied = str(self.media_root.resolve() / ".__denied__")
             if not rel or ".." in Path(rel).parts:
-                return str(root / ".__denied__")
-            candidate = (root / rel).resolve()
-            try:
-                candidate.relative_to(root)
-            except ValueError:
-                return str(root / ".__denied__")
-            return str(candidate)
+                return denied
+            for root in roots:
+                root = Path(root).resolve()
+                candidate = (root / rel).resolve()
+                try:
+                    candidate.relative_to(root)
+                except ValueError:
+                    continue
+                if candidate.is_file():
+                    return str(candidate)
+            return denied
 
         # Default: files under ui/
         root = self.ui_root.resolve()
@@ -132,14 +140,22 @@ class _AppRequestHandler(SimpleHTTPRequestHandler):
             self._send_json(500, {"ok": False, "error": str(exc)})
 
 
+def set_media_http_root(path: Path) -> None:
+    """Point the localhost /media/ server at the configured folder."""
+    root = Path(path).expanduser().resolve()
+    root.mkdir(parents=True, exist_ok=True)
+    _AppRequestHandler.media_root = root
+    default = (PROJECT_ROOT / "media").resolve()
+    _AppRequestHandler.fallback_media_root = None if root == default else default
+    logger.info("Media folder: %s", root)
+
+
 def _start_ui_server(
     media_root: Path | None = None,
 ) -> tuple[ThreadingHTTPServer, str, str]:
     """Serve UI + media over localhost. Returns (server, index_url, origin)."""
-    media_root = (media_root or media_dir()).resolve()
-    media_root.mkdir(parents=True, exist_ok=True)
+    set_media_http_root(media_root or media_dir())
     _AppRequestHandler.ui_root = UI_DIR
-    _AppRequestHandler.media_root = media_root
     server = ThreadingHTTPServer(("127.0.0.1", 0), _AppRequestHandler)
     port = server.server_address[1]
     origin = f"http://127.0.0.1:{port}"
@@ -242,7 +258,14 @@ def main() -> int:
     logger.info("Window: %sx%s", width, height)
     logger.info("Backend: %s", provider)
     if provider == "gemini":
-        logger.info("Gemini text model: %s", (cfg.get("gemini") or {}).get("text_model"))
+        gemini = cfg.get("gemini") or {}
+        logger.info(
+            "Gemini models: text=%s image=%s video=%s audio=%s",
+            gemini.get("text_model"),
+            gemini.get("image_model"),
+            gemini.get("video_model"),
+            gemini.get("audio_model"),
+        )
     elif provider == "openrouter":
         logger.info(
             "OpenRouter text model: %s",

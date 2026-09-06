@@ -322,3 +322,166 @@ def test_export_creation_media_forces_mp4_extension(tmp_path, monkeypatch):
     assert Path(res["path"]).name == "exported.mp4"
     assert Path(res["path"]).read_bytes() == b"ftypisom"
 
+
+def test_export_creation_media_forces_mp3_extension(tmp_path, monkeypatch):
+    api = _api_with_tmp_store(tmp_path, monkeypatch)
+    media_dir = tmp_path / "media"
+    media_dir.mkdir(parents=True, exist_ok=True)
+    src = media_dir / "song.wav"
+    src.write_bytes(b"ID3song")
+    creation = build_media_creation(
+        modality="audio",
+        prompt="A lofi beat",
+        media_path="media/song.wav",
+        mime_type="audio/wav",
+        title="Song",
+        creation_id="song1",
+    )
+    api.store.upsert(creation)
+
+    dest = tmp_path / "exported"
+    captured: dict[str, object] = {}
+
+    class _Win:
+        def create_file_dialog(self, *_args, **kwargs):
+            captured.update(kwargs)
+            return str(dest)
+
+    api._window = _Win()
+    res = api.export_creation_media(creation)
+    assert res["ok"] is True
+    assert Path(res["path"]).name == "exported.mp3"
+    assert Path(res["path"]).read_bytes() == b"ID3song"
+    assert str(captured.get("save_filename") or "").endswith(".mp3")
+    types = captured.get("file_types") or ()
+    assert any("*.mp3" in str(item) for item in types)
+
+
+def test_pick_media_folder_mocked_dialog(tmp_path):
+    api = Api()
+    api.config = {"paths": {"media": "media"}}
+    chosen = tmp_path / "picked-media"
+    chosen.mkdir()
+    win = MagicMock()
+    win.create_file_dialog.return_value = str(chosen)
+    api._window = win
+    res = api.pick_media_folder()
+    assert res["ok"] is True
+    assert Path(res["path"]) == chosen.resolve()
+    win.create_file_dialog.assert_called()
+
+
+def test_pick_media_folder_cancelled():
+    api = Api()
+    api.config = {"paths": {"media": "media"}}
+    win = MagicMock()
+    win.create_file_dialog.return_value = None
+    api._window = win
+    res = api.pick_media_folder()
+    assert res.get("cancelled") is True
+    assert res.get("ok") is False
+
+
+def test_relocate_media_files_moves_and_updates_archive(tmp_path, monkeypatch):
+    api = _api_with_tmp_store(tmp_path, monkeypatch)
+    old = tmp_path / "media"
+    old.mkdir(parents=True, exist_ok=True)
+    src = old / "doc_mv.png"
+    src.write_bytes(b"img-bytes")
+    (old / "archives.json").write_text("[]", encoding="utf-8")
+    (old / "notes.txt").write_text("leave me", encoding="utf-8")
+    creation = build_media_creation(
+        modality="image",
+        prompt="move me",
+        media_path="media/doc_mv.png",
+        mime_type="image/png",
+        title="Move",
+        creation_id="doc_mv",
+    )
+    api.store.upsert(creation)
+    custom = tmp_path / "new-media"
+    api.config["paths"]["media"] = str(custom.resolve())
+
+    res = api.relocate_media_files(str(old.resolve()))
+    assert res["ok"] is True
+    assert res["moved"] == 1
+    assert res["updated"] == 1
+    assert not src.exists()
+    assert (old / "archives.json").is_file()
+    assert (old / "notes.txt").read_text(encoding="utf-8") == "leave me"
+    item = next(c for c in api.store.load() if c["id"] == "doc_mv")
+    new_path = Path(item["mediaPath"])
+    if not new_path.is_absolute():
+        new_path = tmp_path / new_path
+    assert new_path.is_file()
+    assert new_path.read_bytes() == b"img-bytes"
+    assert new_path.parent == custom.resolve()
+
+
+def test_relocate_media_collision_uses_unique_name(tmp_path, monkeypatch):
+    api = _api_with_tmp_store(tmp_path, monkeypatch)
+    old = tmp_path / "media"
+    old.mkdir(parents=True, exist_ok=True)
+    (old / "doc_col.png").write_bytes(b"old-bytes")
+    custom = tmp_path / "new-media"
+    custom.mkdir()
+    (custom / "doc_col.png").write_bytes(b"already-there")
+    creation = build_media_creation(
+        modality="image",
+        prompt="collide",
+        media_path="media/doc_col.png",
+        mime_type="image/png",
+        title="Collide",
+        creation_id="doc_col",
+    )
+    api.store.upsert(creation)
+    api.config["paths"]["media"] = str(custom.resolve())
+
+    res = api.relocate_media_files(str(old.resolve()))
+    assert res["ok"] is True
+    item = next(c for c in api.store.load() if c["id"] == "doc_col")
+    new_path = Path(item["mediaPath"])
+    if not new_path.is_absolute():
+        new_path = tmp_path / new_path
+    assert new_path.name != "doc_col.png"
+    assert new_path.read_bytes() == b"old-bytes"
+    assert (custom / "doc_col.png").read_bytes() == b"already-there"
+
+
+def test_save_settings_offers_move_decline_leaves_files(tmp_path, monkeypatch):
+    import copy
+
+    from retro_98_ai_creator.config import DEFAULTS
+
+    api = _api_with_tmp_store(tmp_path, monkeypatch)
+    dest_cfg = tmp_path / "config.yaml"
+    monkeypatch.setattr("retro_98_ai_creator.config.DEFAULT_CONFIG_PATH", dest_cfg)
+    old = tmp_path / "media"
+    old.mkdir(parents=True, exist_ok=True)
+    leftover = old / "doc_stay.png"
+    leftover.write_bytes(b"stay")
+    creation = build_media_creation(
+        modality="image",
+        prompt="stay",
+        media_path="media/doc_stay.png",
+        mime_type="image/png",
+        title="Stay",
+        creation_id="doc_stay",
+    )
+    api.store.upsert(creation)
+    existing = copy.deepcopy(DEFAULTS)
+    existing["paths"]["archives"] = str(tmp_path / "archives.json")
+    existing["paths"]["media"] = "media"
+    api.config = existing
+    custom = (tmp_path / "elsewhere").resolve()
+
+    res = api.save_settings({"paths": {"media": str(custom)}})
+    assert res["ok"] is True
+    offer = res.get("mediaMove") or {}
+    assert offer.get("offered") is True
+    assert offer.get("count", 0) >= 1
+    assert leftover.is_file()
+    assert leftover.read_bytes() == b"stay"
+    item = next(c for c in api.store.load() if c["id"] == "doc_stay")
+    assert item["mediaPath"] == "media/doc_stay.png"
+

@@ -56,10 +56,12 @@
             <legend>Studio Mission</legend>
             <p>
               A general AI studio for generating <strong>text</strong>, <strong>images</strong>,
-              and <strong>video</strong>. Write what you want in the Prompt field below.
+              <strong>video</strong>, and <strong>music</strong>. Write what you want in the
+              Prompt field below — “compose a song” or “chiptune title theme” routes to
+              <strong>Lyria</strong> (Gemini only; pick Clip or Pro / 3.5 in Control Panel).
               By default the Studio calls <strong>Google Gemini</strong> (paste a
               key in Control Panel). You can switch to <strong>OpenRouter</strong>
-              or a local Hugging Face model anytime.
+              or a local Hugging Face model anytime (text, image, and video).
             </p>
             <p class="hint disclaimer">
               Always review generated output before relying on it — especially facts,
@@ -142,7 +144,8 @@
                 <p class="hint" id="studio-load-hint">
                   Load Text into the prompt. Load Image / Video sets a media basis shown on
                   the right — then describe the change and CREATE. To reuse something already
-                  in Archives, open it in the Viewer and choose Use as Basis.
+                  in Archives, open it in the Viewer and choose Use as Basis. For a song, that
+                  reloads the prompt and lyrics as text — not the MP3.
                 </p>
               </form>
             </div>
@@ -231,6 +234,7 @@
             <button type="button" id="btn-import-text">Import Text…</button>
             <button type="button" id="btn-import-image">Import Image…</button>
             <button type="button" id="btn-import-video">Import Video…</button>
+            <button type="button" id="btn-import-audio">Import Audio…</button>
           </div>
           <div class="archive-list-wrap">
             <table class="archive-table">
@@ -290,8 +294,13 @@
                     Get a key at
                     <a href="https://aistudio.google.com/apikey" target="_blank" rel="noreferrer">aistudio.google.com/apikey</a>.
                     Paste it below and save — it is stored in <code>config.yaml</code>.
-                    Studio picks the Text / Image / Video model from your prompt.
+                    Studio picks the Text / Image / Video / Audio model from your prompt.
                     Defaults are the cheapest options in each slot — customize anytime.
+                    Music uses Lyria (enable the music models for your Gemini API key).
+                    Clip is safest for prompt experiments; Pro / 3.5 full songs are
+                    filtered more strictly (no artist names or copyrighted lyrics).
+                    Viewer Use as Basis on a song reloads the prompt and lyrics as text —
+                    it does not attach the MP3.
                   </p>
                   <div class="field-row-stacked">
                     <label for="gemini-text-model">Text model</label>
@@ -304,6 +313,10 @@
                   <div class="field-row-stacked">
                     <label for="gemini-video-model">Video model</label>
                     <select id="gemini-video-model"></select>
+                  </div>
+                  <div class="field-row-stacked">
+                    <label for="gemini-audio-model">Audio model (Lyria)</label>
+                    <select id="gemini-audio-model"></select>
                   </div>
                   <p class="hint" id="gemini-model-hint">
                     Each list shows only models compatible with that modality.
@@ -596,6 +609,33 @@
                   <p class="hint">
                     Sparse Win95/98-style cues for create / extract success, errors, and cancel —
                     not click chirps. Synthesized in-app (no Microsoft system WAVs).
+                  </p>
+                </fieldset>
+
+                <fieldset>
+                  <legend>Storage</legend>
+                  <div class="field-row-stacked">
+                    <label for="media-folder-path">Media folder</label>
+                    <input
+                      id="media-folder-path"
+                      type="text"
+                      spellcheck="false"
+                      placeholder="media"
+                    />
+                  </div>
+                  <div class="form-actions">
+                    <button type="button" id="btn-pick-media-folder">Browse…</button>
+                    <button type="button" id="btn-reset-media-folder">Use project default</button>
+                  </div>
+                  <p class="hint" id="media-folder-hint">
+                    Only image, video, and song files go here (PNG, MP4, MP3).
+                    Text, lyrics, prompts, and metadata stay in
+                    <code>archives.json</code> — you do not need to Export to
+                    keep them. Default is the <code>media</code> folder next
+                    to the app. After <strong>Save</strong> you can move
+                    existing media files into the new folder; declining leaves
+                    them where they are. Archives still opens items left in
+                    the old project <code>media</code> folder.
                   </p>
                 </fieldset>
 

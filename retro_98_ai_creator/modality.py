@@ -1,11 +1,11 @@
-"""Model / creation modality helpers (text | image | video)."""
+"""Model / creation modality helpers (text | image | video | audio)."""
 
 from __future__ import annotations
 
 import re
 from typing import Any
 
-Modality = str  # "text" | "image" | "video"
+Modality = str  # "text" | "image" | "video" | "audio"
 
 _IMAGE_ID_TOKENS: tuple[str, ...] = (
     "imagen",
@@ -42,13 +42,18 @@ _VIDEO_ID_TOKENS: tuple[str, ...] = (
     "flux-3-video",
 )
 
+_AUDIO_ID_TOKENS: tuple[str, ...] = (
+    "lyria",
+    "text-to-music",
+    "music-generation",
+)
+
 # Non-generative surfaces still excluded from the studio model list
 _SKIP_ID_TOKENS: tuple[str, ...] = (
     "embedding",
     "embed-content",
     "tts",
     "native-audio",
-    "lyria",
     "aqa",
     "robotics",
     "computer-use",
@@ -75,13 +80,20 @@ _VIDEO_PHRASES: tuple[str, ...] = (
     "text to video",
 )
 
+_AUDIO_PHRASES: tuple[str, ...] = (
+    "music generation",
+    "generate music",
+    "generates music",
+    "text-to-music",
+    "text to music",
+)
+
 _SKIP_PHRASES: tuple[str, ...] = (
     "text-to-speech",
     "text to speech",
     "native audio",
     "audio output",
     "speech synthesis",
-    "music generation",
     "embedding",
 )
 
@@ -120,6 +132,23 @@ _VIDEO_PROMPT_RE = re.compile(
     re.IGNORECASE | re.VERBOSE | re.DOTALL,
 )
 
+_AUDIO_PROMPT_RE = re.compile(
+    r"""
+    (?:
+        \b(?:create|generate|make|compose|produce|write|score)\b
+        .{0,48}?
+        \b(?:an?\s+)?(?:music(?:\s+clip)?|song|soundtrack|jingle|melody|tune|instrumental|chiptune)\b
+      | \b(?:an?\s+)?(?:music|song|soundtrack|jingle|melody|chiptune)\s+(?:of|about|for|in)\b
+      | \btext[\s\-]?to[\s\-]?music\b
+      | \b(?:ai[\s\-]?)?music\s+prompt\b
+      | \blyria\b
+      | \binstrumental\s+only\b
+      | \b(?:background|game)\s+(?:music|soundtrack)\b
+    )
+    """,
+    re.IGNORECASE | re.VERBOSE | re.DOTALL,
+)
+
 _TEXT_PROMPT_RE = re.compile(
     r"""
     (?:
@@ -142,6 +171,8 @@ def normalize_modality(value: Any, default: Modality = "text") -> Modality:
         return "image"
     if raw in {"video", "vid", "movie", "clip"}:
         return "video"
+    if raw in {"audio", "music", "song", "soundtrack", "mp3", "wav"}:
+        return "audio"
     if raw in {"text", "document", "doc", "markdown"}:
         return "text"
     return default
@@ -153,7 +184,7 @@ def classify_model_modality(
     display_name: str | None = None,
     description: str | None = None,
 ) -> Modality | None:
-    """Return text/image/video, or None if the model should not appear in the studio list."""
+    """Return text/image/video/audio, or None if the model should not appear in the studio list."""
     mid = (model_id or "").strip().lower().rstrip("/")
     if not mid:
         return None
@@ -162,24 +193,31 @@ def classify_model_modality(
         if token in mid:
             return None
 
+    # Id tokens win over skip phrases so Lyria/Veo/Imagen stay visible
+    # even when Google's description mentions "audio output" etc.
+    for token in _VIDEO_ID_TOKENS:
+        if token in mid:
+            return "video"
+    for token in _AUDIO_ID_TOKENS:
+        if token in mid:
+            return "audio"
+    for token in _IMAGE_ID_TOKENS:
+        if token in mid:
+            return "image"
+    if mid.endswith("-image") or mid.endswith("/image"):
+        return "image"
+
     meta = f"{display_name or ''} {description or ''}".lower()
     for phrase in _SKIP_PHRASES:
         if phrase in meta:
             return None
 
-    for token in _VIDEO_ID_TOKENS:
-        if token in mid:
-            return "video"
     for phrase in _VIDEO_PHRASES:
         if phrase in meta:
             return "video"
-
-    for token in _IMAGE_ID_TOKENS:
-        if token in mid:
-            return "image"
-    # Trailing -image (gemini-2.5-flash-image)
-    if mid.endswith("-image") or mid.endswith("/image"):
-        return "image"
+    for phrase in _AUDIO_PHRASES:
+        if phrase in meta:
+            return "audio"
     for phrase in _IMAGE_PHRASES:
         if phrase in meta:
             return "image"
@@ -193,7 +231,12 @@ def classify_model_modality(
 
 
 def modality_label(modality: Modality) -> str:
-    return {"text": "Text", "image": "Image", "video": "Video"}.get(modality, "Text")
+    return {
+        "text": "Text",
+        "image": "Image",
+        "video": "Video",
+        "audio": "Audio",
+    }.get(modality, "Text")
 
 
 def modality_indefinite(modality: Modality) -> str:
@@ -206,13 +249,16 @@ def infer_prompt_modality(prompt: str) -> Modality | None:
     """
     Infer strong user intent from the prompt.
 
-    Returns text/image/video when signals are clear, or None when ambiguous
+    Returns text/image/video/audio when signals are clear, or None when ambiguous
     (do not block generation).
     """
     text = (prompt or "").strip()
     if not text:
         return None
 
+    # Audio before video: "generate a music clip" must not become Veo.
+    if _AUDIO_PROMPT_RE.search(text):
+        return "audio"
     # Video before image: "create a video of an image morphing…" etc.
     if _VIDEO_PROMPT_RE.search(text):
         return "video"
@@ -229,17 +275,18 @@ def resolve_generation_modality(
     basis_modality: str | None = None,
 ) -> Modality | None:
     """
-    Choose text/image/video for a Studio CREATE.
+    Choose text/image/video/audio for a Studio CREATE.
 
     Clear prompt intent (including \"generate a video\" with an image basis →
-    image-to-video) wins. Otherwise a media basis keeps the same modality.
+    image-to-video, or \"generate music\" with an image basis → image-to-music)
+    wins. Otherwise a media basis keeps the same modality.
     """
     prompt_mod = infer_prompt_modality(prompt)
     basis = (basis_modality or "").strip().lower()
     if basis not in {"image", "video"}:
         basis = ""
 
-    if prompt_mod in {"image", "video"}:
+    if prompt_mod in {"image", "video", "audio"}:
         return prompt_mod
     if basis:
         return basis  # type: ignore[return-value]
@@ -276,11 +323,25 @@ def check_prompt_model_compatibility(
     """
     Compare prompt intent with the selected backend.
 
-    Gemini / OpenRouter / Hugging Face: three modality slots — Studio routes by
-    prompt intent to the matching configured model.
+    Gemini / OpenRouter / Hugging Face: modality slots — Studio routes by
+    prompt intent to the matching configured model. Audio (Lyria) is Gemini-only.
     """
     prompt_mod = infer_prompt_modality(prompt)
     provider_l = (provider or "gemini").lower().strip()
+
+    if prompt_mod == "audio" and provider_l not in {"gemini", "google", "google-gemini"}:
+        return {
+            "ok": False,
+            "error": (
+                "This prompt looks like a music request, but music generation "
+                "(Lyria) is only available with the Gemini backend. Open Control "
+                "Panel and switch Provider to Google Gemini."
+            ),
+            "promptModality": "audio",
+            "modelModality": "text",
+            "model": (model_id or "").strip(),
+            "suggestions": suggested_model_ids_for_modality("audio"),
+        }
 
     if provider_l in {"gemini", "google", "google-gemini"}:
         from .gemini_provider import resolve_gemini_model_for_modality

@@ -1,0 +1,28 @@
+---
+description: When a change adds, removes, or alters a user-facing feature, update the UI copy and README in the same change.
+alwaysApply: true
+---
+
+# Keep UI and README in sync with features
+
+If a repo update **adds, removes, or changes a feature** (capabilities, routing, backends, modalities, tools, import/export, editors, or setup steps), do not leave the UI or README describing the old product.
+
+Ship the docs and in-app copy in the **same change** as the code. Do not treat README or Studio/Control Panel/Viewer text as optional follow-up.
+
+## What to update
+
+- **README.md** — Features list, The apps table, setup sections, Control Panel effects, config excerpt, and any feature-specific section. Remove claims that are no longer true.
+- **Creation Studio** — Studio Mission banner, load/basis hints, tool-mode hints.
+- **Control Panel** — Field labels, picker presence, provider hints (“Studio picks Text / Image / Video…”).
+- **Viewer / Archives** — Toolbar buttons, tab names, export labels, import actions, type labels.
+
+## Examples
+
+- Adding music generation: Mission banner and README must mention music/Lyria; Control Panel needs an Audio picker; Viewer needs Save MP3; README must not still say “text, images, and video” only.
+- Removing a tool or backend: delete it from README tables, Studio/Control Panel copy, and hardcoded catalog fallbacks.
+- Changing behavior (e.g. Use as Basis on a song seeds the prompt, not the MP3): say so in the Viewer/Studio hint and in README.
+
+## Skip this for
+
+- Pure refactors, tests, lint, or internal helpers with no user-visible behavior or setup change.
+- Secret/config-only edits that do not change how the app is used.

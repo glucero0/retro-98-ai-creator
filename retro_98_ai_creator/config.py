@@ -16,6 +16,7 @@ EXAMPLE_CONFIG_PATH = PROJECT_ROOT / "config.example.yaml"
 DEFAULT_GEMINI_TEXT_MODEL = "gemini-2.5-flash"
 DEFAULT_GEMINI_IMAGE_MODEL = "gemini-2.5-flash-image"
 DEFAULT_GEMINI_VIDEO_MODEL = "veo-2.0-generate-001"
+DEFAULT_GEMINI_AUDIO_MODEL = "lyria-3-clip-preview"
 DEFAULT_OPENROUTER_TEXT_MODEL = "google/gemini-2.5-flash"
 DEFAULT_OPENROUTER_IMAGE_MODEL = "google/gemini-2.5-flash-image"
 DEFAULT_OPENROUTER_VIDEO_MODEL = "google/veo-2.0"
@@ -34,6 +35,7 @@ DEFAULTS: dict[str, Any] = {
         "text_model": DEFAULT_GEMINI_TEXT_MODEL,
         "image_model": DEFAULT_GEMINI_IMAGE_MODEL,
         "video_model": DEFAULT_GEMINI_VIDEO_MODEL,
+        "audio_model": DEFAULT_GEMINI_AUDIO_MODEL,
         "api_key": None,  # set via Control Panel → saved in config.yaml
         "google_search": True,
         # When google_search is on: Pass 1 extract + Pass 2 verify at temperature 0
@@ -163,6 +165,7 @@ def normalize_huggingface_cfg(hf: dict[str, Any] | None) -> dict[str, Any]:
 def normalize_gemini_cfg(section: dict[str, Any] | None) -> dict[str, Any]:
     """Normalize Gemini keys and remap shut-down model ids."""
     from .gemini_provider import (
+        DEFAULT_GEMINI_AUDIO_MODEL,
         DEFAULT_GEMINI_IMAGE_MODEL,
         DEFAULT_GEMINI_TEXT_MODEL,
         DEFAULT_GEMINI_VIDEO_MODEL,
@@ -189,9 +192,12 @@ def normalize_gemini_cfg(section: dict[str, Any] | None) -> dict[str, Any]:
     )
     video = _gemini_model_id(out.get("video_model") or "") or DEFAULT_GEMINI_VIDEO_MODEL
     video = aliases.get(video) or aliases.get(video.lower()) or video
+    audio = _gemini_model_id(out.get("audio_model") or "") or DEFAULT_GEMINI_AUDIO_MODEL
+    audio = aliases.get(audio) or aliases.get(audio.lower()) or audio
     out["text_model"] = text
     out["image_model"] = image
     out["video_model"] = video
+    out["audio_model"] = audio
     out["retired_model_aliases"] = learned_retired_aliases(out)
     return out
 
@@ -210,8 +216,7 @@ def load_config() -> dict[str, Any]:
     paths = cfg.setdefault("paths", {})
     if not paths.get("archives"):
         paths["archives"] = DEFAULTS["paths"]["archives"]
-    if not paths.get("media"):
-        paths["media"] = DEFAULTS["paths"]["media"]
+    paths["media"] = normalize_media_folder(paths.get("media"))
     if not paths.get("prompts"):
         paths["prompts"] = DEFAULTS["paths"]["prompts"]
     return cfg
@@ -277,6 +282,8 @@ def save_config(updates: dict[str, Any], existing: dict[str, Any] | None = None)
 
     merged = _deep_merge(current, updates)
     paths = merged.setdefault("paths", {})
+    paths.pop("media_resolved", None)
+    paths["media"] = normalize_media_folder(paths.get("media"))
     ui_out = dict(merged.get("ui") or {})
 
     gemini_out = normalize_gemini_cfg(merged.get("gemini") or {})
@@ -296,6 +303,7 @@ def save_config(updates: dict[str, Any], existing: dict[str, Any] | None = None)
         "ui": ui_out,
         "paths": {
             "archives": paths.get("archives") or DEFAULTS["paths"]["archives"],
+            "media": paths.get("media") or DEFAULTS["paths"]["media"],
             "prompts": paths.get("prompts") or DEFAULTS["paths"]["prompts"],
         },
     }
@@ -312,9 +320,32 @@ def save_config(updates: dict[str, Any], existing: dict[str, Any] | None = None)
     return merged
 
 
+def normalize_media_folder(raw: str | None) -> str:
+    """Return a portable default (`media`) or an absolute folder path."""
+    text = str(raw or "").strip() or DEFAULTS["paths"]["media"]
+    path = Path(text).expanduser()
+    if not path.is_absolute():
+        path = PROJECT_ROOT / path
+    try:
+        resolved = path.resolve()
+    except OSError:
+        return text
+    default = (PROJECT_ROOT / DEFAULTS["paths"]["media"]).resolve()
+    if resolved == default:
+        return DEFAULTS["paths"]["media"]
+    return str(resolved)
+
+
 def archives_path(cfg: dict[str, Any] | None = None) -> Path:
     cfg = cfg or load_config()
     return expand_path(cfg["paths"]["archives"])
+
+
+def media_path(cfg: dict[str, Any] | None = None) -> Path:
+    cfg = cfg or load_config()
+    return expand_path(
+        normalize_media_folder((cfg.get("paths") or {}).get("media"))
+    )
 
 
 def prompts_path(cfg: dict[str, Any] | None = None) -> Path:
