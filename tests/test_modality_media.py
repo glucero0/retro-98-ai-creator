@@ -8,7 +8,7 @@ from retro_98_ai_creator.creation_utils import (
     is_generic_studio_request,
     title_from_prompt,
 )
-from retro_98_ai_creator.media_store import write_media_bytes
+from retro_98_ai_creator.media_store import resolve_media_path, write_media_bytes
 from retro_98_ai_creator.modality import (
     check_prompt_model_compatibility,
     classify_model_modality,
@@ -28,6 +28,10 @@ def test_normalize_and_classify():
     assert classify_model_modality("veo-3.1-generate-preview") == "video"
     assert classify_model_modality("google/veo-2.0") == "video"
     assert classify_model_modality("gemini-2.5-flash-preview-tts") is None
+    assert classify_model_modality("lyria-3-clip-preview") == "audio"
+    assert classify_model_modality("lyria-3.5") == "audio"
+    assert classify_model_modality("lyria-3-pro-preview") == "audio"
+    assert normalize_modality("MUSIC") == "audio"
 
 
 def test_infer_prompt_modality_image_dragon():
@@ -44,6 +48,9 @@ def test_infer_prompt_modality_video_and_text():
     assert infer_prompt_modality("Generate a video of waves crashing") == "video"
     assert infer_prompt_modality("Write a short poem about autumn") == "text"
     assert infer_prompt_modality("a red bicycle leaning on a fence") is None
+    assert infer_prompt_modality("Compose a chiptune song for a Sega Genesis title screen") == "audio"
+    assert infer_prompt_modality("Generate a music clip with dusty vinyl crackle") == "audio"
+    assert infer_prompt_modality("create background music, instrumental only") == "audio"
 
 
 def test_resolve_generation_modality_prompt_wins_over_image_basis():
@@ -77,6 +84,22 @@ def test_resolve_generation_modality_prompt_wins_over_image_basis():
         == "image"
     )
     assert resolve_generation_modality("hello world") is None
+    assert (
+        resolve_generation_modality(
+            "Compose a song inspired by this painting",
+            basis_modality="image",
+        )
+        == "audio"
+    )
+
+
+def test_gemini_routes_music_prompt_ok():
+    prompt = "Compose a song about neon rain"
+    ok = check_prompt_model_compatibility(prompt, "gemini-flash-latest", provider="gemini")
+    assert ok["ok"] is True
+    assert ok.get("routed") is True
+    assert ok["modelModality"] == "audio"
+    assert "lyria" in ok["model"]
 
 
 def test_gemini_routes_image_prompt_ok():
@@ -141,3 +164,26 @@ def test_build_text_and_media_creation(tmp_path, monkeypatch):
     assert media["modality"] == "image"
     assert media["mediaPath"] == stored["mediaPath"]
     assert media["id"] == "doc_abc123"
+
+
+def test_resolve_media_path_finds_legacy_after_folder_switch(tmp_path, monkeypatch):
+    monkeypatch.setattr("retro_98_ai_creator.media_store.PROJECT_ROOT", tmp_path)
+    leftover = tmp_path / "media" / "doc_x.png"
+    leftover.parent.mkdir(parents=True, exist_ok=True)
+    leftover.write_bytes(b"png-bytes")
+    custom = tmp_path / "other-media"
+    cfg = {"paths": {"media": str(custom.resolve())}}
+    found = resolve_media_path("media/doc_x.png", config=cfg)
+    assert found == leftover.resolve()
+    assert found.read_bytes() == b"png-bytes"
+
+
+def test_write_media_bytes_to_custom_absolute_folder(tmp_path):
+    custom = (tmp_path / "abs-media").resolve()
+    cfg = {"paths": {"media": str(custom)}}
+    stored = write_media_bytes(
+        "doc_y", b"\x89PNG", mime_type="image/png", config=cfg
+    )
+    dest = custom / Path(stored["mediaPath"]).name
+    assert dest.is_file()
+    assert dest.read_bytes() == b"\x89PNG"

@@ -804,6 +804,27 @@ html[data-reading-surface="dark"] .doc-canvas.doc-canvas-reading {
   border: 1px solid #444;
 }
 
+.media-audio {
+  width: 100%;
+  max-width: 560px;
+}
+
+.media-lyrics {
+  width: 100%;
+  max-width: 640px;
+  white-space: pre-wrap;
+  text-align: left;
+  background: #1e1e1e;
+  color: #eee;
+  border: 1px solid #444;
+  padding: 10px 12px;
+  font-family: var(--ui-font);
+  font-size: 13px;
+  line-height: 1.45;
+  max-height: min(40vh, 320px);
+  overflow: auto;
+}
+
 .image-edit-body {
   display: flex;
   flex-direction: column;

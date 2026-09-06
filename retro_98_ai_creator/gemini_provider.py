@@ -35,6 +35,7 @@ ProgressCallback = Callable[[Any], None]
 DEFAULT_GEMINI_TEXT_MODEL = "gemini-2.5-flash"
 DEFAULT_GEMINI_IMAGE_MODEL = "gemini-2.5-flash-image"
 DEFAULT_GEMINI_VIDEO_MODEL = "veo-2.0-generate-001"
+DEFAULT_GEMINI_AUDIO_MODEL = "lyria-3-clip-preview"
 
 # Built-in shut-down / blocked ids. Learned aliases are merged from
 # config.yaml → gemini.retired_model_aliases at runtime (see merged_retired_aliases).
@@ -54,7 +55,7 @@ GEMINI_RETIRED_MODEL_ALIASES: dict[str, str] = {
 }
 
 _MODEL_IN_ERR_RE = re.compile(
-    r"(?i)(?:models/)?((?:gemini|veo|imagen)[-a-z0-9.]+)"
+    r"(?i)(?:models/)?((?:gemini|veo|imagen|lyria)[-a-z0-9.]+)"
 )
 
 
@@ -114,6 +115,8 @@ def suggest_replacement_for_retired(model_id: str) -> tuple[str, str]:
         return DEFAULT_GEMINI_IMAGE_MODEL, "image"
     if modality == "video":
         return DEFAULT_GEMINI_VIDEO_MODEL, "video"
+    if modality == "audio":
+        return DEFAULT_GEMINI_AUDIO_MODEL, "audio"
     if "lite" in mid:
         return "gemini-3.1-flash-lite", "text"
     return DEFAULT_GEMINI_TEXT_MODEL, "text"
@@ -147,7 +150,12 @@ def learn_retired_gemini_model(
     learned[mid] = repl
     gemini["retired_model_aliases"] = learned
 
-    slot = {"text": "text_model", "image": "image_model", "video": "video_model"}[modality]
+    slot = {
+        "text": "text_model",
+        "image": "image_model",
+        "video": "video_model",
+        "audio": "audio_model",
+    }[modality]
     current = _gemini_model_id(gemini.get(slot) or "")
     switched = False
     if current.lower() == mid.lower():
@@ -233,6 +241,24 @@ SUGGESTED_GEMINI_MODELS: list[dict[str, str]] = [
         "notes": "Newer video preview (usually costlier)",
         "modality": "video",
     },
+    {
+        "repo_id": "lyria-3-clip-preview",
+        "label": "Lyria 3 Clip Preview (default music)",
+        "notes": "30-second clips — cheapest Lyria slot",
+        "modality": "audio",
+    },
+    {
+        "repo_id": "lyria-3.5",
+        "label": "Lyria 3.5 / Pro (full songs)",
+        "notes": "Full-length songs — current Pro-class Interactions id",
+        "modality": "audio",
+    },
+    {
+        "repo_id": "lyria-3-pro-preview",
+        "label": "Lyria 3 Pro Preview",
+        "notes": "Older full-song id — app retries lyria-3.5 if this is blocked",
+        "modality": "audio",
+    },
 ]
 
 
@@ -247,6 +273,12 @@ def _gemini_model_notes(model_id: str, description: str | None = None) -> str:
     mid = model_id.lower()
     if "flash-lite" in mid or "flashlite" in mid:
         return "Fastest / cheapest Flash variant"
+    if "lyria" in mid:
+        if "clip" in mid:
+            return "30-second music clips"
+        if "3.5" in mid or "pro" in mid:
+            return "Full-length songs (Lyria)"
+        return "Music generation (Lyria)"
     if "flash" in mid and "pro" not in mid:
         if "2.5" in mid:
             return "Best balance — recommended with Search + two-pass"
@@ -274,7 +306,6 @@ _GEMINI_ID_SKIP_TOKENS: tuple[str, ...] = (
     "embed-content",
     "tts",
     "native-audio",
-    "lyria",
     "aqa",
     "robotics",
     "computer-use",
@@ -290,7 +321,6 @@ _GEMINI_SKIP_PHRASES: tuple[str, ...] = (
     "native audio",
     "audio output",
     "speech synthesis",
-    "music generation",
 )
 
 
@@ -302,7 +332,7 @@ def _is_studio_gemini_model(
     supported_actions: list[str] | None = None,
     retired_aliases: dict[str, str] | None = None,
 ) -> bool:
-    """True for Gemini text / image / video models usable in the studio."""
+    """True for Gemini text / image / video / audio models usable in the studio."""
     mid = _gemini_model_id(model_id).lower().rstrip("/")
     if not mid:
         return False
@@ -310,7 +340,7 @@ def _is_studio_gemini_model(
     aliases = retired_aliases if retired_aliases is not None else GEMINI_RETIRED_MODEL_ALIASES
     if mid in {k.lower() for k in aliases}:
         return False
-    # Allow imagen / veo even without "gemini" in the id
+    # Allow imagen / veo / lyria even without "gemini" in the id
     modality = classify_model_modality(
         mid, display_name=display_name, description=description
     )
@@ -323,10 +353,11 @@ def _is_studio_gemini_model(
         if token in mid:
             return False
 
-    meta = f"{display_name or ''} {description or ''}".lower()
-    for phrase in _GEMINI_SKIP_PHRASES:
-        if phrase in meta:
-            return False
+    if modality == "text":
+        meta = f"{display_name or ''} {description or ''}".lower()
+        for phrase in _GEMINI_SKIP_PHRASES:
+            if phrase in meta:
+                return False
 
     actions = [str(a).lower() for a in (supported_actions or [])]
     if actions and modality == "text":
@@ -368,7 +399,7 @@ def list_available_gemini_models(
     *,
     retired_aliases: dict[str, str] | None = None,
 ) -> list[dict[str, str]]:
-    """Query Google for text/image/video models available to this API key."""
+    """Query Google for text/image/video/audio models available to this API key."""
     key = (api_key or "").strip()
     if not key:
         raise RuntimeError("Gemini API key required to list available models.")
@@ -416,7 +447,7 @@ def list_available_gemini_models(
     def sort_key(item: dict[str, str]) -> tuple:
         mid = item["repo_id"].lower()
         modality = item.get("modality") or "text"
-        mod_tier = {"text": 0, "image": 1, "video": 2}.get(modality, 9)
+        mod_tier = {"text": 0, "image": 1, "video": 2, "audio": 3}.get(modality, 9)
         tier = 50
         if "2.5-flash" in mid and "lite" not in mid and "image" not in mid:
             tier = 0
@@ -430,6 +461,8 @@ def list_available_gemini_models(
             tier = 10
         elif "veo" in mid:
             tier = 20
+        elif "lyria" in mid:
+            tier = 30
         elif "exp" in mid or "preview" in mid:
             tier = 80
         return (mod_tier, tier, mid)
@@ -462,7 +495,7 @@ def normalize_gemini_model(
 def resolve_gemini_model_for_modality(
     gemini_cfg: dict[str, Any] | None, modality: str
 ) -> str:
-    """Pick the configured model id for text / image / video."""
+    """Pick the configured model id for text / image / video / audio."""
     cfg = gemini_cfg or {}
     aliases = merged_retired_aliases(cfg)
     mod = (modality or "text").lower().strip()
@@ -472,6 +505,9 @@ def resolve_gemini_model_for_modality(
     elif mod == "video":
         raw = (cfg.get("video_model") or "").strip() or DEFAULT_GEMINI_VIDEO_MODEL
         fallback = DEFAULT_GEMINI_VIDEO_MODEL
+    elif mod == "audio":
+        raw = (cfg.get("audio_model") or "").strip() or DEFAULT_GEMINI_AUDIO_MODEL
+        fallback = DEFAULT_GEMINI_AUDIO_MODEL
     else:
         raw = (cfg.get("text_model") or "").strip() or DEFAULT_GEMINI_TEXT_MODEL
         fallback = DEFAULT_GEMINI_TEXT_MODEL
@@ -599,7 +635,7 @@ def generate_with_gemini(
     modality = (forced_modality or "").strip().lower() or infer_prompt_modality(
         prompt_text
     ) or "text"
-    if basis_media and modality not in {"image", "video"}:
+    if basis_media and modality not in {"image", "video", "audio"}:
         modality = str(basis_media.get("modality") or "image")
     model_name = resolve_gemini_model_for_modality(cfg, modality)
 
@@ -617,6 +653,16 @@ def generate_with_gemini(
         from .gemini_media import generate_video_with_gemini
 
         return generate_video_with_gemini(
+            prompt_text,
+            gemini_cfg=cfg,
+            progress=progress,
+            basis_media=basis_media,
+            cancel_event=cancel_event,
+        )
+    if modality == "audio":
+        from .gemini_audio import generate_audio_with_gemini
+
+        return generate_audio_with_gemini(
             prompt_text,
             gemini_cfg=cfg,
             progress=progress,

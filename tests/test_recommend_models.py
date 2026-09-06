@@ -43,6 +43,7 @@ def test_recommend_gemini_uses_suggested_without_key(monkeypatch):
     assert res["picks"]["text"]
     assert res["picks"]["image"]
     assert res["picks"]["video"]
+    assert res["picks"]["audio"]
     mods = _by_modality(res["models"])
     assert any(m["repo_id"] == res["picks"]["text"] for m in mods["text"])
 

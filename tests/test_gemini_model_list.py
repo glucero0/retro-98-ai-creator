@@ -81,6 +81,30 @@ def test_classifies_image_and_video_models():
         assert _is_studio_gemini_model(mid)
         assert not _is_text_generation_gemini_model(mid)
 
+    for mid in (
+        "lyria-3-clip-preview",
+        "lyria-3.5",
+        "lyria-3-pro-preview",
+        "models/lyria-3-clip-preview",
+    ):
+        assert classify_model_modality(mid) == "audio"
+        assert _is_studio_gemini_model(mid)
+        assert not _is_text_generation_gemini_model(mid)
+
+
+def test_lyria_stays_visible_when_description_mentions_audio():
+    assert (
+        classify_model_modality(
+            "lyria-3-clip-preview",
+            description="Music generation with high-fidelity audio output.",
+        )
+        == "audio"
+    )
+    assert _is_studio_gemini_model(
+        "lyria-3-clip-preview",
+        description="Music generation with high-fidelity audio output.",
+    )
+
 
 def test_skips_audio_live_tts_embedding():
     for mid in (

@@ -64,6 +64,9 @@ def is_generic_studio_request(game: str, platform: str, creation_type: str) -> b
         "text",
         "image",
         "video",
+        "audio",
+        "music",
+        "song",
     }
 
 
@@ -76,14 +79,20 @@ def build_media_creation(
     title: str | None = None,
     model_info: dict[str, Any] | None = None,
     creation_id: str | None = None,
+    lyrics: str | None = None,
 ) -> dict[str, Any]:
-    """Build an image/video creation record (media stored on disk)."""
+    """Build an image/video/audio creation record (media stored on disk)."""
     modality = normalize_modality(modality, default="image")
-    if modality not in {"image", "video"}:
+    if modality not in {"image", "video", "audio"}:
         modality = "image"
     prompt = (prompt or "").strip()
     display = (title or title_from_prompt(prompt, "Untitled")).strip() or "Untitled"
     cid = creation_id or f"doc_{uuid.uuid4().hex[:10]}"
+    type_label = {"image": "Image", "video": "Video", "audio": "Audio"}[modality]
+    sections: list[dict[str, Any]] = []
+    lyrics_text = (lyrics or "").strip()
+    if lyrics_text:
+        sections.append({"title": "Lyrics", "content": lyrics_text, "keyValues": []})
     creation: dict[str, Any] = {
         "id": cid,
         "createdAt": _now_iso(),
@@ -92,11 +101,11 @@ def build_media_creation(
         "title": display,
         "game": display,
         "platform": "General",
-        "creationType": "Image" if modality == "image" else "Video",
+        "creationType": type_label,
         "mediaPath": media_path,
         "mimeType": mime_type,
         "overview": prompt,
-        "sections": [],
+        "sections": sections,
         "meta": {},
         "theme": {
             "themeName": "Studio Media",

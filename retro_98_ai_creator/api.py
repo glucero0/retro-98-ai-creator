@@ -57,6 +57,7 @@ def _save_file_types(suffix: str) -> tuple[str, ...]:
         ".png": "PNG Image (*.png)",
         ".pdf": "PDF Document (*.pdf)",
         ".mp4": "MP4 Video (*.mp4)",
+        ".mp3": "MP3 Audio (*.mp3)",
         ".json": "JSON (*.json)",
         ".txt": "Text File (*.txt)",
     }
@@ -77,6 +78,28 @@ def _ensure_save_suffix(path: Path, suffix: str) -> Path:
     if path.suffix.lower() != want:
         return path.with_suffix(want)
     return path
+
+
+def _safe_dialog_save_path(dialog_result: Any, suffix: str) -> Path:
+    """Rebuild a save-dialog path from resolved parent + sanitized filename.
+
+    Native dialogs return a user-chosen location. Writing that string directly
+    is a path-injection sink (CodeQL py/path-injection). Only the basename is
+    kept; the file must stay inside the resolved parent folder.
+    """
+    raw = dialog_result if isinstance(dialog_result, str) else dialog_result[0]
+    picked = Path(str(raw or "").strip())
+    if not picked.name or ".." in picked.parts:
+        raise ValueError("Invalid save path")
+    parent = picked.expanduser().resolve().parent
+    if not parent.is_dir():
+        raise ValueError("Save folder does not exist")
+    name = _ensure_save_suffix(Path(picked.name), suffix).name
+    if not name or name in {".", ".."} or "/" in name or "\\" in name:
+        raise ValueError("Invalid save filename")
+    dest = (parent / name).resolve()
+    dest.relative_to(parent)
+    return dest
 
 class Api:
     """Methods on this class are callable from window.pywebview.api in the UI."""
@@ -239,6 +262,97 @@ class Api:
     def pick_gmail_credentials(self) -> dict[str, Any]:
         return self.pick_google_workspace_credentials()
 
+    def pick_media_folder(self) -> dict[str, Any]:
+        """Pick a folder for generated/imported images, video, and audio."""
+        from .config import normalize_media_folder
+        from .media_store import media_dir
+
+        if self._window is None:
+            return {"ok": False, "error": "No window"}
+        try:
+            start = str(media_dir(self.config))
+        except OSError:
+            start = ""
+        dialog_kwargs: dict[str, Any] = {}
+        if start:
+            dialog_kwargs["directory"] = start
+        result = self._window.create_file_dialog(
+            _file_dialog("folder"),
+            **dialog_kwargs,
+        )
+        if not result:
+            return {"ok": False, "cancelled": True}
+        path = Path(result if isinstance(result, str) else result[0])
+        if path.is_file():
+            path = path.parent
+        try:
+            path = path.expanduser().resolve()
+            path.mkdir(parents=True, exist_ok=True)
+        except OSError as exc:
+            return {"ok": False, "error": f"Cannot use that folder: {exc}"}
+        if not path.is_dir():
+            return {"ok": False, "error": f"Not a folder: {path}"}
+        stored = normalize_media_folder(str(path))
+        return {"ok": True, "path": stored, "resolved": str(path)}
+
+    def relocate_media_files(self, source: Any = None) -> dict[str, Any]:
+        """Move media files from a previous folder into the current media folder."""
+        from .media_store import media_dir, relocate_media_to_folder
+
+        if isinstance(source, dict):
+            source = source.get("source")
+        raw = str(source or "").strip()
+        if not raw or ".." in Path(raw).parts:
+            return {"ok": False, "error": "Invalid source folder"}
+        try:
+            src = Path(raw).expanduser().resolve()
+        except OSError as exc:
+            return {"ok": False, "error": f"Cannot use that folder: {exc}"}
+        if not src.is_dir():
+            return {"ok": False, "error": f"Not a folder: {src}"}
+        try:
+            dest = media_dir(self.config)
+        except OSError as exc:
+            return {"ok": False, "error": f"Cannot use the new media folder: {exc}"}
+        if src == dest:
+            return {
+                "ok": True,
+                "moved": 0,
+                "updated": 0,
+                "skipped": 0,
+                "creations": self.store.load(),
+                "message": "Already using that folder.",
+            }
+        try:
+            updated, stats = relocate_media_to_folder(src, dest, self.store.load())
+        except ValueError as exc:
+            return {"ok": False, "error": str(exc)}
+        except OSError as exc:
+            return {"ok": False, "error": f"Could not move media files: {exc}"}
+        if stats.get("updated"):
+            self.store.save(updated)
+        else:
+            updated = self.store.load()
+        return {
+            "ok": True,
+            "creations": updated,
+            "moved": stats.get("moved", 0),
+            "updated": stats.get("updated", 0),
+            "skipped": stats.get("skipped", 0),
+            "source": str(src),
+            "dest": str(dest),
+        }
+
+    def _apply_media_http_root(self) -> None:
+        """Point localhost /media/ at the saved folder without restarting."""
+        try:
+            from .app import set_media_http_root
+            from .media_store import media_dir
+
+            set_media_http_root(media_dir(self.config))
+        except Exception:  # noqa: BLE001
+            logger.debug("Could not refresh media HTTP root", exc_info=True)
+
     def _public_config(self) -> dict[str, Any]:
         cfg = self.config
         gemini = dict(cfg.get("gemini") or {})
@@ -248,13 +362,21 @@ class Api:
         else:
             gemini["api_key_set"] = bool(resolve_gemini_key(cfg.get("gemini") or {}))
 
+        from .media_store import media_dir
+
+        paths = dict(cfg.get("paths") or {})
+        try:
+            paths["media_resolved"] = str(media_dir(cfg))
+        except OSError:
+            paths["media_resolved"] = str(paths.get("media") or "media")
+
         return {
             "backend": {"provider": "gemini"},
             "gemini": gemini,
             "prompt": dict(cfg.get("prompt") or {}),
             "google_workspace": dict(cfg.get("google_workspace") or {}),
             "ui": dict(cfg.get("ui") or {}),
-            "paths": dict(cfg.get("paths") or {}),
+            "paths": paths,
         }
 
     def get_model_status(self) -> dict[str, Any]:
@@ -322,14 +444,39 @@ class Api:
 
         updates.pop("reload_model", False)
 
-        self.config = save_config(updates, existing=self.config)
+        from .media_store import collect_relocatable_media, media_dir
 
-        return {
+        try:
+            old_media_root = media_dir(self.config)
+        except OSError:
+            old_media_root = None
+
+        self.config = save_config(updates, existing=self.config)
+        self._apply_media_http_root()
+
+        result: dict[str, Any] = {
             "ok": True,
             "config": self._public_config(),
             "modelStatus": provider_status(self.config),
             "message": "Settings saved.",
         }
+        try:
+            if old_media_root is not None:
+                new_media_root = media_dir(self.config)
+                if new_media_root != old_media_root:
+                    pending = collect_relocatable_media(
+                        old_media_root, new_media_root, self.store.load()
+                    )
+                    if pending:
+                        result["mediaMove"] = {
+                            "offered": True,
+                            "count": len(pending),
+                            "source": str(old_media_root),
+                            "dest": str(new_media_root),
+                        }
+        except Exception:  # noqa: BLE001
+            logger.debug("Could not preview media folder move", exc_info=True)
+        return result
 
     def preload_model(self) -> dict[str, Any]:
         """Gemini uses the cloud API — nothing to download locally."""
@@ -654,6 +801,7 @@ class Api:
             raise RuntimeError(
                 f"TXT export is not available for {modality} creations until you run Extract Text…"
             )
+        # Audio: lyrics/structure from Lyria live in sections.
 
         lines: list[str] = []
         overview = str(creation.get("overview") or "").strip()
@@ -859,6 +1007,7 @@ class Api:
         mime = mime or mime_for_path(path)
         modality = str(creation.get("modality") or "").lower()
         is_video = modality == "video" or (mime or "").startswith("video/")
+        is_audio = modality == "audio" or (mime or "").startswith("audio/")
 
         # Prefer same-origin HTTP — WebView blocks file:// from localhost pages,
         # and large image data URLs can choke the pywebview bridge.
@@ -867,10 +1016,10 @@ class Api:
             http_url = f"{self._ui_origin}/media/{path.name}"
         file_uri = http_url or media_file_uri(media_path)
 
-        if is_video:
+        if is_video or is_audio:
             return {
                 "ok": True,
-                "modality": "video",
+                "modality": "audio" if is_audio else "video",
                 "mimeType": mime,
                 "fileUrl": file_uri,
                 "mediaPath": media_path,
@@ -1084,10 +1233,7 @@ class Api:
             )
             if not result:
                 return {"ok": False, "cancelled": True}
-            out = _ensure_save_suffix(
-                Path(result if isinstance(result, str) else result[0]),
-                ".mp4",
-            )
+            out = _safe_dialog_save_path(result, ".mp4")
             out.write_bytes(dest.read_bytes())
             return {"ok": True, "path": str(out)}
         except Exception as exc:  # noqa: BLE001
@@ -1226,6 +1372,8 @@ class Api:
         modality = (creation.get("modality") or "").strip().lower()
         if modality == "video" or (mime or "").startswith("video/"):
             ext = ".mp4"
+        elif modality == "audio" or (mime or "").startswith("audio/"):
+            ext = ".mp3"
         else:
             from .media_store import extension_for_mime
 
@@ -1240,10 +1388,10 @@ class Api:
         )
         if not result:
             return {"ok": False, "cancelled": True}
-        dest = _ensure_save_suffix(
-            Path(result if isinstance(result, str) else result[0]),
-            ext,
-        )
+        try:
+            dest = _safe_dialog_save_path(result, ext)
+        except ValueError as exc:
+            return {"ok": False, "error": str(exc)}
         dest.write_bytes(path.read_bytes())
         return {"ok": True, "path": str(dest)}
 
@@ -1258,10 +1406,10 @@ class Api:
         )
         if not result:
             return {"ok": False, "cancelled": True}
-        path = _ensure_save_suffix(
-            Path(result if isinstance(result, str) else result[0]),
-            Path(default_name).suffix,
-        )
+        try:
+            path = _safe_dialog_save_path(result, Path(default_name).suffix)
+        except ValueError as exc:
+            return {"ok": False, "error": str(exc)}
         path.write_text(content, encoding="utf-8")
         return {"ok": True, "path": str(path)}
 
@@ -1291,10 +1439,10 @@ class Api:
         )
         if not result:
             return {"ok": False, "cancelled": True}
-        path = _ensure_save_suffix(
-            Path(result if isinstance(result, str) else result[0]),
-            Path(default_name).suffix,
-        )
+        try:
+            path = _safe_dialog_save_path(result, Path(default_name).suffix)
+        except ValueError as exc:
+            return {"ok": False, "error": str(exc)}
         path.write_bytes(raw)
         return {"ok": True, "path": str(path)}
 
@@ -1339,7 +1487,7 @@ class Api:
         return out
 
     def import_media_file(self, modality: str = "image") -> dict[str, Any]:
-        """Import an image or video file into Archives as a new creation."""
+        """Import an image, video, or audio file into Archives as a new creation."""
         import uuid
 
         import webview
@@ -1351,12 +1499,17 @@ class Api:
         if self._window is None:
             return {"ok": False, "error": "No window"}
         mod = normalize_modality(modality, default="image")
-        if mod not in {"image", "video"}:
-            return {"ok": False, "error": "modality must be image or video"}
+        if mod not in {"image", "video", "audio"}:
+            return {"ok": False, "error": "modality must be image, video, or audio"}
 
         if mod == "image":
             file_types = (
                 "Image Files (*.png;*.jpg;*.jpeg;*.webp;*.gif;*.bmp)",
+                "All Files (*.*)",
+            )
+        elif mod == "audio":
+            file_types = (
+                "Audio Files (*.mp3;*.wav;*.ogg;*.m4a;*.aac)",
                 "All Files (*.*)",
             )
         else:
@@ -1388,6 +1541,8 @@ class Api:
             mime = "image/png"
         if mod == "video" and not str(mime).startswith("video/"):
             mime = "video/mp4"
+        if mod == "audio" and not str(mime).startswith("audio/"):
+            mime = "audio/mpeg"
 
         new_id = f"doc_{uuid.uuid4().hex[:10]}"
         try:
@@ -1397,7 +1552,11 @@ class Api:
         except Exception as exc:  # noqa: BLE001
             return {"ok": False, "error": str(exc)}
 
-        title = path.stem.strip() or ("Imported Image" if mod == "image" else "Imported Video")
+        title = path.stem.strip() or {
+            "image": "Imported Image",
+            "video": "Imported Video",
+            "audio": "Imported Audio",
+        }.get(mod, "Imported Media")
         creation = build_media_creation(
             modality=mod,
             prompt=f"Imported from {path.name}",
@@ -1429,16 +1588,30 @@ class Api:
         if not title.lower().endswith("(copy)"):
             title = f"{title} (copy)"
 
-        if mod in {"image", "video"}:
+        if mod in {"image", "video", "audio"}:
             raw = read_media_bytes(source.get("mediaPath"), config=self.config)
             if not raw:
                 return {"ok": False, "error": "Media file not found"}
             mime = source.get("mimeType") or (
-                "video/mp4" if mod == "video" else "image/png"
+                "audio/mpeg"
+                if mod == "audio"
+                else "video/mp4"
+                if mod == "video"
+                else "image/png"
             )
             stored = write_media_bytes(
                 new_id, raw, mime_type=mime, config=self.config
             )
+            lyrics = None
+            if mod == "audio":
+                lyric_parts: list[str] = []
+                for sec in source.get("sections") or []:
+                    if not isinstance(sec, dict):
+                        continue
+                    content = str(sec.get("content") or "").strip()
+                    if content:
+                        lyric_parts.append(content)
+                lyrics = "\n\n".join(lyric_parts) or None
             creation = build_media_creation(
                 modality=mod,
                 prompt=str(source.get("prompt") or title),
@@ -1447,6 +1620,7 @@ class Api:
                 title=title,
                 creation_id=new_id,
                 model_info={"provider": "duplicate", "from": creation_id, "modality": mod},
+                lyrics=lyrics,
             )
         else:
             body_parts: list[str] = []

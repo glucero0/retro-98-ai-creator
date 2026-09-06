@@ -5,10 +5,11 @@ backend:
   provider: gemini
 
 gemini:
-  # Three modality slots — Studio picks by prompt intent (cheapest defaults)
+  # Four Gemini slots — Studio picks by prompt intent (cheapest defaults)
   text_model: gemini-2.5-flash
   image_model: gemini-2.5-flash-image
   video_model: veo-2.0-generate-001
+  audio_model: lyria-3-clip-preview
   api_key: null
   google_search: true
   # Pass 1: search & extract with sourceSnippets; Pass 2: verify at temperature 0
@@ -40,6 +41,7 @@ ui:
 
 paths:
   archives: archives.json
+  # Relative "media" is the project media/ folder. Control Panel can set an absolute folder.
   media: media
   prompts: prompts.json
 
