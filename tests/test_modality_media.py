@@ -8,7 +8,12 @@ from retro_98_ai_creator.creation_utils import (
     is_generic_studio_request,
     title_from_prompt,
 )
-from retro_98_ai_creator.media_store import resolve_media_path, write_media_bytes
+from retro_98_ai_creator.media_store import (
+    _join_under_dir,
+    resolve_media_path,
+    stored_media_path,
+    write_media_bytes,
+)
 from retro_98_ai_creator.modality import (
     check_prompt_model_compatibility,
     classify_model_modality,
@@ -176,6 +181,24 @@ def test_resolve_media_path_finds_legacy_after_folder_switch(tmp_path, monkeypat
     found = resolve_media_path("media/doc_x.png", config=cfg)
     assert found == leftover.resolve()
     assert found.read_bytes() == b"png-bytes"
+
+
+def test_join_under_dir_stays_in_root(tmp_path):
+    root = tmp_path / "media"
+    root.mkdir()
+    dest = _join_under_dir(root, "ok.png")
+    assert dest == (root / "ok.png").resolve()
+    # Parent segments are dropped; the file stays in root.
+    assert _join_under_dir(root, "../secret.txt") == (root / "secret.txt").resolve()
+    assert _join_under_dir(root, "..") is None
+
+
+def test_stored_media_path_uses_basename_only(tmp_path, monkeypatch):
+    monkeypatch.setattr("retro_98_ai_creator.media_store.PROJECT_ROOT", tmp_path)
+    dest = tmp_path / "media" / "clip.png"
+    dest.parent.mkdir(parents=True, exist_ok=True)
+    dest.write_bytes(b"x")
+    assert stored_media_path(dest) == "media/clip.png"
 
 
 def test_write_media_bytes_to_custom_absolute_folder(tmp_path):

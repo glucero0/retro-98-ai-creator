@@ -70,30 +70,44 @@ def media_read_roots(config: dict[str, Any] | None = None) -> list[Path]:
     return roots
 
 
+def _safe_basename(name: str) -> str | None:
+    base = Path(str(name or "")).name
+    if not base or base in {".", ".."} or ".." in Path(base).parts:
+        return None
+    if "/" in base or "\\" in base:
+        return None
+    return base
+
+
+def _join_under_dir(root: Path, name: str) -> Path | None:
+    """Rebuild root / basename so the result cannot escape root."""
+    base = _safe_basename(name)
+    if base is None:
+        return None
+    try:
+        parent = root.expanduser().resolve()
+        dest = (parent / base).resolve()
+        dest.relative_to(parent)
+    except (OSError, ValueError):
+        return None
+    return dest
+
+
 def _resolve_within_roots(
     candidate: Path, roots: list[Path], *, must_exist: bool
 ) -> Path | None:
-    try:
-        resolved = candidate.resolve()
-    except OSError:
+    # Rebuild from each root + basename; do not resolve the raw candidate.
+    base = _safe_basename(Path(str(candidate)).name)
+    if base is None:
         return None
     for root in roots:
-        try:
-            resolved.relative_to(root)
-        except ValueError:
+        dest = _join_under_dir(root, base)
+        if dest is None:
             continue
-        if must_exist and (not resolved.exists() or not resolved.is_file()):
+        if must_exist and not dest.is_file():
             continue
-        return resolved
+        return dest
     return None
-
-
-def _resolve_within_media_root(
-    candidate: Path, config: dict[str, Any] | None = None, *, must_exist: bool
-) -> Path | None:
-    return _resolve_within_roots(
-        candidate, [media_dir(config).resolve()], must_exist=must_exist
-    )
 
 
 def _safe_stem(creation_id: str) -> str:
@@ -127,10 +141,13 @@ _SKIP_RELOCATE_NAMES = {
 
 def stored_media_path(dest: Path) -> str:
     """Portable relative path under the project, otherwise absolute."""
+    safe = _join_under_dir(dest.expanduser().parent, dest.name)
+    if safe is None:
+        raise ValueError("Invalid media path")
     try:
-        return dest.resolve().relative_to(PROJECT_ROOT.resolve()).as_posix()
+        return safe.relative_to(PROJECT_ROOT.resolve()).as_posix()
     except ValueError:
-        return dest.resolve().as_posix()
+        return safe.as_posix()
 
 
 def unique_media_filename(dest_dir: Path, filename: str) -> str:
@@ -308,8 +325,7 @@ def write_media_bytes(
     if not ext.startswith("."):
         ext = "." + ext
     filename = f"{_safe_stem(creation_id)}{ext}"
-    candidate = media_dir(config) / filename
-    dest = _resolve_within_media_root(candidate, config, must_exist=False)
+    dest = _join_under_dir(media_dir(config), filename)
     if dest is None:
         raise ValueError("Invalid media destination path")
     dest.write_bytes(data)
