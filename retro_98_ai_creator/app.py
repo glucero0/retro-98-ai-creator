@@ -251,7 +251,6 @@ def main() -> int:
     if hasattr(window.events, "resized"):
         window.events.resized += _remember_size
 
-    provider = (cfg.get("backend") or {}).get("provider") or "gemini"
     logger.info("Starting Retro 98 AI Creator")
     logger.info("UI: %s", url)
     logger.info("Media HTTP: %s/media/", origin)

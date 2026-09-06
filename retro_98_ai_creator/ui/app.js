@@ -14,8 +14,6 @@
     windowZOrder: ["form", "viewer", "library", "control", "image-edit", "video-edit", "prompt-editor"],
     preMaximizeRect: {},
     generating: false,
-    modelLoading: false,
-    preloadJobId: null,
     soundEnabled: true,
     soundVolume: 100,
     crtEnabled: false,
@@ -29,8 +27,6 @@
     archiveSort: { key: "created", dir: "desc" },
     presets: [],
     creationTypes: [],
-    suggestedHfModels: null,
-    suggestedOpenRouterModels: null,
     studioBasis: null, // { creationId, modality, fileUrl, mimeType, title }
     studioTools: [], // selected Gemini tool aliases for this session
     geminiToolsCatalog: null, // from bootstrap / list_gemini_tools
@@ -511,11 +507,11 @@
     },
     dark: {
       themeName: "Dark Mode (Night)",
-      bgColor: "#12151a",
-      cardBg: "#2a2f38",
-      textColor: "#e8eaed",
-      accentColor: "#5b9bd5",
-      headerBg: "#1a3358",
+      bgColor: "#181818",
+      cardBg: "#2c2c2c",
+      textColor: "#e6e6e6",
+      accentColor: "#4e8ec8",
+      headerBg: "#242424",
       fontStyle: "sans",
     },
   };
@@ -671,34 +667,54 @@
     const text = t.textColor || "#222222";
     const title = t.headerBg || t.accentColor || "#000080";
     const accent = t.accentColor || "#000080";
-    const titleMid = _mixHex(title, accent, 0.4);
-    const titleText = _luminance(title) > 0.55 ? "#111111" : "#ffffff";
-    const titleInactive = _mixHex(title, "#808080", 0.55);
-    const titleInactiveMid = _mixHex(titleInactive, "#ffffff", 0.18);
-    const titleTextInactive =
-      _luminance(titleInactive) > 0.55 ? "#333333" : "#d4d4d4";
+    const titleText = _luminance(title) > 0.55 ? "#111111" : "#e6e6e6";
     const lightWin = _luminance(windowBg) > 0.45;
-    const buttonFace = lightWin
-      ? _mixHex(windowBg, "#dfdfdf", 0.25)
-      : _mixHex(windowBg, "#ffffff", 0.12);
-    const buttonText = _luminance(buttonFace) > 0.5 ? "#222222" : "#f0f0f0";
+    let titleMid;
+    let titleInactive;
+    let titleInactiveMid;
+    let buttonFace;
+    let inputBg;
+    let muted;
+    let taskbar;
+    let highlight;
+    let borderLight;
+    let borderMid;
+    let borderDark;
+    let borderDarker;
+    if (lightWin) {
+      titleMid = _mixHex(title, accent, 0.4);
+      titleInactive = _mixHex(title, "#808080", 0.55);
+      titleInactiveMid = _mixHex(titleInactive, "#ffffff", 0.18);
+      buttonFace = _mixHex(windowBg, "#dfdfdf", 0.25);
+      inputBg = _mixHex(windowBg, "#ffffff", 0.65);
+      muted = _mixHex(text, windowBg, 0.42);
+      taskbar = _mixHex(windowBg, "#b0b0b0", 0.2);
+      highlight = _mixHex("#ffffd0", accent, 0.12);
+      borderLight = "#ffffff";
+      borderMid = "#dfdfdf";
+      borderDark = "#808080";
+      borderDarker = "#0a0a0a";
+    } else {
+      // Quiet dark chrome: depth from tone, not chalky 98.css highlights.
+      titleMid = _mixHex(title, "#ffffff", 0.06);
+      titleInactive = _mixHex(title, "#000000", 0.22);
+      titleInactiveMid = _mixHex(titleInactive, "#ffffff", 0.05);
+      buttonFace = _mixHex(windowBg, "#ffffff", 0.07);
+      inputBg = _mixHex(windowBg, "#000000", 0.16);
+      muted = _mixHex(text, windowBg, 0.26);
+      taskbar = _mixHex(windowBg, "#000000", 0.12);
+      highlight = _mixHex(windowBg, accent, 0.12);
+      borderLight = _mixHex(windowBg, "#ffffff", 0.13);
+      borderMid = _mixHex(windowBg, "#ffffff", 0.07);
+      borderDark = _mixHex(windowBg, "#000000", 0.32);
+      borderDarker = _mixHex(windowBg, "#000000", 0.5);
+    }
+    const titleTextInactive =
+      _luminance(titleInactive) > 0.55 ? "#333333" : "#bdbdbd";
+    const buttonText = _luminance(buttonFace) > 0.5 ? "#222222" : "#e6e6e6";
     const darkButtons = _luminance(buttonFace) <= 0.5;
-    const inputBg = lightWin
-      ? _mixHex(windowBg, "#ffffff", 0.65)
-      : _mixHex(windowBg, "#000000", 0.25);
     const inputText = _luminance(inputBg) > 0.5 ? "#111111" : text;
-    const muted = _mixHex(text, windowBg, 0.42);
-    const taskbar = lightWin
-      ? _mixHex(windowBg, "#b0b0b0", 0.2)
-      : _mixHex(windowBg, "#ffffff", 0.08);
     const accentText = _luminance(accent) > 0.55 ? "#111111" : "#ffffff";
-    const highlight = lightWin
-      ? _mixHex("#ffffd0", accent, 0.12)
-      : _mixHex(windowBg, accent, 0.28);
-    const borderLight = lightWin ? "#ffffff" : _mixHex(windowBg, "#ffffff", 0.38);
-    const borderMid = lightWin ? "#dfdfdf" : _mixHex(windowBg, "#ffffff", 0.2);
-    const borderDark = lightWin ? "#808080" : _mixHex(windowBg, "#000000", 0.35);
-    const borderDarker = lightWin ? "#0a0a0a" : _mixHex(windowBg, "#000000", 0.7);
 
     root.style.setProperty("--desktop-bg", t.bgColor);
     root.style.setProperty("--desktop-bg-mid", mid);
@@ -736,6 +752,7 @@
     root.style.setProperty("--ui-border-mid", borderMid);
     root.style.setProperty("--ui-border-dark", borderDark);
     root.style.setProperty("--ui-border-darker", borderDarker);
+    root.style.setProperty("--ui-shadow", borderDark);
 
     applyUiFont(state.uiFont || "inter");
 
@@ -745,6 +762,12 @@
     document.documentElement.setAttribute(
       "data-ui-button-dark",
       darkButtons ? "1" : "0"
+    );
+    const readingDark =
+      key === "dark" || (key === "custom" && !lightDesktop);
+    document.documentElement.setAttribute(
+      "data-reading-surface",
+      readingDark ? "dark" : "light"
     );
 
     if ($("#app-theme") && [...$("#app-theme").options].some((o) => o.value === key)) {
@@ -982,10 +1005,8 @@
   const BUSY_HINTS = {
     generate:
       "Creating text, an image, or video from your prompt. You can cancel anytime.",
-    preload:
-      "Downloading / loading local text, image, and video models. Create is blocked until this finishes.",
     default:
-      "Gemini usually finishes in seconds. Local models can take minutes.",
+      "Gemini usually finishes in seconds.",
   };
 
   const busy = {
@@ -994,7 +1015,7 @@
     elapsedTimer: null,
     startedAt: 0,
     title: "Please wait…",
-    activity: null, // "generate" | "preload" | "other"
+    activity: null, // "generate" | "other"
     cancellable: false,
     cancelling: false,
     jobId: null,
@@ -1033,6 +1054,7 @@
       yesBtn.textContent = opts.yesLabel || "Yes";
       noBtn.textContent = opts.noLabel || "No";
       overlay.hidden = false;
+      detachIme();
 
       const finish = (value) => {
         overlay.hidden = true;
@@ -1065,6 +1087,7 @@
       const balanced = $("#recommend-balanced");
       if (balanced) balanced.checked = true;
       overlay.hidden = false;
+      detachIme();
 
       const finish = (value) => {
         overlay.hidden = true;
@@ -1108,12 +1131,12 @@
         delayMs: 0,
         percent: 20,
         hint:
-          "Queries Google, OpenRouter, or Hugging Face for the provider you chose — not only the current picker lists.",
+          "Queries Google for Gemini Text / Image / Video models — not only the current picker lists.",
       }
     );
 
     try {
-      const res = await a.recommend_models(criteria, provider || "");
+      const res = await a.recommend_models(criteria, "gemini");
       if (!res || !res.ok) {
         showToast((res && res.error) || "Could not recommend models.");
         return;
@@ -1171,56 +1194,7 @@
           },
         },
       });
-      return;
     }
-
-    if (provider === "openrouter") {
-      state.suggestedOpenRouterModels = models;
-      fillOpenRouterModalitySelect(
-        $("#openrouter-text-model"),
-        picks.text,
-        models,
-        "text"
-      );
-      fillOpenRouterModalitySelect(
-        $("#openrouter-image-model"),
-        picks.image,
-        models,
-        "image"
-      );
-      fillOpenRouterModalitySelect(
-        $("#openrouter-video-model"),
-        picks.video,
-        models,
-        "video"
-      );
-      updateStudioBackendLabel({
-        config: {
-          backend: { provider: "openrouter" },
-          openrouter: {
-            text_model: picks.text,
-            image_model: picks.image,
-            video_model: picks.video,
-          },
-        },
-      });
-      return;
-    }
-
-    state.suggestedModels = models;
-    fillHfModalitySelect($("#hf-text-model"), picks.text, models, "text");
-    fillHfModalitySelect($("#hf-image-model"), picks.image, models, "image");
-    fillHfModalitySelect($("#hf-video-model"), picks.video, models, "video");
-    updateStudioBackendLabel({
-      config: {
-        backend: { provider: "huggingface" },
-        huggingface: {
-          text_model: picks.text,
-          image_model: picks.image,
-          video_model: picks.video,
-        },
-      },
-    });
   }
 
   /**
@@ -1285,6 +1259,7 @@
       });
 
       overlay.hidden = false;
+      detachIme();
       cancelBtn.addEventListener("click", onCancel);
       const firstBtn = listEl.querySelector("button[data-first]") || cancelBtn;
       firstBtn.focus();
@@ -1292,9 +1267,7 @@
   }
 
   function studioGeminiBackend() {
-    const cfg = state.config || {};
-    const backend = (cfg.backend && cfg.backend.provider) || "gemini";
-    return backend === "gemini";
+    return true;
   }
 
   function studioToolsEnabled() {
@@ -1444,9 +1417,8 @@
       state.studioEnableTools = !!box.checked && available;
     }
     if (hint) {
-      hint.textContent = available
-        ? "Toggle tools for this Studio session without opening Control Panel. Control Panel → Use Tools is the default on launch."
-        : "Tools require the Gemini backend. Switch provider in Control Panel, then Save.";
+      hint.textContent =
+        "Toggle tools for this Studio session without opening Control Panel. Control Panel → Use Tools is the default on launch.";
       hint.classList.toggle("muted", !available);
     }
 
@@ -1517,8 +1489,12 @@
     const padAfter = after && !/^\s/.test(after) ? " " : "";
     ta.value = before + padBefore + text + padAfter + after;
     const cursor = start + padBefore.length + text.length;
-    ta.focus();
-    ta.setSelectionRange(cursor, cursor);
+    try {
+      ta.setSelectionRange(cursor, cursor);
+    } catch (_) {
+      /* ignore */
+    }
+    attachIme(ta);
   }
 
   function showAddToolDialog() {
@@ -1581,6 +1557,7 @@
 
       state.studioAddToolOpen = true;
       overlay.hidden = false;
+      detachIme();
       cancelBtn.addEventListener("click", onCancel);
       overlay.addEventListener("keydown", onKey);
       // Keep focus inside the dialog so Escape / Tab stay modal.
@@ -1593,68 +1570,10 @@
   function setCreateBlocked(blocked) {
     const btn = $("#btn-generate");
     if (!btn) return;
-    if (blocked || state.generating || state.modelLoading) {
+    if (blocked || state.generating) {
       btn.disabled = true;
     } else {
       btn.disabled = false;
-    }
-  }
-
-  function finishModelDownload(ok, errMsg) {
-    if (!state.modelLoading && !busy.visible) {
-      // Already finished (guard against double completion from poll + bridge push)
-      return;
-    }
-    state.modelLoading = false;
-    state.preloadJobId = null;
-    endBusy("Ready");
-    setCreateBlocked(false);
-    if (ok) {
-      showToast("Local model ready");
-      closeWindow("control");
-      playUiSound("success");
-    } else {
-      showToast(errMsg || "Model download / load failed");
-      playUiSound("error");
-    }
-  }
-
-  async function startLocalModelDownload() {
-    const a = api();
-    if (!a) {
-      showToast("Python bridge not ready.");
-      return;
-    }
-    if (state.modelLoading) {
-      showToast("A model download is already in progress…");
-      return;
-    }
-    state.modelLoading = true;
-    setCreateBlocked(true);
-    beginBusy("Downloading models", "Starting Hugging Face downloads…", {
-      delayMs: 0,
-      activity: "preload",
-      hint: BUSY_HINTS.preload,
-    });
-
-    let res;
-    try {
-      res = await a.preload_model();
-    } catch (err) {
-      finishModelDownload(false, String(err));
-      return;
-    }
-
-    if (!res || !res.ok) {
-      finishModelDownload(false, (res && res.error) || "Backend check failed");
-      return;
-    }
-
-    if (res.job_id) {
-      state.preloadJobId = res.job_id;
-      await pollJob(res.job_id, "preload");
-    } else {
-      finishModelDownload(true);
     }
   }
 
@@ -1669,10 +1588,7 @@
 
     if (opts.applyDisplay) applyDisplaySettingsFromControls();
 
-    const provider =
-      ($("#backend-provider") && $("#backend-provider").value) || "gemini";
-    const offerDownload = provider === "huggingface" && !!opts.offerDownload;
-    const res = await a.save_settings(collectSettings(offerDownload));
+    const res = await a.save_settings(collectSettings());
 
     if (res.config) {
       state.config = res.config;
@@ -1683,19 +1599,15 @@
       } catch (_) {
         fillControlPanel({
           config: res.config,
-          suggestedModels: [],
           suggestedGeminiModels: [],
-          suggestedOpenRouterModels: [],
           modelStatus: res.modelStatus,
         });
         updateApiKeyIndicators();
       }
       if ($("#gemini-key")) $("#gemini-key").value = "";
-      if ($("#openrouter-key")) $("#openrouter-key").value = "";
       syncStudioToolsPanel();
     }
 
-    // Always close Control Panel after a successful Save.
     closeWindow("control");
     showToast(res.message || "Saved");
 
@@ -1780,6 +1692,7 @@
     if (hint) setBusyHint(hint);
     overlay.hidden = false;
     busy.visible = true;
+    detachIme();
     if (!busy.startedAt) busy.startedAt = Date.now();
     if (!busy.elapsedTimer) {
       updateBusyElapsed();
@@ -1813,7 +1726,7 @@
    * Otherwise the dialog appears only if work is still going after delayMs
    * (default 1500ms) so short actions don't flash a modal.
    * opts.cancellable — show Cancel (generation jobs).
-   * opts.activity — "generate" | "preload" | "other" (drives title/hint framing).
+   * opts.activity — "generate" | "other" (drives title/hint framing).
    * opts.hint — footer description for this activity.
    */
   function beginBusy(title, message, opts) {
@@ -1829,9 +1742,7 @@
         ? opts.hint
         : busy.activity === "generate"
           ? BUSY_HINTS.generate
-          : busy.activity === "preload"
-            ? BUSY_HINTS.preload
-            : null;
+          : null;
     clearTimeout(busy.showTimer);
     setProgress(message || title || "Working…");
 
@@ -1909,7 +1820,10 @@
 
   function setStudioPrompt(text) {
     const field = $("#studio-prompt");
-    if (field) field.value = text || "";
+    if (field) {
+      field.value = text || "";
+      refreshImeField(field);
+    }
   }
 
   function getStudioSearch() {
@@ -1919,7 +1833,10 @@
 
   function setStudioSearch(text) {
     const field = $("#studio-search");
-    if (field) field.value = text || "";
+    if (field) {
+      field.value = text || "";
+      refreshImeField(field);
+    }
   }
 
   function getStudioToolUse() {
@@ -1929,7 +1846,10 @@
 
   function setStudioToolUse(text) {
     const field = $("#studio-tool-use");
-    if (field) field.value = text || "";
+    if (field) {
+      field.value = text || "";
+      refreshImeField(field);
+    }
   }
 
   function savedPromptById(id) {
@@ -2213,11 +2133,22 @@
   }
 
   function rememberStudioCaret(el) {
-    if (!el || typeof el.selectionStart !== "number") return;
+    if (!el) return;
+    let start;
+    let end;
+    if (ime.target === el) {
+      start = ime.selStart;
+      end = ime.selEnd;
+    } else if (typeof el.selectionStart === "number") {
+      start = el.selectionStart;
+      end = el.selectionEnd;
+    } else {
+      return;
+    }
     state.studioCaret = {
       fieldId: el.id,
-      start: el.selectionStart,
-      end: el.selectionEnd,
+      start: start,
+      end: end,
     };
   }
 
@@ -2250,13 +2181,13 @@
     const after = ta.value.slice(end);
     ta.value = before + text + after;
     const cursor = start + text.length;
-    ta.focus();
     try {
       ta.setSelectionRange(cursor, cursor);
     } catch (_) {
       /* ignore */
     }
     rememberStudioCaret(ta);
+    attachIme(ta);
     const studioSel = $("#studio-saved-prompt");
     if (studioSel) studioSel.value = "";
     showToast('Inserted "' + (prompt.name || "prompt") + '".');
@@ -2673,25 +2604,558 @@
     if (layer) layer.appendChild(el);
   }
 
+  // Native <textarea> carets (and the Windows Ease of Access "text cursor"
+  // indicator) paint in screen space above every window. Keep keyboard focus on
+  // a non-text trap and draw a caret clipped inside the field's app window.
+  const ime = {
+    trap: null,
+    caretEl: null,
+    target: null,
+    drag: null,
+    resume: null,
+    selStart: 0,
+    selEnd: 0,
+  };
+
+  function isImeField(el) {
+    if (!el || el === ime.trap) return false;
+    if (!el.closest || !el.closest(".app-window")) return false;
+    if (el.disabled || el.readOnly) return false;
+    const tag = (el.tagName || "").toLowerCase();
+    if (tag === "textarea") return true;
+    if (tag !== "input") return false;
+    const type = String(el.type || "text").toLowerCase();
+    return type === "text" || type === "password" || type === "search" || type === "url" || type === "email";
+  }
+
+  function imeGetSel(field) {
+    if (ime.target === field) {
+      let start = ime.selStart;
+      let end = ime.selEnd;
+      if (end < start) {
+        const t = start;
+        start = end;
+        end = t;
+      }
+      return { start: start, end: end };
+    }
+    let start = field.selectionStart;
+    let end = field.selectionEnd;
+    if (typeof start !== "number") start = (field.value || "").length;
+    if (typeof end !== "number") end = start;
+    if (end < start) {
+      const t = start;
+      start = end;
+      end = t;
+    }
+    return { start: start, end: end };
+  }
+
+  function imeSetSel(field, start, end) {
+    const valueLen = (field.value || "").length;
+    let s = Math.max(0, Math.min(valueLen, start));
+    let e = end == null ? s : Math.max(0, Math.min(valueLen, end));
+    ime.selStart = s;
+    ime.selEnd = e;
+    try {
+      field.selectionStart = s;
+      field.selectionEnd = e;
+    } catch (_err) {
+      /* unfocused inputs may reject selection */
+    }
+  }
+
+  function imeReplace(field, start, end, text) {
+    const value = field.value || "";
+    field.value = value.slice(0, start) + text + value.slice(end);
+    const pos = start + String(text).length;
+    imeSetSel(field, pos, pos);
+    field.dispatchEvent(new Event("input", { bubbles: true }));
+    if (typeof field.selectionStart === "number") rememberStudioCaret(field);
+    syncImeCaret();
+  }
+
+  function imeLineInfo(value, pos) {
+    const lineStart = value.lastIndexOf("\n", pos - 1) + 1;
+    const nl = value.indexOf("\n", pos);
+    const lineEnd = nl < 0 ? value.length : nl;
+    return { lineStart: lineStart, lineEnd: lineEnd, col: pos - lineStart };
+  }
+
+  function handleImeKeydown(e) {
+    const field = ime.target;
+    if (!field) return;
+    const active = document.activeElement;
+    if (
+      active &&
+      active !== ime.trap &&
+      active !== field &&
+      active !== document.body &&
+      active !== document.documentElement
+    ) {
+      const tag = (active.tagName || "").toLowerCase();
+      if (tag === "button" || tag === "select" || tag === "option" || tag === "a") return;
+      if (isImeField(active) && active !== field) return;
+    }
+    if (e.isComposing) return;
+    const key = e.key;
+    const sel = imeGetSel(field);
+    const value = field.value || "";
+    const ctrl = e.ctrlKey || e.metaKey;
+
+    if (key === "Tab") {
+      e.preventDefault();
+      const next = nextImeField(field, e.shiftKey);
+      if (next) attachIme(next);
+      else detachIme();
+      return;
+    }
+    if (ctrl && key.toLowerCase() === "a") {
+      e.preventDefault();
+      imeSetSel(field, 0, value.length);
+      rememberStudioCaret(field);
+      syncImeCaret();
+      return;
+    }
+    if (ctrl && key.toLowerCase() === "c") {
+      e.preventDefault();
+      const text = value.slice(sel.start, sel.end);
+      if (text && field.type !== "password") {
+        navigator.clipboard.writeText(text).catch(() => {});
+      }
+      return;
+    }
+    if (ctrl && key.toLowerCase() === "x") {
+      e.preventDefault();
+      const text = value.slice(sel.start, sel.end);
+      if (text && field.type !== "password") {
+        navigator.clipboard.writeText(text).catch(() => {});
+      }
+      imeReplace(field, sel.start, sel.end, "");
+      return;
+    }
+    if (ctrl && key.toLowerCase() === "v") {
+      e.preventDefault();
+      navigator.clipboard
+        .readText()
+        .then((text) => imeReplace(field, sel.start, sel.end, text || ""))
+        .catch(() => {});
+      return;
+    }
+    if (ctrl) return;
+
+    if (key === "Backspace") {
+      e.preventDefault();
+      if (sel.start !== sel.end) imeReplace(field, sel.start, sel.end, "");
+      else if (sel.start > 0) imeReplace(field, sel.start - 1, sel.start, "");
+      return;
+    }
+    if (key === "Delete") {
+      e.preventDefault();
+      if (sel.start !== sel.end) imeReplace(field, sel.start, sel.end, "");
+      else if (sel.end < value.length) imeReplace(field, sel.start, sel.start + 1, "");
+      return;
+    }
+    if (key === "Enter") {
+      e.preventDefault();
+      if (field.tagName === "TEXTAREA") imeReplace(field, sel.start, sel.end, "\n");
+      return;
+    }
+    if (key === "Home") {
+      e.preventDefault();
+      const info = imeLineInfo(value, sel.start);
+      if (e.shiftKey) imeSetSel(field, info.lineStart, sel.end);
+      else imeSetSel(field, info.lineStart, info.lineStart);
+      rememberStudioCaret(field);
+      syncImeCaret();
+      return;
+    }
+    if (key === "End") {
+      e.preventDefault();
+      const info = imeLineInfo(value, sel.end);
+      if (e.shiftKey) imeSetSel(field, sel.start, info.lineEnd);
+      else imeSetSel(field, info.lineEnd, info.lineEnd);
+      rememberStudioCaret(field);
+      syncImeCaret();
+      return;
+    }
+    if (key === "ArrowLeft") {
+      e.preventDefault();
+      if (e.shiftKey) imeSetSel(field, Math.max(0, sel.start - 1), sel.end);
+      else if (sel.start !== sel.end) imeSetSel(field, sel.start, sel.start);
+      else {
+        const next = Math.max(0, sel.start - 1);
+        imeSetSel(field, next, next);
+      }
+      rememberStudioCaret(field);
+      syncImeCaret();
+      return;
+    }
+    if (key === "ArrowRight") {
+      e.preventDefault();
+      if (e.shiftKey) imeSetSel(field, sel.start, Math.min(value.length, sel.end + 1));
+      else if (sel.start !== sel.end) imeSetSel(field, sel.end, sel.end);
+      else {
+        const next = Math.min(value.length, sel.end + 1);
+        imeSetSel(field, next, next);
+      }
+      rememberStudioCaret(field);
+      syncImeCaret();
+      return;
+    }
+    if (key === "ArrowUp" || key === "ArrowDown") {
+      e.preventDefault();
+      const dir = key === "ArrowUp" ? -1 : 1;
+      const pos = dir < 0 ? sel.start : sel.end;
+      const info = imeLineInfo(value, pos);
+      let target;
+      if (dir < 0) {
+        if (info.lineStart === 0) target = 0;
+        else {
+          const prevEnd = info.lineStart - 1;
+          const prev = imeLineInfo(value, prevEnd);
+          target = Math.min(prev.lineStart + info.col, prevEnd);
+        }
+      } else if (info.lineEnd === value.length) {
+        target = value.length;
+      } else {
+        const nextStart = info.lineEnd + 1;
+        const next = imeLineInfo(value, nextStart);
+        target = Math.min(next.lineStart + info.col, next.lineEnd);
+      }
+      if (e.shiftKey) {
+        if (dir < 0) imeSetSel(field, target, sel.end);
+        else imeSetSel(field, sel.start, target);
+      } else {
+        imeSetSel(field, target, target);
+      }
+      rememberStudioCaret(field);
+      syncImeCaret();
+      return;
+    }
+    if (key.length === 1) {
+      e.preventDefault();
+      imeReplace(field, sel.start, sel.end, key);
+    }
+  }
+
+  function ensureImeBridge() {
+    if (ime.trap) return;
+    const trap = document.createElement("button");
+    trap.id = "ime-focus";
+    trap.type = "button";
+    trap.tabIndex = -1;
+    trap.setAttribute("aria-label", "Text cursor");
+    document.body.appendChild(trap);
+    ime.trap = trap;
+    document.addEventListener("keydown", handleImeKeydown, true);
+
+    const caret = document.createElement("div");
+    caret.id = "ime-caret";
+    caret.hidden = true;
+    caret.setAttribute("aria-hidden", "true");
+    document.body.appendChild(caret);
+    ime.caretEl = caret;
+
+    document.addEventListener(
+      "pointerdown",
+      (e) => {
+        if (e.button !== 0) return;
+        const el = imeFieldFromEvent(e);
+        if (!el) {
+          ime.drag = null;
+          return;
+        }
+        // Do not let the native field take focus — that summons the Windows
+        // text-cursor indicator at this screen position, on top of every window.
+        e.preventDefault();
+        const win = el.closest(".app-window");
+        if (win && win.dataset.window) focusWindow(win.dataset.window);
+        const idx = indexFromClientPoint(el, e.clientX, e.clientY);
+        attachIme(el);
+        imeSetSel(el, idx, idx);
+        ime.drag = { field: el, anchor: idx };
+        rememberStudioCaret(el);
+        syncImeCaret();
+      },
+      true
+    );
+    document.addEventListener(
+      "pointermove",
+      (e) => {
+        if (!ime.drag || !(e.buttons & 1)) return;
+        const el = ime.drag.field;
+        const idx = indexFromClientPoint(el, e.clientX, e.clientY);
+        const a = ime.drag.anchor;
+        imeSetSel(el, Math.min(a, idx), Math.max(a, idx));
+        rememberStudioCaret(el);
+        syncImeCaret();
+      },
+      true
+    );
+    const endImeDrag = () => {
+      ime.drag = null;
+    };
+    document.addEventListener("pointerup", endImeDrag, true);
+    document.addEventListener("pointercancel", endImeDrag, true);
+
+    const watchImeFocus = () => {
+      const el = document.activeElement;
+      if (isImeField(el)) attachIme(el);
+      requestAnimationFrame(watchImeFocus);
+    };
+    requestAnimationFrame(watchImeFocus);
+  }
+
+  function nextImeField(from, backwards) {
+    const win = from.closest(".app-window");
+    if (!win) return null;
+    const list = [...win.querySelectorAll("textarea, input")].filter(isImeField);
+    const idx = list.indexOf(from);
+    if (idx < 0) return null;
+    const next = backwards ? list[idx - 1] : list[idx + 1];
+    return next || null;
+  }
+
+  function getFieldCaretViewportRect(el, pos) {
+    if (!el) return null;
+    if (typeof pos !== "number") {
+      if (typeof el.selectionEnd !== "number") return null;
+      pos = el.selectionEnd;
+    }
+    const style = window.getComputedStyle(el);
+    const div = document.createElement("div");
+    const props = [
+      "direction",
+      "boxSizing",
+      "width",
+      "overflowX",
+      "overflowY",
+      "borderTopWidth",
+      "borderRightWidth",
+      "borderBottomWidth",
+      "borderLeftWidth",
+      "paddingTop",
+      "paddingRight",
+      "paddingBottom",
+      "paddingLeft",
+      "fontStyle",
+      "fontVariant",
+      "fontWeight",
+      "fontStretch",
+      "fontSize",
+      "lineHeight",
+      "fontFamily",
+      "textAlign",
+      "textTransform",
+      "textIndent",
+      "letterSpacing",
+      "wordSpacing",
+      "tabSize",
+      "whiteSpace",
+      "wordWrap",
+      "wordBreak",
+    ];
+    div.style.position = "absolute";
+    div.style.visibility = "hidden";
+    div.style.left = "-9999px";
+    div.style.top = "0";
+    props.forEach((p) => {
+      div.style[p] = style[p];
+    });
+    div.style.whiteSpace = el.tagName === "TEXTAREA" ? "pre-wrap" : "pre";
+    div.style.wordWrap = "break-word";
+    div.style.overflow = "hidden";
+    div.style.width = el.clientWidth + "px";
+    div.textContent = el.value.substring(0, pos);
+    const marker = document.createElement("span");
+    marker.textContent = "\u200b";
+    div.appendChild(marker);
+    document.body.appendChild(div);
+    const fieldRect = el.getBoundingClientRect();
+    const scale = uiZoomFactor();
+    const localX =
+      marker.offsetLeft - el.scrollLeft + (parseFloat(style.borderLeftWidth) || 0);
+    const localY =
+      marker.offsetTop - el.scrollTop + (parseFloat(style.borderTopWidth) || 0);
+    const left = fieldRect.left + localX * scale;
+    const top = fieldRect.top + localY * scale;
+    let height = parseFloat(style.lineHeight);
+    if (!Number.isFinite(height) || height <= 0) {
+      height = parseFloat(style.fontSize) * 1.2 || 16;
+    }
+    height *= scale;
+    div.remove();
+    return { left: left, top: top, height: height };
+  }
+
+  function indexFromClientPoint(el, clientX, clientY) {
+    const n = (el.value || "").length;
+    if (n === 0) return 0;
+    let lo = 0;
+    let hi = n;
+    while (lo < hi) {
+      const mid = (lo + hi) >> 1;
+      const rect = getFieldCaretViewportRect(el, mid);
+      if (!rect) return mid;
+      if (clientY > rect.top + rect.height) lo = mid + 1;
+      else if (clientY < rect.top) hi = mid;
+      else if (clientX > rect.left) lo = mid + 1;
+      else hi = mid;
+    }
+    return lo;
+  }
+
+  function imeFieldFromEvent(e) {
+    const t = e.target;
+    if (!t || !t.closest) return null;
+    const direct = t.closest("textarea, input");
+    if (isImeField(direct)) return direct;
+    const label = t.closest("label");
+    if (!label) return null;
+    const control = label.control || (label.htmlFor ? document.getElementById(label.htmlFor) : null);
+    return isImeField(control) ? control : null;
+  }
+
+  function syncImeCaret() {
+    ensureImeBridge();
+    const field = ime.target;
+    const caret = ime.caretEl;
+    if (!caret) return;
+    if (!field) {
+      caret.hidden = true;
+      return;
+    }
+    const win = field.closest(".app-window");
+    if (!win || win.hidden || win.classList.contains("minimized")) {
+      caret.hidden = true;
+      return;
+    }
+    if (state.focused !== win.dataset.window) {
+      caret.hidden = true;
+      return;
+    }
+    const sel = imeGetSel(field);
+    if (sel.start !== sel.end) {
+      caret.hidden = true;
+      return;
+    }
+    const rect = getFieldCaretViewportRect(field, sel.end);
+    if (!rect) {
+      caret.hidden = true;
+      return;
+    }
+    const fieldRect = field.getBoundingClientRect();
+    const scale = uiZoomFactor();
+    let left = (rect.left - fieldRect.left) / scale;
+    let top = (rect.top - fieldRect.top) / scale;
+    let height = rect.height / scale;
+    if (height < 8) height = parseFloat(window.getComputedStyle(field).fontSize) * 1.2 || 12;
+    if (left < 0) left = 0;
+    if (top < 0) top = 0;
+    if (left > field.clientWidth) left = Math.max(0, field.clientWidth - 2);
+    if (top > field.clientHeight - 2) top = Math.max(0, field.clientHeight - height);
+    const host = field.parentElement;
+    if (!host) {
+      caret.hidden = true;
+      return;
+    }
+    host.classList.add("ime-caret-host");
+    if (caret.parentElement !== host) host.appendChild(caret);
+    const hostRect = host.getBoundingClientRect();
+    caret.style.left = (fieldRect.left - hostRect.left) / scale + left + "px";
+    caret.style.top = (fieldRect.top - hostRect.top) / scale + top + "px";
+    caret.style.height = height + "px";
+    caret.hidden = false;
+  }
+
+  function attachIme(field) {
+    if (!isImeField(field)) return;
+    ensureImeBridge();
+    const switching = ime.target !== field;
+    ime.target = field;
+    if (switching) {
+      let start = field.selectionStart;
+      let end = field.selectionEnd;
+      if (typeof start !== "number") start = 0;
+      if (typeof end !== "number") end = start;
+      ime.selStart = start;
+      ime.selEnd = end;
+    }
+    if (typeof field.selectionStart === "number") rememberStudioCaret(field);
+    if (!field.dataset.imeScroll) {
+      field.dataset.imeScroll = "1";
+      field.addEventListener("scroll", syncImeCaret);
+    }
+    try {
+      ime.trap.focus({ preventScroll: true });
+    } catch (_err) {
+      /* ignore */
+    }
+    ime.resume = null;
+    syncImeCaret();
+  }
+
+  function refreshImeField(field) {
+    if (ime.target === field) syncImeCaret();
+  }
+
+  function detachIme(opts) {
+    const keepResume = !!(opts && opts.resume);
+    if (keepResume && ime.target) ime.resume = ime.target;
+    else if (!keepResume) ime.resume = null;
+    ime.target = null;
+    if (ime.caretEl) ime.caretEl.hidden = true;
+    if (ime.trap && document.activeElement === ime.trap) ime.trap.blur();
+  }
+
+  function hideCaretOutsideWindow(id) {
+    if (ime.target) {
+      const host = ime.target.closest(".app-window");
+      if (!host || host.dataset.window !== id) {
+        detachIme();
+      } else {
+        syncImeCaret();
+      }
+    }
+    const active = document.activeElement;
+    if (!active || active === document.body || active === document.documentElement) {
+      return;
+    }
+    if (active === ime.trap) return;
+    const host = active.closest(".app-window");
+    if (!host) return;
+    if (host.dataset.window === id) return;
+    const tag = (active.tagName || "").toLowerCase();
+    const editable =
+      tag === "textarea" ||
+      tag === "input" ||
+      tag === "select" ||
+      active.isContentEditable;
+    if (!editable) return;
+    if (typeof active.selectionStart === "number") rememberStudioCaret(active);
+    active.blur();
+  }
+
   function focusWindow(id) {
     if (!id) return;
     const already = state.focused === id;
     state.focused = id;
     bringWindowToFront(id);
-    if (already && document.querySelector(".app-window.focused")?.dataset.window === id) {
-      return;
+    if (!(already && document.querySelector(".app-window.focused")?.dataset.window === id)) {
+      document.querySelectorAll(".app-window").forEach((w) => {
+        const title = w.querySelector(".title-bar");
+        if (w.dataset.window === id) {
+          w.classList.add("focused");
+          if (title) title.classList.remove("inactive");
+        } else {
+          w.classList.remove("focused");
+          if (title) title.classList.add("inactive");
+        }
+      });
+      renderTaskbar();
     }
-    document.querySelectorAll(".app-window").forEach((w) => {
-      const title = w.querySelector(".title-bar");
-      if (w.dataset.window === id) {
-        w.classList.add("focused");
-        if (title) title.classList.remove("inactive");
-      } else {
-        w.classList.remove("focused");
-        if (title) title.classList.add("inactive");
-      }
-    });
-    renderTaskbar();
+    hideCaretOutsideWindow(id);
   }
 
   function openWindow(id) {
@@ -2727,8 +3191,6 @@
   }
 
   let _geminiModelsRefreshSeq = 0;
-  let _hfModelsRefreshSeq = 0;
-  let _openrouterModelsRefreshSeq = 0;
 
   async function refreshGeminiModelsForControlPanel() {
     const a = api();
@@ -2889,74 +3351,62 @@
     const videoSel = $("#openrouter-video-model");
     if (!a || !textSel || !imageSel || !videoSel) return;
 
-    const go = await showConfirm(
-      "Refresh OpenRouter models?",
-      "This contacts OpenRouter and loads up to 20 popular models for each of Text, Image, and Video (ranked by popularity).\n\n" +
-        "This usually takes about 5–15 seconds, depending on your connection.\n\n" +
-        "OK — fetch the model lists now.\n" +
-        "Cancel — keep the current lists.",
-      { yesLabel: "OK", noLabel: "Cancel" }
-    );
-    if (!go) return;
-
-    const seq = ++_openrouterModelsRefreshSeq;
+    const seq = ++_geminiModelsRefreshSeq;
     const prev = {
       text: textSel.value,
       image: imageSel.value,
       video: videoSel.value,
     };
     beginBusy(
-      "Refreshing OpenRouter models",
-      "Asking OpenRouter for top text, image, and video models…",
+      "Refreshing Gemini models",
+      "Checking Google for models available to your API key…",
       {
         delayMs: 0,
         percent: 15,
-        hint: "Up to 20 models per modality, ranked by popularity. Usually 5–15 seconds.",
+        hint:
+          "Each modality picker is filled with compatible models only. Requires a saved Gemini API key.",
       }
     );
 
     try {
-      const res = await a.list_openrouter_models();
-      if (seq !== _openrouterModelsRefreshSeq) return;
+      const res = await a.list_gemini_models();
+      if (seq !== _geminiModelsRefreshSeq) return;
       const models = (res && res.models) || [];
-      state.suggestedOpenRouterModels = models;
-      fillOpenRouterModalitySelect(textSel, prev.text, models, "text");
-      fillOpenRouterModalitySelect(imageSel, prev.image, models, "image");
-      fillOpenRouterModalitySelect(videoSel, prev.video, models, "video");
-      syncControlPanelWidth();
-      requestAnimationFrame(() => syncDesktopScrollExtent());
+      fillGeminiModalitySelect(textSel, prev.text, models, "text");
+      fillGeminiModalitySelect(imageSel, prev.image, models, "image");
+      fillGeminiModalitySelect(videoSel, prev.video, models, "video");
       if (res && res.ok) {
-        const live = res.liveCount != null ? res.liveCount : models.length;
         updateBusy(
           "Loaded " +
-            live +
-            " OpenRouter model" +
-            (live === 1 ? "" : "s") +
-            " (up to 20 per modality).",
+            models.length +
+            " Gemini model" +
+            (models.length === 1 ? "" : "s") +
+            " from Google.",
           100
         );
-        showToast("OpenRouter model lists refreshed");
       } else {
         updateBusy(
           (res && res.error) ||
-            "Could not refresh OpenRouter models — showing the curated fallback list.",
+            "Could not refresh live models — showing the built-in fallback list.",
           100
         );
         if (res && res.error) showToast(res.error);
       }
       updateStudioBackendLabel({
         config: {
-          backend: { provider: "openrouter" },
-          gemini: currentGeminiUiConfig(),
-          openrouter: currentOpenRouterUiConfig(),
-          huggingface: currentHfUiConfig(),
+          backend: { provider: "gemini" },
+          gemini: {
+            text_model: textSel.value,
+            image_model: imageSel.value,
+            video_model: videoSel.value,
+          },
         },
       });
     } catch (err) {
-      if (seq !== _openrouterModelsRefreshSeq) return;
-      showToast("OpenRouter model list refresh failed: " + err);
+      if (seq !== _geminiModelsRefreshSeq) return;
+      showToast("Model list refresh failed: " + err);
     } finally {
-      if (seq === _openrouterModelsRefreshSeq) {
+      if (seq === _geminiModelsRefreshSeq) {
         endBusy("Ready");
         requestAnimationFrame(() => syncDesktopScrollExtent());
       }
@@ -3005,22 +3455,17 @@
         if (state.config) {
           fillControlPanel({
             config: state.config,
-            suggestedModels: [],
             suggestedGeminiModels: [],
-            suggestedOpenRouterModels: [],
           });
         }
       }
     } else if (state.config) {
       fillControlPanel({
         config: state.config,
-        suggestedModels: [],
         suggestedGeminiModels: [],
-        suggestedOpenRouterModels: [],
       });
     }
     if ($("#gemini-key")) $("#gemini-key").value = "";
-    if ($("#openrouter-key")) $("#openrouter-key").value = "";
     closeWindow("control");
   }
 
@@ -3331,6 +3776,7 @@
       dragState.win.style.left = next.left + "px";
       dragState.win.style.top = next.top + "px";
       dragState.win.style.right = "auto";
+      syncImeCaret();
     });
 
     document.addEventListener("mouseup", () => {
@@ -3438,6 +3884,7 @@
       nextH = Math.max(minH, Math.min(nextH, roomH));
       resizeState.win.style.width = Math.round(nextW) + "px";
       resizeState.win.style.height = Math.round(nextH) + "px";
+      syncImeCaret();
     });
 
     const endResize = (e) => {
@@ -3650,22 +4097,9 @@
     return !t || /^response$/i.test(t);
   }
 
-  function renderDocTab(creation, theme) {
+  function renderDocTab(creation) {
     const meta = creation.meta || {};
-    const title = creationTitle(creation);
     let html = "";
-    html +=
-      '<div class="doc-header" style="background:' +
-      escapeHtml(theme.headerBg || "#000080") +
-      ';color:#fff;padding:8px 10px;margin:-12px -12px 12px;">';
-    html += "<h2>" + escapeHtml(title) + "</h2>";
-    html +=
-      "<div>" +
-      escapeHtml(creation.creationType || "Text") +
-      (creation.platform && creation.platform !== "General"
-        ? " — " + escapeHtml(creation.platform)
-        : "") +
-      "</div></div>";
 
     if (creation.prompt) {
       html +=
@@ -3674,8 +4108,7 @@
         "</p>";
     }
 
-    html += '<div class="doc-meta">';
-    [
+    const metaRows = [
       ["Year", meta.releaseYear],
       ["Developer", meta.developer],
       ["Publisher", meta.publisher],
@@ -3683,16 +4116,19 @@
       ["Genre", meta.genre],
       ["Media", meta.mediaFormat],
       ["Hardware", meta.systemRequirements],
-    ].forEach(([label, val]) => {
-      if (!val) return;
-      html +=
-        "<div><strong>" +
-        escapeHtml(label) +
-        ":</strong> " +
-        escapeHtml(val) +
-        "</div>";
-    });
-    html += "</div>";
+    ].filter(([, val]) => val);
+    if (metaRows.length) {
+      html += '<div class="doc-meta">';
+      metaRows.forEach(([label, val]) => {
+        html +=
+          "<div><strong>" +
+          escapeHtml(label) +
+          ":</strong> " +
+          escapeHtml(val) +
+          "</div>";
+      });
+      html += "</div>";
+    }
 
     const overview = String(creation.overview || "").trim();
     if (overview && !overviewIsTruncatedBody(creation)) {
@@ -3703,12 +4139,7 @@
       const secTitle = String(sec.title || "").trim();
       html += '<div class="doc-section">';
       if (!shouldHideSectionHeading(secTitle)) {
-        html +=
-          '<h3 style="color:' +
-          escapeHtml(theme.accentColor || "#000080") +
-          '">' +
-          escapeHtml(secTitle) +
-          "</h3>";
+        html += "<h3>" + escapeHtml(secTitle) + "</h3>";
       }
       html +=
         '<div class="doc-section-body">' +
@@ -3982,7 +4413,7 @@
 
     if (!creation) {
       stopSpeech();
-      canvas.classList.remove("tab-ascii");
+      canvas.classList.remove("tab-ascii", "doc-canvas-reading");
       canvas.style.background = "";
       canvas.style.color = "";
       canvas.style.fontFamily = "";
@@ -3998,7 +4429,6 @@
 
     syncViewerChrome(creation);
     const modality = creationModality(creation);
-    const theme = resolveTheme(creation);
     const sources = creation.groundingSources || [];
     if (groundingTab) groundingTab.textContent = "Sources (" + sources.length + ")";
 
@@ -4016,6 +4446,7 @@
 
     const tab = state.viewerTab || (modality === "text" ? "doc" : "media");
     canvas.classList.toggle("tab-ascii", tab === "ascii");
+    canvas.classList.remove("doc-canvas-reading");
 
     if (isMediaModality(modality)) {
       canvas.style.background = "#111";
@@ -4054,10 +4485,11 @@
       canvas.style.fontFamily = "var(--ui-font)";
       canvas.innerHTML = renderPrintTab(creation);
     } else {
-      canvas.style.background = theme.cardBg || "#fff";
-      canvas.style.color = theme.textColor || "#000";
+      canvas.classList.add("doc-canvas-reading");
+      canvas.style.background = "";
+      canvas.style.color = "";
       canvas.style.fontFamily = "var(--ui-font)";
-      canvas.innerHTML = renderDocTab(creation, theme);
+      canvas.innerHTML = renderDocTab(creation);
     }
 
     openWindow("viewer");
@@ -4502,17 +4934,6 @@
       });
   }
 
-  function syncBackendPanels() {
-    const provider = ($("#backend-provider") && $("#backend-provider").value) || "gemini";
-    const gemini = $("#gemini-settings");
-    const openrouter = $("#openrouter-settings");
-    const hf = $("#hf-settings");
-    if (gemini) gemini.hidden = provider !== "gemini";
-    if (openrouter) openrouter.hidden = provider !== "openrouter";
-    if (hf) hf.hidden = provider !== "huggingface";
-    syncGeminiToolsAvailability();
-  }
-
   function syncGeminiTwoPassAvailability() {
     const search = $("#gemini-search");
     const twoPass = $("#gemini-two-pass");
@@ -4580,49 +5001,6 @@
     return opt;
   }
 
-  function fillModelSelect(sel, selected, suggestions) {
-    if (!sel) return;
-    const list = suggestions || [];
-    sel.innerHTML = "";
-    const groups = { text: [], image: [], video: [], other: [] };
-    list.forEach((m) => {
-      const mod = (m.modality || "text").toLowerCase();
-      if (groups[mod]) groups[mod].push(m);
-      else groups.other.push(m);
-    });
-    const labels = {
-      text: "Text",
-      image: "Image",
-      video: "Video",
-      other: "Other",
-    };
-    ["text", "image", "video", "other"].forEach((key) => {
-      const items = groups[key];
-      if (!items.length) return;
-      const og = document.createElement("optgroup");
-      og.label = labels[key];
-      items.forEach((m) => {
-        const opt = document.createElement("option");
-        opt.value = m.repo_id;
-        opt.textContent = modelOptionLabel(m);
-        opt.title = modelOptionTitle(m);
-        opt.dataset.modality = m.modality || key;
-        og.appendChild(opt);
-      });
-      sel.appendChild(og);
-    });
-    if (selected && ![...sel.options].some((o) => o.value === selected)) {
-      const opt = document.createElement("option");
-      opt.value = selected;
-      opt.textContent = modelOptionLabel({ label: selected, repo_id: selected });
-      opt.title = selected;
-      sel.appendChild(opt);
-    }
-    if (list.length || sel.options.length) {
-      sel.value = selected;
-    }
-  }
-
   /** Fill a Gemini modality picker with only compatible models. */
   function fillGeminiModalitySelect(sel, selected, suggestions, modality) {
     if (!sel) return;
@@ -4649,58 +5027,6 @@
     } else if (pick && ![...sel.options].some((o) => o.value === pick)) {
       // Keep a valid saved config choice even when the short suggested list
       // doesn't include it yet (e.g. veo-3.1-fast before live Refresh).
-      appendModelOption(
-        sel,
-        { repo_id: pick, label: pick, notes: "saved" },
-        want
-      );
-    }
-    if (!pick && sel.options.length) pick = sel.options[0].value;
-    if (pick) sel.value = pick;
-  }
-
-  /** Fill an OpenRouter modality picker with only compatible models. */
-  function fillOpenRouterModalitySelect(sel, selected, suggestions, modality) {
-    if (!sel) return;
-    const want = (modality || "text").toLowerCase();
-    const defaults = {
-      text: "google/gemini-2.5-flash",
-      image: "google/gemini-2.5-flash-image",
-      video: "google/veo-2.0",
-    };
-    const filtered = (suggestions || []).filter(
-      (m) => (m.modality || "text").toLowerCase() === want
-    );
-    sel.innerHTML = "";
-    filtered.forEach((m) => appendModelOption(sel, m, want));
-    let pick = selected || defaults[want] || "";
-    if (pick && ![...sel.options].some((o) => o.value === pick)) {
-      appendModelOption(
-        sel,
-        { repo_id: pick, label: pick, notes: "saved" },
-        want
-      );
-    }
-    if (!pick && sel.options.length) pick = sel.options[0].value;
-    if (pick) sel.value = pick;
-  }
-
-  /** Fill a Hugging Face modality picker with only compatible models. */
-  function fillHfModalitySelect(sel, selected, suggestions, modality) {
-    if (!sel) return;
-    const want = (modality || "text").toLowerCase();
-    const defaults = {
-      text: "microsoft/Phi-3.5-mini-instruct",
-      image: "stable-diffusion-v1-5/stable-diffusion-v1-5",
-      video: "ali-vilab/text-to-video-ms-1.7b",
-    };
-    const filtered = (suggestions || []).filter(
-      (m) => (m.modality || "text").toLowerCase() === want
-    );
-    sel.innerHTML = "";
-    filtered.forEach((m) => appendModelOption(sel, m, want));
-    let pick = selected || defaults[want] || "";
-    if (pick && ![...sel.options].some((o) => o.value === pick)) {
       appendModelOption(
         sel,
         { repo_id: pick, label: pick, notes: "saved" },
@@ -4870,16 +5196,9 @@
     if (boot && Array.isArray(boot.retiredGeminiModels)) {
       state.retiredGeminiModels = boot.retiredGeminiModels.slice();
     }
-    const model = (boot.config && boot.config.huggingface) || {};
     const gemini = (boot.config && boot.config.gemini) || {};
-    const openrouter = (boot.config && boot.config.openrouter) || {};
-    const backend = (boot.config && boot.config.backend) || {};
     const ui = (boot.config && boot.config.ui) || {};
     const promptCfg = (boot.config && boot.config.prompt) || {};
-
-    if ($("#backend-provider")) {
-      $("#backend-provider").value = backend.provider || "gemini";
-    }
 
     if ($("#gemini-temp")) {
       $("#gemini-temp").value = gemini.temperature ?? 0;
@@ -4939,57 +5258,8 @@
       "audio"
     );
 
-    if ($("#openrouter-temp")) {
-      $("#openrouter-temp").value = openrouter.temperature ?? 0;
-    }
-    const orSuggested =
-      state.suggestedOpenRouterModels || boot.suggestedOpenRouterModels || [];
-    fillOpenRouterModalitySelect(
-      $("#openrouter-text-model"),
-      openrouter.text_model || "google/gemini-2.5-flash",
-      orSuggested,
-      "text"
-    );
-    fillOpenRouterModalitySelect(
-      $("#openrouter-image-model"),
-      openrouter.image_model || "google/gemini-2.5-flash-image",
-      orSuggested,
-      "image"
-    );
-    fillOpenRouterModalitySelect(
-      $("#openrouter-video-model"),
-      openrouter.video_model || "google/veo-2.0",
-      orSuggested,
-      "video"
-    );
-
     updateApiKeyIndicators();
 
-    const hfSuggested =
-      state.suggestedHfModels || boot.suggestedModels || [];
-    fillHfModalitySelect(
-      $("#hf-text-model"),
-      model.text_model || model.repo_id || "microsoft/Phi-3.5-mini-instruct",
-      hfSuggested,
-      "text"
-    );
-    fillHfModalitySelect(
-      $("#hf-image-model"),
-      model.image_model || "stable-diffusion-v1-5/stable-diffusion-v1-5",
-      hfSuggested,
-      "image"
-    );
-    fillHfModalitySelect(
-      $("#hf-video-model"),
-      model.video_model || "ali-vilab/text-to-video-ms-1.7b",
-      hfSuggested,
-      "video"
-    );
-    if ($("#model-device")) $("#model-device").value = model.device || "auto";
-    if ($("#model-dtype")) $("#model-dtype").value = model.torch_dtype || "auto";
-    if ($("#model-tokens")) $("#model-tokens").value = model.max_new_tokens || 2048;
-    if ($("#model-temp")) $("#model-temp").value = model.temperature ?? 0;
-    if ($("#model-token")) $("#model-token").value = model.hf_token || "";
     if ($("#system-extra")) $("#system-extra").value = promptCfg.extra_instructions || "";
     $("#opt-sound").checked = ui.sound_enabled !== false;
     $("#opt-crt").checked = !!ui.crt_enabled;
@@ -5034,7 +5304,6 @@
     }
     applyAppTheme(state.appTheme);
 
-    syncBackendPanels();
     updateStudioBackendLabel(boot);
     syncStudioToolsPanel();
   }
@@ -5144,20 +5413,10 @@
   }
 
   function updateApiKeyIndicators() {
-    const selected =
-      ($("#backend-provider") && $("#backend-provider").value) || "gemini";
-    const saved = savedBackendProvider();
-    const providerChanged = selected !== saved;
-
     const geminiSet = !!(
       state.config &&
       state.config.gemini &&
       state.config.gemini.api_key_set
-    );
-    const openrouterSet = !!(
-      state.config &&
-      state.config.openrouter &&
-      state.config.openrouter.api_key_set
     );
 
     const geminiBadge = $("#gemini-key-badge");
@@ -5174,44 +5433,9 @@
         : "Paste Gemini API key";
     }
     if (geminiStatus) {
-      if (geminiSet) {
-        geminiStatus.textContent =
-          selected === "gemini" && providerChanged
-            ? "A Gemini API key is already saved — Save to switch providers (leave blank to keep it)."
-            : "A Gemini API key is already saved. Leave the field blank to keep it.";
-      } else if (selected === "gemini" && providerChanged) {
-        geminiStatus.textContent =
-          "Provider changed — paste a Gemini API key before saving.";
-      } else {
-        geminiStatus.textContent = "No Gemini API key saved yet.";
-      }
-    }
-
-    const orBadge = $("#openrouter-key-badge");
-    const orStatus = $("#openrouter-key-status");
-    const orInput = $("#openrouter-key");
-    if (orBadge) {
-      orBadge.textContent = openrouterSet ? "Saved" : "Not set";
-      orBadge.classList.toggle("key-badge-set", openrouterSet);
-      orBadge.classList.toggle("key-badge-missing", !openrouterSet);
-    }
-    if (orInput) {
-      orInput.placeholder = openrouterSet
-        ? "Leave blank to keep saved key"
-        : "Paste OpenRouter API key";
-    }
-    if (orStatus) {
-      if (openrouterSet) {
-        orStatus.textContent =
-          selected === "openrouter" && providerChanged
-            ? "An OpenRouter API key is already saved — Save to switch providers (leave blank to keep it)."
-            : "An OpenRouter API key is already saved. Leave the field blank to keep it.";
-      } else if (selected === "openrouter" && providerChanged) {
-        orStatus.textContent =
-          "Provider changed — paste an OpenRouter API key before saving.";
-      } else {
-        orStatus.textContent = "No OpenRouter API key saved yet.";
-      }
+      geminiStatus.textContent = geminiSet
+        ? "A Gemini API key is already saved. Leave the field blank to keep it."
+        : "No Gemini API key saved yet.";
     }
   }
 
@@ -5279,40 +5503,20 @@
     }
   }
 
-  function providerApiKeyReady(provider) {
-    if (provider === "huggingface") return true;
-
-    const typed =
-      provider === "openrouter"
-        ? (($("#openrouter-key") && $("#openrouter-key").value.trim()) || "")
-        : (($("#gemini-key") && $("#gemini-key").value.trim()) || "");
-
+  function providerApiKeyReady() {
+    const typed = ($("#gemini-key") && $("#gemini-key").value.trim()) || "";
     if (typed) return true;
-    if (provider === "openrouter") {
-      return !!(
-        state.config &&
-        state.config.openrouter &&
-        state.config.openrouter.api_key_set
-      );
-    }
-    return !!(state.config && state.config.gemini && state.config.gemini.api_key_set);
+    return !!(
+      state.config &&
+      state.config.gemini &&
+      state.config.gemini.api_key_set
+    );
   }
 
   function ensureApiKeyBeforeSave() {
-    const provider =
-      ($("#backend-provider") && $("#backend-provider").value) || "gemini";
-    if (providerApiKeyReady(provider)) return true;
-
-    const changed = provider !== savedBackendProvider();
-    const label = providerLabel(provider);
-    showToast(
-      changed
-        ? "Paste a " + label + " API key before switching providers."
-        : "Paste a " + label + " API key before saving."
-    );
-    if (provider === "openrouter" && $("#openrouter-key")) {
-      $("#openrouter-key").focus();
-    } else if (provider === "gemini" && $("#gemini-key")) {
+    if (providerApiKeyReady()) return true;
+    showToast("Paste a Gemini API key before saving.");
+    if ($("#gemini-key")) {
       $("#gemini-key").focus();
     }
     return false;
@@ -5336,45 +5540,9 @@
     };
   }
 
-  function currentOpenRouterUiConfig() {
-    const text =
-      ($("#openrouter-text-model") && $("#openrouter-text-model").value) ||
-      "google/gemini-2.5-flash";
+  function collectSettings() {
     return {
-      text_model: text,
-      image_model:
-        ($("#openrouter-image-model") && $("#openrouter-image-model").value) ||
-        "google/gemini-2.5-flash-image",
-      video_model:
-        ($("#openrouter-video-model") && $("#openrouter-video-model").value) ||
-        "google/veo-2.0",
-    };
-  }
-
-  function currentHfUiConfig() {
-    const text =
-      ($("#hf-text-model") && $("#hf-text-model").value) ||
-      "microsoft/Phi-3.5-mini-instruct";
-    return {
-      text_model: text,
-      repo_id: text,
-      image_model:
-        ($("#hf-image-model") && $("#hf-image-model").value) ||
-        "stable-diffusion-v1-5/stable-diffusion-v1-5",
-      video_model:
-        ($("#hf-video-model") && $("#hf-video-model").value) ||
-        "ali-vilab/text-to-video-ms-1.7b",
-    };
-  }
-
-  function collectSettings(reload) {
-    const provider = ($("#backend-provider") && $("#backend-provider").value) || "gemini";
-    const hfText =
-      ($("#hf-text-model") && $("#hf-text-model").value.trim()) ||
-      "microsoft/Phi-3.5-mini-instruct";
-    return {
-      reload_model: !!reload,
-      backend: { provider: provider },
+      backend: { provider: "gemini" },
       gemini: {
         text_model:
           ($("#gemini-text-model") && $("#gemini-text-model").value.trim()) ||
@@ -5399,37 +5567,6 @@
           ? $("#gemini-youtube-search-captions").checked
           : true,
         temperature: $("#gemini-temp") ? Number($("#gemini-temp").value) || 0 : 0,
-      },
-      openrouter: {
-        text_model:
-          ($("#openrouter-text-model") && $("#openrouter-text-model").value.trim()) ||
-          "google/gemini-2.5-flash",
-        image_model:
-          ($("#openrouter-image-model") && $("#openrouter-image-model").value.trim()) ||
-          "google/gemini-2.5-flash-image",
-        video_model:
-          ($("#openrouter-video-model") && $("#openrouter-video-model").value.trim()) ||
-          "google/veo-2.0",
-        api_key: ($("#openrouter-key") && $("#openrouter-key").value.trim()) || "",
-        temperature: $("#openrouter-temp")
-          ? Number($("#openrouter-temp").value) || 0
-          : 0,
-      },
-      huggingface: {
-        text_model: hfText,
-        repo_id: hfText,
-        image_model:
-          ($("#hf-image-model") && $("#hf-image-model").value.trim()) ||
-          "stable-diffusion-v1-5/stable-diffusion-v1-5",
-        video_model:
-          ($("#hf-video-model") && $("#hf-video-model").value.trim()) ||
-          "ali-vilab/text-to-video-ms-1.7b",
-        device: ($("#model-device") && $("#model-device").value) || "auto",
-        torch_dtype: ($("#model-dtype") && $("#model-dtype").value) || "auto",
-        max_new_tokens: ($("#model-tokens") && Number($("#model-tokens").value)) || 2048,
-        temperature: ($("#model-temp") && Number($("#model-temp").value)) || 0,
-        hf_token: ($("#model-token") && $("#model-token").value.trim()) || null,
-        trust_remote_code: false,
       },
       prompt: {
         extra_instructions: ($("#system-extra") && $("#system-extra").value) || "",
@@ -5621,11 +5758,6 @@
       } else {
         title = title || busy.title || "Creating…";
       }
-    } else if (busy.activity === "preload") {
-      if (phase === "download") title = title || "Downloading models";
-      else if (phase === "load") title = title || "Loading models";
-      else if (phase === "ready") title = title || "Models ready";
-      else title = title || busy.title || "Downloading models";
     } else {
       if (phase === "download") title = title || "Downloading model";
       if (phase === "load") title = title || "Loading model";
@@ -5683,7 +5815,6 @@
     focusWindow("control");
     setControlTab("ai");
     const gemini = (info && info.gemini) || {};
-    if ($("#backend-provider")) $("#backend-provider").value = "gemini";
     // Prefill slots with replacements before refresh so pickers land on them.
     if ($("#gemini-text-model") && gemini.text_model) {
       $("#gemini-text-model").value = gemini.text_model;
@@ -5748,7 +5879,7 @@
       showToast("Extract Text is for images and videos.");
       return;
     }
-    if (state.generating || state.modelLoading) {
+    if (state.generating) {
       showToast("Wait for the current AI job to finish.");
       return;
     }
@@ -5878,13 +6009,11 @@
       try {
         job = await a.get_job(jobId);
       } catch (err) {
-        if (kind === "preload") {
-          finishModelDownload(false, "Lost connection to Python bridge: " + err);
-        } else if (kind === "extract") {
+        if (kind === "generate") {
+          applyGenerationError("Lost connection to Python bridge: " + err);
+        } else {
           endBusy();
           showToast("Lost connection to Python bridge: " + err);
-        } else {
-          applyGenerationError("Lost connection to Python bridge: " + err);
         }
         return;
       }
@@ -5901,10 +6030,11 @@
       if (job.status === "done") {
         if (kind === "generate") {
           applyGenerationResult(job.result);
-        } else if (kind === "preload") {
-          finishModelDownload(true);
         } else if (kind === "extract") {
           applyExtractResult(job.result);
+        } else {
+          endBusy();
+          showToast(job.error || "Unexpected job completed.");
         }
         return;
       }
@@ -5924,7 +6054,8 @@
           showToast("Extract Text cancelled.");
           playUiSound("cancel");
         } else {
-          finishModelDownload(false, "Cancelled");
+          endBusy();
+          showToast("Cancelled");
         }
         return;
       }
@@ -5946,7 +6077,8 @@
           showToast(job.error || "Extract Text failed");
           playUiSound("error");
         } else {
-          finishModelDownload(false, job.error || "Model load failed");
+          endBusy();
+          showToast(job.error || "Job failed");
         }
         return;
       }
@@ -5961,7 +6093,8 @@
       showToast("Timed out waiting for Extract Text.");
       playUiSound("error");
     } else {
-      finishModelDownload(false, "Timed out waiting for model load.");
+      endBusy();
+      showToast("Timed out waiting for job.");
     }
   }
 
@@ -5974,24 +6107,17 @@
   function applyModalityMismatch(res) {
     const msg =
       (res && res.error) ||
-      "This prompt needs Google Gemini (image/video). Switch provider in Control Panel.";
+      "This prompt needs a Gemini image or video model. Pick one in Control Panel.";
     showToast(msg, 14000);
-    setProgress("Stopped — switch provider");
+    setProgress("Stopped");
     playUiSound("error");
     openWindow("control");
-    if ($("#backend-provider") && $("#backend-provider").value !== "gemini") {
-      // Leave provider panel visible — user should switch to Gemini
-    }
   }
 
   async function startGeneration(opts) {
     const exactTitle = !!(opts && opts.exactTitle);
     if (startGenerationLock || state.generating) {
       showToast("A generation is already running…");
-      return;
-    }
-    if (state.modelLoading) {
-      showToast("Wait for the local model download / load to finish.");
       return;
     }
     // Fresh user-initiated search may need a new Search Results dialog
@@ -6223,33 +6349,8 @@
     applyNeedsChoice(payload);
   };
 
-  window.__onModelStatus = async function () {
-    // Don't endBusy here if a generate job is still running
+  window.__onModelStatus = function () {
     if (state.generating) return;
-
-    // Preload finished (Python pushes this from the worker thread). Prefer
-    // resolving via job status so we don't leave the busy dialog open forever
-    // if pollJob was stalled.
-    if (state.modelLoading) {
-      const a = api();
-      const jobId = state.preloadJobId;
-      if (a && jobId) {
-        try {
-          const job = await a.get_job(jobId);
-          if (job && job.status === "done") {
-            finishModelDownload(true);
-            return;
-          }
-          if (job && (job.status === "error" || job.status === "missing")) {
-            finishModelDownload(false, job.error || "Model load failed");
-            return;
-          }
-        } catch (_) {
-          /* pollJob may still be running */
-        }
-      }
-      return;
-    }
     endBusy("Ready");
   };
 
@@ -8241,6 +8342,35 @@
       }
     });
 
+    document.addEventListener("focusin", (e) => {
+      const el = e.target;
+      if (el === ime.trap) return;
+      if (isImeField(el)) {
+        attachIme(el);
+        return;
+      }
+      if (ime.target) detachIme();
+    });
+
+    window.addEventListener("blur", () => detachIme({ resume: true }));
+    window.addEventListener("focus", () => {
+      const field = ime.resume;
+      ime.resume = null;
+      if (!field || !document.body.contains(field) || field.disabled || field.readOnly) {
+        return;
+      }
+      const win = field.closest(".app-window");
+      if (!win || win.dataset.window !== state.focused) return;
+      attachIme(field);
+    });
+    document.addEventListener(
+      "scroll",
+      () => {
+        if (ime.target) syncImeCaret();
+      },
+      true
+    );
+
     $("#create-form").addEventListener("submit", async (e) => {
       e.preventDefault();
       e.stopPropagation();
@@ -8519,57 +8649,13 @@
         el.addEventListener("change", () => {
           updateStudioBackendLabel({
             config: {
-              backend: {
-                provider:
-                  ($("#backend-provider") && $("#backend-provider").value) ||
-                  "gemini",
-              },
+              backend: { provider: "gemini" },
               gemini: currentGeminiUiConfig(),
-              openrouter: currentOpenRouterUiConfig(),
-              huggingface: currentHfUiConfig(),
             },
           });
         });
       }
     );
-
-    [
-      "openrouter-text-model",
-      "openrouter-image-model",
-      "openrouter-video-model",
-    ].forEach((id) => {
-      const el = $("#" + id);
-      if (!el) return;
-      el.addEventListener("change", () => {
-        updateStudioBackendLabel({
-          config: {
-            backend: {
-              provider:
-                ($("#backend-provider") && $("#backend-provider").value) ||
-                "openrouter",
-            },
-            gemini: currentGeminiUiConfig(),
-            openrouter: currentOpenRouterUiConfig(),
-            huggingface: currentHfUiConfig(),
-          },
-        });
-      });
-    });
-
-    if ($("#backend-provider")) {
-      $("#backend-provider").addEventListener("change", () => {
-        syncBackendPanels();
-        updateApiKeyIndicators();
-        updateStudioBackendLabel({
-          config: {
-            backend: { provider: $("#backend-provider").value },
-            gemini: currentGeminiUiConfig(),
-            openrouter: currentOpenRouterUiConfig(),
-            huggingface: currentHfUiConfig(),
-          },
-        });
-      });
-    }
 
     if ($("#gemini-search")) {
       $("#gemini-search").addEventListener("change", () => {
@@ -8619,20 +8705,8 @@
     }
 
     $("#btn-save-model").addEventListener("click", async () => {
-      await saveControlPanelSettings({ offerDownload: true });
+      await saveControlPanelSettings();
     });
-
-    if ($("#btn-hf-refresh-models")) {
-      $("#btn-hf-refresh-models").addEventListener("click", () => {
-        void refreshHfModelsForControlPanel();
-      });
-    }
-
-    if ($("#btn-openrouter-refresh-models")) {
-      $("#btn-openrouter-refresh-models").addEventListener("click", () => {
-        void refreshOpenRouterModelsForControlPanel();
-      });
-    }
 
     if ($("#btn-gemini-refresh-models")) {
       $("#btn-gemini-refresh-models").addEventListener("click", () => {
@@ -8729,16 +8803,6 @@
         void runRecommendModels("gemini");
       });
     }
-    if ($("#btn-openrouter-recommend-models")) {
-      $("#btn-openrouter-recommend-models").addEventListener("click", () => {
-        void runRecommendModels("openrouter");
-      });
-    }
-    if ($("#btn-hf-recommend-models")) {
-      $("#btn-hf-recommend-models").addEventListener("click", () => {
-        void runRecommendModels("huggingface");
-      });
-    }
 
     $("#btn-save-settings").addEventListener("click", async () => {
       await saveControlPanelSettings({ applyDisplay: true });
@@ -8831,6 +8895,7 @@
     applyAppTheme(state.appTheme || "light");
     syncControlPanelWidth();
     adoptWindowsIntoLayer();
+    ensureImeBridge();
     wireEvents();
     enableWindowDragging();
     enableWindowResizing();

@@ -28,7 +28,6 @@ DEFAULT_HF_MODEL = DEFAULT_HF_TEXT_MODEL
 
 DEFAULTS: dict[str, Any] = {
     "backend": {
-        # gemini (default) | openrouter | huggingface (local, optional deps)
         "provider": "gemini",
     },
     "gemini": {
@@ -48,30 +47,6 @@ DEFAULTS: dict[str, Any] = {
         "temperature": 0.0,
         # Runtime-learned: { "old-model-id": "replacement-id" } merged with built-ins
         "retired_model_aliases": {},
-    },
-    "openrouter": {
-        "text_model": DEFAULT_OPENROUTER_TEXT_MODEL,
-        "image_model": DEFAULT_OPENROUTER_IMAGE_MODEL,
-        "video_model": DEFAULT_OPENROUTER_VIDEO_MODEL,
-        "api_key": None,  # set via Control Panel → saved in config.yaml
-        "temperature": 0.0,
-        "base_url": "https://openrouter.ai/api/v1",
-    },
-    "huggingface": {
-        # Three modality slots — Studio picks by prompt intent (like Gemini/OpenRouter)
-        "text_model": DEFAULT_HF_TEXT_MODEL,
-        "image_model": DEFAULT_HF_IMAGE_MODEL,
-        "video_model": DEFAULT_HF_VIDEO_MODEL,
-        # Alias of text_model (kept for older configs / UI)
-        "repo_id": DEFAULT_HF_TEXT_MODEL,
-        "revision": "main",
-        "device": "auto",
-        "torch_dtype": "auto",
-        "max_new_tokens": 2048,
-        "temperature": 0.0,
-        "top_p": 0.9,
-        "trust_remote_code": False,
-        "hf_token": None,
     },
     "prompt": {
         # Appended to generation prompts (Control Panel → Extra system instructions)
@@ -138,28 +113,19 @@ def _load_yaml(path: Path) -> dict[str, Any]:
     return data
 
 
-def normalize_huggingface_cfg(hf: dict[str, Any] | None) -> dict[str, Any]:
-    """
-    Normalize Hugging Face settings to three modality slots.
-
-    Older configs only had ``repo_id`` (text). That value becomes ``text_model``
-    when ``text_model`` is missing; ``repo_id`` stays synced as an alias.
-    """
-    out = dict(hf or {})
-    text = (
-        (out.get("text_model") or out.get("repo_id") or DEFAULT_HF_TEXT_MODEL) or ""
-    ).strip() or DEFAULT_HF_TEXT_MODEL
-    image = (
-        (out.get("image_model") or DEFAULT_HF_IMAGE_MODEL) or ""
-    ).strip() or DEFAULT_HF_IMAGE_MODEL
-    video = (
-        (out.get("video_model") or DEFAULT_HF_VIDEO_MODEL) or ""
-    ).strip() or DEFAULT_HF_VIDEO_MODEL
-    out["text_model"] = text
-    out["image_model"] = image
-    out["video_model"] = video
-    out["repo_id"] = text
-    return out
+def _coerce_gemini_backend(cfg: dict[str, Any]) -> None:
+    """Ignore retired OpenRouter / Hugging Face backends from older config files."""
+    backend = cfg.setdefault("backend", {})
+    if not isinstance(backend, dict):
+        cfg["backend"] = {"provider": "gemini"}
+        return
+    prov = str(backend.get("provider") or "gemini").lower().strip()
+    if prov in _DEPRECATED_BACKENDS or prov not in ("gemini", "google", "google-gemini"):
+        backend["provider"] = "gemini"
+    else:
+        backend["provider"] = "gemini"
+    cfg.pop("openrouter", None)
+    cfg.pop("huggingface", None)
 
 
 def normalize_gemini_cfg(section: dict[str, Any] | None) -> dict[str, Any]:
@@ -209,7 +175,7 @@ def load_config() -> dict[str, Any]:
     for path in (DEFAULT_CONFIG_PATH, PROJECT_ROOT / "config.local.yaml"):
         cfg = _deep_merge(cfg, _load_yaml(path))
 
-    cfg["huggingface"] = normalize_huggingface_cfg(cfg.get("huggingface"))
+    _coerce_gemini_backend(cfg)
     cfg["gemini"] = normalize_gemini_cfg(cfg.get("gemini"))
     cfg["google_workspace"] = normalize_google_workspace_cfg(cfg)
 
@@ -265,39 +231,28 @@ def _apply_api_key_update(updates: dict[str, Any], section: str) -> None:
     updates[section] = section_updates
 
 
-def _normalize_api_key(section: dict[str, Any]) -> dict[str, Any]:
-    out = dict(section or {})
-    raw_key = (out.get("api_key") or "").strip()
-    out["api_key"] = raw_key or None
-    return out
-
-
 def save_config(updates: dict[str, Any], existing: dict[str, Any] | None = None) -> dict[str, Any]:
     """Persist Control Panel changes to the project config.yaml."""
     current = existing or load_config()
     updates = copy.deepcopy(updates)
 
     _apply_api_key_update(updates, "gemini")
-    _apply_api_key_update(updates, "openrouter")
 
     merged = _deep_merge(current, updates)
+    _coerce_gemini_backend(merged)
     paths = merged.setdefault("paths", {})
     paths.pop("media_resolved", None)
     paths["media"] = normalize_media_folder(paths.get("media"))
     ui_out = dict(merged.get("ui") or {})
 
     gemini_out = normalize_gemini_cfg(merged.get("gemini") or {})
-    openrouter_out = _normalize_api_key(merged.get("openrouter") or {})
-    huggingface_out = normalize_huggingface_cfg(merged.get("huggingface") or {})
     prompt_out = dict(merged.get("prompt") or {})
     prompt_out.setdefault("extra_instructions", "")
     workspace_out = normalize_google_workspace_cfg(merged)
 
     to_write = {
-        "backend": merged.get("backend", {}),
+        "backend": {"provider": "gemini"},
         "gemini": gemini_out,
-        "openrouter": openrouter_out,
-        "huggingface": huggingface_out,
         "prompt": prompt_out,
         "google_workspace": workspace_out,
         "ui": ui_out,
@@ -310,12 +265,13 @@ def save_config(updates: dict[str, Any], existing: dict[str, Any] | None = None)
     with DEFAULT_CONFIG_PATH.open("w", encoding="utf-8") as fh:
         yaml.safe_dump(to_write, fh, default_flow_style=False, sort_keys=False)
 
+    merged["backend"] = {"provider": "gemini"}
     merged["gemini"] = gemini_out
-    merged["openrouter"] = openrouter_out
-    merged["huggingface"] = huggingface_out
     merged["prompt"] = prompt_out
     merged["google_workspace"] = workspace_out
     merged.pop("gmail", None)
+    merged.pop("openrouter", None)
+    merged.pop("huggingface", None)
     merged["ui"] = ui_out
     return merged
 
@@ -351,61 +307,3 @@ def media_path(cfg: dict[str, Any] | None = None) -> Path:
 def prompts_path(cfg: dict[str, Any] | None = None) -> Path:
     cfg = cfg or load_config()
     return expand_path(cfg["paths"].get("prompts") or DEFAULTS["paths"]["prompts"])
-
-# Suggested Hugging Face models (local backend) — curated per modality
-SUGGESTED_MODELS: list[dict[str, str]] = [
-    {
-        "repo_id": "microsoft/Phi-3.5-mini-instruct",
-        "label": "Phi-3.5 Mini Instruct",
-        "notes": "~3.8B text — weak for accurate docs without search tools",
-        "modality": "text",
-    },
-    {
-        "repo_id": "Qwen/Qwen2.5-3B-Instruct",
-        "label": "Qwen2.5 3B Instruct",
-        "notes": "Small local text — demos / light writing",
-        "modality": "text",
-    },
-    {
-        "repo_id": "Qwen/Qwen2.5-1.5B-Instruct",
-        "label": "Qwen2.5 1.5B Instruct",
-        "notes": "Fastest / lowest VRAM text — demos only",
-        "modality": "text",
-    },
-    {
-        "repo_id": "google/gemma-2-2b-it",
-        "label": "Gemma 2 2B IT",
-        "notes": "Compact text (may require HF acceptance)",
-        "modality": "text",
-    },
-    {
-        "repo_id": "stable-diffusion-v1-5/stable-diffusion-v1-5",
-        "label": "Stable Diffusion 1.5",
-        "notes": "Classic local text-to-image (~4GB VRAM typical)",
-        "modality": "image",
-    },
-    {
-        "repo_id": "stabilityai/sd-turbo",
-        "label": "SD Turbo",
-        "notes": "Fast image (1–4 steps) — higher VRAM than SD 1.5",
-        "modality": "image",
-    },
-    {
-        "repo_id": "stabilityai/sdxl-turbo",
-        "label": "SDXL Turbo",
-        "notes": "Higher quality turbo image — needs more VRAM",
-        "modality": "image",
-    },
-    {
-        "repo_id": "ali-vilab/text-to-video-ms-1.7b",
-        "label": "ModelScope Text-to-Video 1.7B",
-        "notes": "Classic Diffusers T2V — short clips, heavy on CPU/GPU",
-        "modality": "video",
-    },
-    {
-        "repo_id": "cerspense/zeroscope_v2_576w",
-        "label": "Zeroscope v2 576w",
-        "notes": "Local text-to-video — short 576p-ish clips",
-        "modality": "video",
-    },
-]

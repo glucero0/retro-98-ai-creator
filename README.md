@@ -2,7 +2,7 @@
 
 A Windows 98–themed desktop studio for general-purpose AI creation: **text**, **images**, **video**, and **music** — with built-in editors, an archive of everything you make, and a fully skinnable retro desktop.
 
-> **Work in progress.** This project is under active development. Features, APIs, config, and storage formats may change without notice. **Use at your own risk** — there is no warranty of any kind. You are responsible for API costs, local model downloads, and any data you generate or store. Do not rely on it for production, critical, or irreversible work.
+> **Work in progress.** This project is under active development. Features, APIs, config, and storage formats may change without notice. **Use at your own risk** — there is no warranty of any kind. You are responsible for API costs and any data you generate or store. Do not rely on it for production, critical, or irreversible work.
 
 **Default backend: Google Gemini** — text, image, Veo video, and Lyria music via separate model pickers. **OpenRouter** and optional **local Hugging Face** support three modality slots (text / image / video). Music generation is Gemini-only.
 
@@ -25,11 +25,8 @@ A Windows 98–themed desktop studio for general-purpose AI creation: **text**, 
 ## Requirements
 
 - Python 3.10+
-- An API key for at least one backend, set via **Control Panel** (saved to `config.yaml`):
-  - **Gemini** (default backend) — a [Gemini API key](https://aistudio.google.com/apikey)
-  - **OpenRouter** — an [OpenRouter API key](https://openrouter.ai/keys)
-  - **Hugging Face** (optional local backend) — no key required for public models; a [Hugging Face access token](https://huggingface.co/settings/tokens) is only needed for gated/private models or to avoid rate limits, plus `pip install -r requirements-local.txt` and, for GPU use, sufficient VRAM
-- **ffmpeg + ffprobe** — only needed for **Video Edit** (apply filters, split/reorder segments, export). See [Installing ffmpeg](#installing-ffmpeg) below.
+- A [Gemini API key](https://aistudio.google.com/apikey), set via **Control Panel** (saved to `config.yaml`)
+- **ffmpeg + ffprobe** — only needed for **Video Editor** (apply filters, split/reorder segments, export). See [Installing ffmpeg](#installing-ffmpeg) below.
 
 ## Quick start
 
@@ -49,7 +46,7 @@ Then open **Control Panel** → paste your Gemini API key → pick a **Text**, *
 
 ## Installing ffmpeg
 
-Video Edit shells out to system `ffmpeg` and `ffprobe`. They are **not** bundled with this app — install them yourself and put them on your `PATH` (or, on Windows, in a common install folder the app already checks).
+Video Editor shells out to system `ffmpeg` and `ffprobe`. They are **not** bundled with this app — install them yourself and put them on your `PATH` (or, on Windows, in a common install folder the app already checks).
 
 Official builds and docs: [https://ffmpeg.org/download.html](https://ffmpeg.org/download.html)
 
@@ -108,7 +105,7 @@ ffmpeg -version
 ffprobe -version
 ```
 
-Use a reasonably current build (roughly ffmpeg 4+). Very old copies on `PATH` (for example ancient helper scripts) can break Video Edit — remove or reorder `PATH` so the modern `ffmpeg` wins.
+Use a reasonably current build (roughly ffmpeg 4+). Very old copies on `PATH` (for example ancient helper scripts) can break Video Editor — remove or reorder `PATH` so the modern `ffmpeg` wins.
 ## The apps
 
 | Window | What it does |
@@ -120,7 +117,18 @@ Use a reasonably current build (roughly ffmpeg 4+). Very old copies on `PATH` (f
 | **Video Edit** | Same filter/crop/rotate toolset plus a **segment timeline**: split at the playhead, delete/reorder segments, then re-render. Requires ffmpeg. Opened standalone or via Viewer → Edit. |
 | **Control Panel** | AI backend + model pickers, Gemini search/tools toggles, **Storage** / media folder picker, display theme, sound, CRT scanlines, UI scale. **Save** writes `config.yaml` and resets Studio’s **Enable Tools** checkbox to the saved **Use Tools** default (search field visibility and model labels also update). |
 
-### Image Edit / Video Edit: Apply vs. Save
+### Prompt Editor and Saved prompt
+
+Use **Prompt Editor** to keep reusable snippets (a house style, a tool-use recipe, a search query, and so on). **Add** a prompt, give it a **Name**, write the **Prompt** body, then **Save**. **Delete** removes the selected snippet.
+
+In **Creation Studio**, open the **Saved prompt** dropdown and pick a name. The body is inserted at the current cursor in the Prompt field — or in **Search** / **Tool Use** when **Enable Tools** is on, depending on which field last had the cursor.
+
+### Send to Creator vs Use as Basis
+
+- **Use as Basis** (Viewer) — load the Archive item’s media into Studio without copying it. The original stays in Archives.
+- **Save and Send to Creator** (Viewer, Image Editor, Video Editor) — for images and videos only. Saves the current editor/viewer state, then sends that media into Studio as an anonymous basis. The next **CREATE** is stored as a **new** Archive item rather than overwriting the source.
+
+### Image Editor / Video Editor: Apply vs. Save
 
 - Opened **from the Viewer** on an existing Archive item: **Apply** writes the edit back onto that creation's media file.
 - Opened **standalone** (Load Image/Video…): use **Save** to overwrite the loaded file, or **Save As…** to write a new file, via a native save dialog.
@@ -196,7 +204,7 @@ Walking through the neon glow…
 
 ## Gemini Use Tools (optional)
 
-In **Creation Studio**, check **Enable Tools** (Gemini backend). That is a per-session override — you do not need to open Control Panel. Control Panel → **Use Tools (local file read/write)** is only the default after launch or **Save**.
+In **Creation Studio**, check **Enable Tools**. That is a per-session override — you do not need to open Control Panel. Control Panel → **Use Tools (local file read/write)** is only the default after launch or **Save**.
 
 When tools are on, Studio hides the normal prompt and shows:
 
@@ -229,7 +237,7 @@ When tools are on, Studio hides the normal prompt and shows:
 
 ### Google Workspace setup (Gmail, Drive, Docs, Calendar, Tasks)
 
-One desktop OAuth client and one stored token cover all of these tools. Google Keep is not supported on a personal Gmail account. Adding a product later does not require a new client secret — enable the API, add the scope, then Connect again.
+One desktop OAuth client and one stored token cover all of these tools. **Google Keep is omitted** — the Keep API is not available on a personal Gmail account; it requires a Google Workspace (enterprise) account. Adding a product later does not require a new client secret — enable the API, add the scope, then Connect again.
 
 1. In [Google Cloud Console](https://console.cloud.google.com/), create a project and enable the **Gmail**, **Google Drive**, **Google Docs**, **Google Calendar**, and **Google Tasks** APIs.
 2. Create an OAuth client (**Desktop application**) and download the client JSON file.
@@ -286,32 +294,12 @@ All paths for file tools must be **absolute** (e.g. `C:\data\step1.json`). The m
 
 **Security note:** tools read and write files on your machine, `execute_powershell` runs scripts you point at, Google tools use your connected Gmail/Drive/Docs/Calendar account, and `browse_web` fetches http(s) pages you (or the model) choose. Only attach tools you trust.
 
-## OpenRouter setup
-
-1. Create a key at https://openrouter.ai/keys
-2. Control Panel → **Provider: OpenRouter** → paste the key → pick Text / Image / Video models → **Save**
-3. Google Search grounding is Gemini-only; OpenRouter uses the model's own knowledge (no grounding tool)
-4. Studio routes by prompt intent to the matching OpenRouter slot (same pattern as Gemini)
-
-## Local Hugging Face backend (optional)
-
-```bash
-pip install -r requirements-local.txt
-```
-
-Then in Control Panel set **Provider** to **Hugging Face local**, pick **Text**, **Image**, and **Video** models, and save. You can download all three into the Hugging Face cache from the Save dialog. First generation of each modality also downloads on demand.
-
-- **Text** — causal instruct models (Phi-3.5, Qwen, Gemma, …)
-- **Image** — Diffusers text-to-image (Stable Diffusion 1.5, SD Turbo, …)
-- **Video** — Diffusers text-to-video (ModelScope T2V, Zeroscope, …)
-
-Local image/video is slow on CPU and needs substantial VRAM on GPU. Small text models are not recommended for factual docs or keybindings compared to Gemini/OpenRouter with web search.
-
 ## Display, sound, and UI scale
 
 Control Panel → **Display & Sound**:
 
-- **Appearance**: Light, Dark, or Customize (pick a solid desktop color, window color, title bar color, text color, and font — no patterned wallpaper)
+- **Appearance**: **Light Mode (Day)** or **Dark Mode (Night)** — both stay Windows 98 chrome; Dark inverts the palette.
+- **UI font**: Inter by default; Retro Pixel for the classic Win98 look (open-source fonts load from the network the first time you pick them)
 - **Sound effects** on/off
 - **CRT scanlines** overlay on/off
 - **UI scale** from 75%–200%, for high-DPI displays or larger text
@@ -341,7 +329,7 @@ All settings, including API keys, live in `config.yaml` (gitignored). Control Pa
 
 ```yaml
 backend:
-  provider: gemini   # gemini | openrouter | huggingface
+  provider: gemini
 
 gemini:
   text_model: gemini-2.5-flash
@@ -356,28 +344,15 @@ gemini:
   youtube_search_captions: true
   temperature: 0.0
 
-openrouter:
-  text_model: google/gemini-2.5-flash
-  image_model: google/gemini-2.5-flash-image
-  video_model: google/veo-2.0
-  api_key: your_openrouter_key
-  temperature: 0.0
-
-huggingface:         # used when provider: huggingface
-  text_model: microsoft/Phi-3.5-mini-instruct
-  image_model: stable-diffusion-v1-5/stable-diffusion-v1-5
-  video_model: ali-vilab/text-to-video-ms-1.7b
-  device: auto
-  max_new_tokens: 2048
-
 prompt:
   extra_instructions: ""
 
 ui:
-  app_theme: light    # light | dark | custom
+  app_theme: light    # light | dark
   sound_enabled: true
   crt_enabled: false
   ui_scale: 1.0
+  ui_font: inter
 
 paths:
   archives: archives.json

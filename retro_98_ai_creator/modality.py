@@ -222,7 +222,7 @@ def classify_model_modality(
         if phrase in meta:
             return "image"
 
-    # OpenRouter / Gemini text chat models
+    # Gemini text chat models (and leftover Hub-style ids)
     if "gemini" in mid or "/" in mid or "gpt" in mid or "claude" in mid or "llama" in mid:
         return "text"
     if "instruct" in mid or "chat" in mid:
@@ -317,11 +317,9 @@ def check_prompt_model_compatibility(
     *,
     provider: str = "gemini",
     gemini_cfg: dict[str, Any] | None = None,
-    openrouter_cfg: dict[str, Any] | None = None,
-    huggingface_cfg: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     """
-    Compare prompt intent with the selected backend.
+    Compare prompt intent with Gemini's modality slots.
 
     Gemini / OpenRouter / Hugging Face: modality slots — Studio routes by
     prompt intent to the matching configured model. Audio (Lyria) is Gemini-only.
@@ -399,16 +397,12 @@ def check_prompt_model_compatibility(
     )
     where = f"Open Control Panel and switch to {suggest_txt}"
 
-    error = (
-        f"This prompt looks like {modality_indefinite(prompt_mod)} request, but the "
-        f"selected model ({(model_id or '').strip() or 'unknown'}) is "
-        f"{modality_label(model_mod)}-only. Generation stopped. {where}."
-    )
+    routed_mod = prompt_mod or "text"
+    model = resolve_gemini_model_for_modality(gemini_cfg, routed_mod)
     return {
-        "ok": False,
-        "error": error,
+        "ok": True,
         "promptModality": prompt_mod,
-        "modelModality": model_mod,
-        "model": (model_id or "").strip(),
-        "suggestions": suggestions,
+        "modelModality": routed_mod,
+        "model": model,
+        "routed": True,
     }

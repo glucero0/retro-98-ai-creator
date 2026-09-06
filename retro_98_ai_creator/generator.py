@@ -1,4 +1,4 @@
-"""Generation router — Gemini (default), OpenRouter, or local Hugging Face."""
+"""Generation router — Google Gemini."""
 
 from __future__ import annotations
 
@@ -15,20 +15,10 @@ ProgressCallback = Callable[[Any], None]
 
 
 def _active_model_and_provider(config: dict[str, Any]) -> tuple[str, str]:
-    backend = ((config.get("backend") or {}).get("provider") or "gemini").lower().strip()
-    if backend in ("gemini", "google", "google-gemini"):
-        from .gemini_provider import normalize_gemini_model
+    from .gemini_provider import normalize_gemini_model
 
-        g = config.get("gemini") or {}
-        return normalize_gemini_model(g.get("text_model")), "gemini"
-    if backend in ("openrouter", "open-router", "or"):
-        from .openrouter_provider import normalize_openrouter_model
-
-        o = config.get("openrouter") or {}
-        return normalize_openrouter_model(o.get("text_model")), "openrouter"
-    from .hf_provider import resolve_hf_model_for_modality
-
-    return resolve_hf_model_for_modality(config.get("huggingface"), "text"), "huggingface"
+    g = config.get("gemini") or {}
+    return normalize_gemini_model(g.get("text_model")), "gemini"
 
 
 def generate_creation(
@@ -45,8 +35,9 @@ def generate_creation(
     tool_aliases: list[str] | None = None,
     search_query: str | None = None,
 ) -> dict[str, Any]:
-    """Dispatch to the configured backend and return a creation document."""
+    """Dispatch to Gemini and return a creation document."""
     from .cancellation import raise_if_cancelled
+    from .gemini_provider import generate_with_gemini
     from .modality import infer_prompt_modality
 
     def _cancelled() -> bool:
@@ -61,7 +52,6 @@ def generate_creation(
 
         maybe_raise_franchise_ambiguous(game)
 
-    backend = ((config.get("backend") or {}).get("provider") or "gemini").lower().strip()
     system_extra = (config.get("prompt") or {}).get("extra_instructions", "") or ""
     creation_description = resolve_creation_description(
         creation_type,
@@ -99,73 +89,26 @@ def generate_creation(
         prompt_for_compat,
         model_id,
         provider=provider,
-        gemini_cfg=config.get("gemini") if provider == "gemini" else None,
-        openrouter_cfg=config.get("openrouter") if provider == "openrouter" else None,
-        huggingface_cfg=(
-            config.get("huggingface") if provider == "huggingface" else None
-        ),
+        gemini_cfg=config.get("gemini"),
     )
     if not compat.get("ok"):
         raise RuntimeError(compat.get("error") or "Model modality mismatch.")
 
-    if backend in ("gemini", "google", "google-gemini"):
-        from .gemini_provider import generate_with_gemini
-
-        raise_if_cancelled(_cancelled)
-        return generate_with_gemini(
-            game,
-            platform,
-            creation_type,
-            gemini_cfg=config.get("gemini") or {},
-            system_extra=system_extra,
-            creation_description=creation_description,
-            progress=progress,
-            exact_title=exact_title or generic,
-            basis_media=basis,
-            forced_modality=forced_modality,
-            cancel_event=cancel_event,
-            tool_aliases=tool_aliases,
-            search_query=search_text,
-        )
-
-    if backend in ("openrouter", "open-router", "or"):
-        from .openrouter_provider import generate_with_openrouter
-
-        raise_if_cancelled(_cancelled)
-        return generate_with_openrouter(
-            game,
-            platform,
-            creation_type,
-            openrouter_cfg=config.get("openrouter") or {},
-            system_extra=system_extra,
-            creation_description=creation_description,
-            progress=progress,
-            exact_title=exact_title or generic,
-            basis_media=basis,
-            forced_modality=forced_modality,
-            cancel_event=cancel_event,
-        )
-
-    if backend in ("huggingface", "hf", "local", "phi"):
-        from .hf_provider import generate_with_huggingface
-
-        raise_if_cancelled(_cancelled)
-        return generate_with_huggingface(
-            game,
-            platform,
-            creation_type,
-            model_cfg=config.get("huggingface") or {},
-            system_extra=system_extra,
-            creation_description=creation_description,
-            progress=progress,
-            exact_title=exact_title or generic,
-            cancel_event=cancel_event,
-            basis_media=basis,
-            forced_modality=forced_modality,
-        )
-
-    raise RuntimeError(
-        f"Unknown backend provider {backend!r}. Use 'gemini', 'openrouter', or 'huggingface'."
+    raise_if_cancelled(_cancelled)
+    return generate_with_gemini(
+        game,
+        platform,
+        creation_type,
+        gemini_cfg=config.get("gemini") or {},
+        system_extra=system_extra,
+        creation_description=creation_description,
+        progress=progress,
+        exact_title=exact_title or generic,
+        basis_media=basis,
+        forced_modality=forced_modality,
+        cancel_event=cancel_event,
+        tool_aliases=tool_aliases,
+        search_query=search_text,
     )
 
 
@@ -236,24 +179,18 @@ def provider_status(config: dict[str, Any]) -> dict[str, Any]:
     media_status = dict(local_media_manager.status)
     loaded = text_status.get("loaded_repo") or media_status.get("loaded_repo")
     detail = (
-        f"Hugging Face local · text {text_m} · image {image_m} · video {video_m}"
+        f"Gemini ready · text {text_m} · image {image_m} · video {video_m}"
+        if has_key
+        else "Paste your Gemini API key in Control Panel"
     )
-    if loaded:
-        kind = media_status.get("loaded_kind") or "text"
-        device = media_status.get("device") if media_status.get("loaded_repo") else text_status.get("device")
-        detail = f"{detail} · loaded {kind} {loaded} on {device}"
-    else:
-        idle_detail = text_status.get("detail") or media_status.get("detail")
-        if idle_detail:
-            detail = f"{detail}. {idle_detail}"
     return {
-        "state": text_status.get("state") or media_status.get("state") or "idle",
+        "state": "ready" if has_key else "needs_key",
         "detail": detail,
-        "provider": "huggingface",
-        "loaded_repo": loaded,
+        "provider": "gemini",
+        "loaded_repo": text_m,
         "textModel": text_m,
         "imageModel": image_m,
         "videoModel": video_m,
         "modality": "multi",
-        "device": text_status.get("device") or media_status.get("device") or "local",
+        "device": "api",
     }

@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Retro 98 AI Creator</title>
   <link rel="stylesheet" href="vendor/98.css" />
-  <link rel="stylesheet" href="styles.css?v=prompt2" />
+  <link rel="stylesheet" href="styles.css?v=caret5" />
 </head>
 <body>
   <div id="desktop">
@@ -78,7 +78,7 @@
                 </div>
                 <p class="hint" id="studio-enable-tools-hint">
                   Toggle tools for this Studio session without opening Control Panel.
-                  Requires Gemini. Control Panel → Use Tools is the default on launch.
+                  Control Panel → Use Tools is the default on launch.
                 </p>
                 <div id="studio-saved-prompt-wrap" class="field-row-stacked">
                   <label for="studio-saved-prompt">Saved prompt</label>
@@ -276,18 +276,6 @@
           <div class="window control-tab-panel" role="tabpanel">
             <div class="window-body">
               <div id="control-pane-ai" class="control-pane" data-control-pane="ai">
-                <fieldset>
-                  <legend>AI Backend</legend>
-                  <div class="field-row-stacked">
-                    <label for="backend-provider">Provider</label>
-                    <select id="backend-provider">
-                      <option value="gemini">Google Gemini (API — fast)</option>
-                      <option value="openrouter">OpenRouter (API — many models)</option>
-                      <option value="huggingface">Hugging Face local (slow / offline)</option>
-                    </select>
-                  </div>
-                </fieldset>
-
                 <fieldset id="gemini-settings">
                   <legend>Gemini</legend>
                   <p class="hint">
@@ -415,111 +403,6 @@
                   <div class="field-row">
                     <label for="gemini-temp">Temperature</label>
                     <input id="gemini-temp" type="number" min="0" max="2" step="0.05" value="0" />
-                  </div>
-                </fieldset>
-
-                <fieldset id="openrouter-settings" hidden>
-                  <legend>OpenRouter</legend>
-                  <p class="hint">
-                    Get a key at
-                    <a href="https://openrouter.ai/keys" target="_blank" rel="noreferrer">openrouter.ai/keys</a>.
-                    Paste it below and save — it is stored in <code>config.yaml</code>.
-                    Studio picks the Text / Image / Video model from your prompt.
-                  </p>
-                  <div class="field-row-stacked">
-                    <label for="openrouter-text-model">Text model</label>
-                    <select id="openrouter-text-model"></select>
-                  </div>
-                  <div class="field-row-stacked">
-                    <label for="openrouter-image-model">Image model</label>
-                    <select id="openrouter-image-model"></select>
-                  </div>
-                  <div class="field-row-stacked">
-                    <label for="openrouter-video-model">Video model</label>
-                    <select id="openrouter-video-model"></select>
-                  </div>
-                  <div class="form-actions">
-                    <button type="button" id="btn-openrouter-refresh-models">Refresh OpenRouter models…</button>
-                    <button type="button" id="btn-openrouter-recommend-models">Recommend Models…</button>
-                  </div>
-                  <p class="hint" id="openrouter-model-hint">
-                    Each list starts with a curated set. Refresh loads up to 20 popular
-                    OpenRouter models per modality (ranked by popularity).
-                    Studio picks the slot from your prompt (text / image / video).
-                  </p>
-                  <div class="field-row-stacked">
-                    <label for="openrouter-key">
-                      <span>API key</span>
-                      <span class="label-hint" id="openrouter-key-badge">Not set</span>
-                    </label>
-                    <input id="openrouter-key" type="password" placeholder="Paste OpenRouter API key" />
-                  </div>
-                  <p class="hint" id="openrouter-key-status"></p>
-                  <div class="field-row">
-                    <label for="openrouter-temp">Temperature</label>
-                    <input id="openrouter-temp" type="number" min="0" max="2" step="0.05" value="0" />
-                  </div>
-                </fieldset>
-
-                <fieldset id="hf-settings" hidden>
-                  <legend>Hugging Face (local)</legend>
-                  <p class="hint disclaimer hf-setup-hint">
-                    <strong>Setup required:</strong> install local deps with
-                    <code>pip install -r requirements-local.txt</code> before this backend will work.
-                  </p>
-                  <p class="hint disclaimer">
-                    Studio picks the <strong>Text</strong> / <strong>Image</strong> /
-                    <strong>Video</strong> model from your prompt (same slot pattern as Gemini).
-                    Text uses causal instruct models; image/video use Diffusers pipelines.
-                    Defaults are small curated Hub repos — large downloads and high VRAM use
-                    are expected.
-                  </p>
-                  <div class="field-row-stacked">
-                    <label for="hf-text-model">Text model</label>
-                    <select id="hf-text-model"></select>
-                  </div>
-                  <div class="field-row-stacked">
-                    <label for="hf-image-model">Image model</label>
-                    <select id="hf-image-model"></select>
-                  </div>
-                  <div class="field-row-stacked">
-                    <label for="hf-video-model">Video model</label>
-                    <select id="hf-video-model"></select>
-                  </div>
-                  <div class="form-actions">
-                    <button type="button" id="btn-hf-refresh-models">Refresh Hub models…</button>
-                    <button type="button" id="btn-hf-recommend-models">Recommend Models…</button>
-                  </div>
-                  <p class="hint" id="hf-model-hint">
-                    Each list starts with a curated set. Refresh loads up to 20 popular
-                    Hub models per modality (ranked by downloads).
-                    Save can offer a download of all three into the Hugging Face cache.
-                  </p>
-                  <div class="field-row">
-                    <label for="model-device">Device</label>
-                    <select id="model-device">
-                      <option value="auto">auto</option>
-                      <option value="cpu">cpu</option>
-                      <option value="cuda">cuda</option>
-                      <option value="mps">mps</option>
-                    </select>
-                    <label for="model-dtype">dtype</label>
-                    <select id="model-dtype">
-                      <option value="auto">auto</option>
-                      <option value="float16">float16</option>
-                      <option value="bfloat16">bfloat16</option>
-                      <option value="float32">float32</option>
-                    </select>
-                  </div>
-                  <div class="field-row">
-                    <label for="model-tokens">Max tokens</label>
-                    <input id="model-tokens" type="number" min="256" max="16384" step="256" />
-                    <label for="model-temp">Temperature</label>
-                    <input id="model-temp" type="number" min="0" max="2" step="0.05" value="0" />
-                  </div>
-                  <div class="field-row-stacked">
-                    <label for="model-token">HF token (optional, gated models)</label>
-                    <input id="model-token" type="password" placeholder="hf_… or leave blank" />
                   </div>
                 </fieldset>
 
@@ -1111,8 +994,8 @@
         </div>
         <div class="window-body">
           <p id="recommend-models-message">
-            Choose how to pick Text, Image, and Video models for the active provider.
-            The app will query the live catalog (not only the current picker lists).
+            Choose how to pick Text, Image, and Video Gemini models.
+            The app will query Google's live catalog (not only the current picker lists).
           </p>
           <fieldset class="recommend-models-options">
             <legend>Recommendation</legend>
@@ -1174,6 +1057,6 @@
   <script src="vendor/jspdf.umd.min.js"></script>
   <script src="catalog.js"></script>
   <script src="image_edit.js"></script>
-  <script src="app.js?v=prompt2"></script>
+  <script src="app.js?v=caret5"></script>
 </body>
 </html>

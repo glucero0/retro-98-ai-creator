@@ -10,7 +10,7 @@ from pathlib import Path
 from typing import Any
 
 from . import __version__
-from .config import SUGGESTED_MODELS, load_config, save_config
+from .config import load_config, save_config
 from .gemini_provider import (
     SUGGESTED_GEMINI_MODELS,
     _gemini_model_id,
@@ -23,10 +23,6 @@ from .gemini_provider import (
 )
 from .creation_utils import AmbiguousGameError
 from .generator import generate_creation, provider_status
-from .openrouter_provider import (
-    SUGGESTED_OPENROUTER_MODELS,
-    resolve_api_key as resolve_openrouter_key,
-)
 from .presets import CREATION_TYPES, PLATFORM_OPTIONS, PLATFORMS, POPULAR_GAME_PRESETS
 from .storage import ArchiveStore, PromptStore
 
@@ -165,13 +161,7 @@ class Api:
             prompt or "",
             model_id,
             provider=provider,
-            gemini_cfg=self.config.get("gemini") if provider == "gemini" else None,
-            openrouter_cfg=(
-                self.config.get("openrouter") if provider == "openrouter" else None
-            ),
-            huggingface_cfg=(
-                self.config.get("huggingface") if provider == "huggingface" else None
-            ),
+            gemini_cfg=self.config.get("gemini"),
         )
         return result
 
@@ -183,7 +173,6 @@ class Api:
         return {
             "version": __version__,
             "config": self._public_config(),
-            "suggestedModels": SUGGESTED_MODELS,
             "suggestedGeminiModels": [
                 m
                 for m in SUGGESTED_GEMINI_MODELS
@@ -192,7 +181,6 @@ class Api:
             "retiredGeminiModels": sorted(
                 {_gemini_model_id(k).lower() for k in aliases if _gemini_model_id(k)}
             ),
-            "suggestedOpenRouterModels": SUGGESTED_OPENROUTER_MODELS,
             "platforms": PLATFORM_OPTIONS,
             "hardwarePlatforms": PLATFORMS,
             "creationTypes": CREATION_TYPES,
@@ -370,10 +358,8 @@ class Api:
             paths["media_resolved"] = str(paths.get("media") or "media")
 
         return {
-            "backend": dict(cfg.get("backend") or {}),
+            "backend": {"provider": "gemini"},
             "gemini": gemini,
-            "openrouter": openrouter,
-            "huggingface": dict(cfg.get("huggingface") or {}),
             "prompt": dict(cfg.get("prompt") or {}),
             "google_workspace": dict(cfg.get("google_workspace") or {}),
             "ui": dict(cfg.get("ui") or {}),
@@ -422,57 +408,8 @@ class Api:
                 "source": "fallback",
             }
 
-    def list_hf_models(self) -> dict[str, Any]:
-        """Fetch top Hub models (by downloads) for text / image / video slots."""
-        from .hf_provider import list_available_hf_models, merge_hf_model_suggestions
-
-        try:
-            live = list_available_hf_models(self.config.get("huggingface") or {})
-            models = merge_hf_model_suggestions(live, SUGGESTED_MODELS)
-            return {
-                "ok": True,
-                "models": models,
-                "source": "live",
-                "count": len(live),
-                "liveCount": len(live),
-            }
-        except Exception as exc:  # noqa: BLE001
-            logger.warning("list_hf_models failed: %s", exc)
-            return {
-                "ok": False,
-                "error": str(exc),
-                "models": SUGGESTED_MODELS,
-                "source": "fallback",
-            }
-
-    def list_openrouter_models(self) -> dict[str, Any]:
-        """Fetch popular OpenRouter models for text / image / video slots."""
-        from .openrouter_provider import (
-            list_available_openrouter_models,
-            merge_openrouter_model_suggestions,
-        )
-
-        try:
-            live = list_available_openrouter_models(self.config.get("openrouter") or {})
-            models = merge_openrouter_model_suggestions(live, SUGGESTED_OPENROUTER_MODELS)
-            return {
-                "ok": True,
-                "models": models,
-                "source": "live",
-                "count": len(live),
-                "liveCount": len(live),
-            }
-        except Exception as exc:  # noqa: BLE001
-            logger.warning("list_openrouter_models failed: %s", exc)
-            return {
-                "ok": False,
-                "error": str(exc),
-                "models": SUGGESTED_OPENROUTER_MODELS,
-                "source": "fallback",
-            }
-
     def recommend_models(self, criteria: str = "balanced", provider: str = "") -> dict[str, Any]:
-        """Pick Text / Image / Video models from live catalogs for a provider."""
+        """Pick Text / Image / Video Gemini models from Google's catalog."""
         from .recommend_models import recommend_models_for_config
 
         try:
@@ -492,7 +429,7 @@ class Api:
         if not isinstance(updates, dict):
             return {"ok": False, "error": "Invalid settings payload"}
 
-        reload_model = bool(updates.pop("reload_model", False))
+        updates.pop("reload_model", False)
 
         from .media_store import collect_relocatable_media, media_dir
 
@@ -504,7 +441,7 @@ class Api:
         self.config = save_config(updates, existing=self.config)
         self._apply_media_http_root()
 
-        result: dict[str, Any] = {
+        return {
             "ok": True,
             "config": self._public_config(),
             "modelStatus": provider_status(self.config),
@@ -527,85 +464,13 @@ class Api:
         except Exception:  # noqa: BLE001
             logger.debug("Could not preview media folder move", exc_info=True)
 
-        provider = ((self.config.get("backend") or {}).get("provider") or "gemini").lower()
-        if reload_model and provider in ("huggingface", "hf", "local", "phi"):
-            try:
-                from .hf_media import local_media_manager
-                from .llm import model_manager
-
-                model_manager.unload()
-                local_media_manager.unload()
-                result["modelStatus"] = provider_status(self.config)
-                result["message"] = (
-                    "Settings saved. Local models will reload on next generation "
-                    "(or use Download to preload text, image, and video)."
-                )
-            except Exception:  # noqa: BLE001
-                pass
-
-        return result
-
     def preload_model(self) -> dict[str, Any]:
-        """Download / load local HF text, image, and video models (API backends: no-op)."""
-        provider = ((self.config.get("backend") or {}).get("provider") or "gemini").lower()
-        if provider in ("gemini", "google", "google-gemini"):
-            status = provider_status(self.config)
-            return {
-                "ok": True,
-                "message": status.get("detail") or "Gemini uses the cloud API — no local download.",
-                "modelStatus": status,
-            }
-        if provider in ("openrouter", "open-router", "or"):
-            status = provider_status(self.config)
-            return {
-                "ok": True,
-                "message": status.get("detail")
-                or "OpenRouter uses the cloud API — no local download.",
-                "modelStatus": status,
-            }
-
-        job_id = f"load_{uuid.uuid4().hex[:10]}"
-        self._set_job(
-            job_id,
-            status="running",
-            kind="preload",
-            progress={
-                "message": "Starting download of text, image, and video models…",
-                "phase": "download",
-            },
-        )
-
-        def _run() -> None:
-            try:
-                from .hf_media import preload_local_models
-
-                info = preload_local_models(
-                    self.config.get("huggingface") or {},
-                    progress=lambda payload: self._on_job_progress(job_id, payload),
-                )
-                self._set_job(
-                    job_id,
-                    status="done",
-                    progress={
-                        "message": "Text, image, and video models ready",
-                        "percent": 100,
-                        "phase": "ready",
-                    },
-                    result={"modelStatus": provider_status(self.config), "preloaded": info},
-                )
-            except Exception as exc:  # noqa: BLE001
-                logger.exception("Model preload failed")
-                self._set_job(job_id, status="error", error=str(exc))
-            finally:
-                self._push_best_effort(
-                    "window.__onModelStatus && window.__onModelStatus()"
-                )
-
-        threading.Thread(target=_run, daemon=True, name="rgc-preload").start()
+        """Gemini uses the cloud API — nothing to download locally."""
+        status = provider_status(self.config)
         return {
             "ok": True,
-            "job_id": job_id,
-            "message": "Downloading text, image, and video models…",
+            "message": status.get("detail") or "Gemini uses the cloud API — no local download.",
+            "modelStatus": status,
         }
 
     # ── Archives ──────────────────────────────────────────────────────
@@ -698,13 +563,7 @@ class Api:
             desc_preview,
             model_id,
             provider=provider,
-            gemini_cfg=self.config.get("gemini") if provider == "gemini" else None,
-            openrouter_cfg=(
-                self.config.get("openrouter") if provider == "openrouter" else None
-            ),
-            huggingface_cfg=(
-                self.config.get("huggingface") if provider == "huggingface" else None
-            ),
+            gemini_cfg=self.config.get("gemini"),
         )
         if not compat.get("ok"):
             return {
@@ -858,12 +717,6 @@ class Api:
                             f"JSON.parse({json.dumps(json.dumps(retired))}))"
                         )
                 else:
-                    if "torch" in err.lower() or isinstance(exc, ModuleNotFoundError):
-                        err = (
-                            f"{exc}\n\nFor local HF backend install:\n"
-                            "  pip install -r requirements-local.txt\n"
-                            "Or switch backend to Gemini in Control Panel."
-                        )
                     self._set_job(job_id, status="error", error=err)
                     self._push_best_effort(
                         f"window.__onGenerateError && window.__onGenerateError({json.dumps(err)})"
