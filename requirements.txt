@@ -12,7 +12,7 @@ colorama==0.4.6
 cryptography==50.0.0
 distro==1.9.0
 google-auth==2.57.0
-google-auth-oauthlib==1.4.0
+google-auth-oauthlib==1.4.1
 google-genai==2.19.0
 google-api-core==2.34.0
 google-api-python-client==2.199.0
