@@ -255,16 +255,15 @@ def main() -> int:
     logger.info("UI: %s", url)
     logger.info("Media HTTP: %s/media/", origin)
     logger.info("Window: %sx%s", width, height)
-    logger.info("Backend: %s", provider)
-    if provider == "gemini":
-        gemini = cfg.get("gemini") or {}
-        logger.info(
-            "Gemini models: text=%s image=%s video=%s audio=%s",
-            gemini.get("text_model"),
-            gemini.get("image_model"),
-            gemini.get("video_model"),
-            gemini.get("audio_model"),
-        )
+    logger.info("Backend: gemini")
+    gemini = cfg.get("gemini") or {}
+    logger.info(
+        "Gemini models: text=%s image=%s video=%s audio=%s",
+        gemini.get("text_model"),
+        gemini.get("image_model"),
+        gemini.get("video_model"),
+        gemini.get("audio_model"),
+    )
     try:
         webview.start(debug=bool(ui_cfg.get("debug")))
     finally:
