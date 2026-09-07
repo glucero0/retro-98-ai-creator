@@ -75,7 +75,15 @@ def generate_creation(
     forced_modality = resolve_generation_modality(
         creation_description or game,
         basis_modality=basis_mod or None,
+        layout_basis=bool(basis and basis.get("extracted_layout")),
     )
+    if basis and basis.get("extracted_layout"):
+        from .extract_layout import format_layout_basis_prompt
+
+        creation_description = format_layout_basis_prompt(
+            basis.get("extracted_layout"),
+            existing=creation_description or "",
+        )
     prompt_for_compat = creation_description or game
     if forced_modality == "image" and not infer_prompt_modality(prompt_for_compat):
         prompt_for_compat = f"Create an image: {prompt_for_compat}"

@@ -636,7 +636,10 @@ def generate_with_gemini(
         prompt_text
     ) or "text"
     if basis_media and modality not in {"image", "video", "audio"}:
-        modality = str(basis_media.get("modality") or "image")
+        if basis_media.get("extracted_layout"):
+            modality = "text"
+        else:
+            modality = str(basis_media.get("modality") or "image")
     model_name = resolve_gemini_model_for_modality(cfg, modality)
 
     if modality == "image":
@@ -684,6 +687,7 @@ def generate_with_gemini(
         cancel_event=cancel_event,
         tool_aliases=tool_aliases,
         search_query=search_query,
+        basis_media=basis_media,
     )
 
 
@@ -702,6 +706,7 @@ def _generate_text_with_gemini(
     cancel_event: Any = None,
     tool_aliases: list[str] | None = None,
     search_query: str | None = None,
+    basis_media: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     """Text generation path (freeform Prompt or classic structured document)."""
 
@@ -760,6 +765,22 @@ def _generate_text_with_gemini(
     enrich_meta: dict[str, Any] = {}
     search_enrichment_appendix = ""
 
+    def _text_user_contents(prompt: str, *, attach_basis: bool) -> Any:
+        raw = (basis_media or {}).get("bytes") if basis_media else None
+        mime = str((basis_media or {}).get("mime_type") or "image/png").lower()
+        if (
+            not attach_basis
+            or not basis_media
+            or not basis_media.get("extracted_layout")
+            or not raw
+            or not mime.startswith("image/")
+        ):
+            return prompt
+        return [
+            types.Part.from_bytes(data=bytes(raw), mime_type=mime),
+            types.Part.from_text(text=prompt),
+        ]
+
     def _call(
         prompt: str,
         *,
@@ -767,6 +788,7 @@ def _generate_text_with_gemini(
         call_temperature: float,
         json_mime: bool,
         with_url_context: bool = False,
+        attach_basis: bool = True,
     ) -> str:
         nonlocal grounding_sources
         config_kwargs: dict[str, Any] = {
@@ -788,7 +810,7 @@ def _generate_text_with_gemini(
         response = run_cancellable(
             lambda: client.models.generate_content(
                 model=model_name,
-                contents=prompt,
+                contents=_text_user_contents(prompt, attach_basis=attach_basis),
                 config=types.GenerateContentConfig(**config_kwargs),
             ),
             cancel_event,
@@ -828,10 +850,15 @@ def _generate_text_with_gemini(
             )
 
         config = types.GenerateContentConfig(**config_kwargs)
+        user_parts = _text_user_contents(prompt, attach_basis=True)
+        if isinstance(user_parts, str):
+            parts = [types.Part.from_text(text=user_parts)]
+        else:
+            parts = user_parts
         contents: list[Any] = [
             types.Content(
                 role="user",
-                parts=[types.Part.from_text(text=prompt)],
+                parts=parts,
             )
         ]
 
@@ -917,6 +944,7 @@ def _generate_text_with_gemini(
                                 with_url_context=True,
                                 call_temperature=research_temp,
                                 json_mime=False,
+                                attach_basis=False,
                             )
                             if grounding_sources:
                                 search_used = True

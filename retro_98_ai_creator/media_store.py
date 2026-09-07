@@ -36,13 +36,20 @@ MIME_FOR_EXT: dict[str, str] = {
     ".jpeg": "image/jpeg",
     ".webp": "image/webp",
     ".gif": "image/gif",
+    ".bmp": "image/bmp",
     ".mp4": "video/mp4",
     ".webm": "video/webm",
     ".mov": "video/quicktime",
+    ".mkv": "video/x-matroska",
+    ".avi": "video/x-msvideo",
     ".mp3": "audio/mpeg",
     ".wav": "audio/wav",
     ".ogg": "audio/ogg",
+    ".m4a": "audio/mp4",
+    ".aac": "audio/aac",
 }
+
+_TEXT_SUFFIXES = {".txt", ".md", ".markdown", ".csv"}
 
 
 def media_dir(config: dict[str, Any] | None = None) -> Path:
@@ -129,6 +136,21 @@ def mime_for_path(path: Path) -> str:
         return MIME_FOR_EXT[ext]
     guessed, _ = mimetypes.guess_type(str(path))
     return guessed or "application/octet-stream"
+
+
+def modality_for_path(path: Path) -> str | None:
+    """Viewer/import type for a user-chosen file, or None if unsupported."""
+    suffix = Path(path).suffix.lower()
+    if suffix in _TEXT_SUFFIXES:
+        return "text"
+    mime = str(mime_for_path(path) or "").split(";", 1)[0].strip().lower()
+    if mime.startswith("image/"):
+        return "image"
+    if mime.startswith("video/"):
+        return "video"
+    if mime.startswith("audio/"):
+        return "audio"
+    return None
 
 
 _SKIP_RELOCATE_NAMES = {

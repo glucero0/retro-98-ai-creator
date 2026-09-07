@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Retro 98 AI Creator</title>
   <link rel="stylesheet" href="vendor/98.css" />
-  <link rel="stylesheet" href="styles.css?v=caret5" />
+  <link rel="stylesheet" href="styles.css?v=viewer-layout8" />
 </head>
 <body>
   <div id="desktop">
@@ -61,6 +61,9 @@
               <strong>Lyria</strong> (pick Clip or Pro / 3.5 in Control Panel).
               Studio uses <strong>Google Gemini</strong> — paste a key in Control Panel
               and pick Text, Image, Video, and Audio models.
+              Viewer <strong>Extract Layout</strong> plus <strong>Use as Basis</strong> sends a
+              screenshot and its coordinate JSON so Studio can recreate the UI
+              (HTML/CSS or an app) unless you ask for an image or video instead.
             </p>
             <p class="hint disclaimer">
               Always review generated output before relying on it — especially facts,
@@ -142,9 +145,13 @@
                 </div>
                 <p class="hint" id="studio-load-hint">
                   Load Text into the prompt. Load Image / Video sets a media basis shown on
-                  the right — then describe the change and CREATE. To reuse something already
-                  in Archives, open it in the Viewer and choose Use as Basis. For a song, that
-                  reloads the prompt and lyrics as text — not the MP3.
+                  the right — then describe the change and CREATE. The Viewer can
+                  <strong>Open…</strong> a text, image, video, or song file itself (tabs and
+                  tools switch to that type). On an image or video, Viewer
+                  <strong>Extract Layout…</strong> finds UI chrome; <strong>Use as Basis</strong>
+                  then sends the screenshot plus layout JSON so Studio can recreate it as
+                  HTML/CSS or an app (ask for an image if you want another mockup instead).
+                  For a song, Use as Basis reloads the prompt and lyrics as text — not the MP3.
                 </p>
               </form>
             </div>
@@ -181,34 +188,44 @@
           </div>
         </div>
         <div class="window-body viewer-body">
-          <div class="viewer-tabs" role="tablist">
-            <button type="button" class="viewer-tab active" data-tab="doc" role="tab" id="tab-doc">The Document</button>
+          <div class="viewer-tabs" id="viewer-tabs" role="tablist" hidden>
+            <button type="button" class="viewer-tab" data-tab="doc" role="tab" id="tab-doc" hidden>Document</button>
             <button type="button" class="viewer-tab" data-tab="media" role="tab" id="tab-media" hidden>Media</button>
             <button type="button" class="viewer-tab" data-tab="extracted" role="tab" id="tab-extracted" hidden>Extracted</button>
-            <button type="button" class="viewer-tab" data-tab="grounding" role="tab" id="tab-grounding">Sources (0)</button>
-            <button type="button" class="viewer-tab" data-tab="print" role="tab" id="tab-print">Reference Layout</button>
-            <button type="button" class="viewer-tab" data-tab="ascii" role="tab" id="tab-ascii">Plain ASCII</button>
+            <button type="button" class="viewer-tab" data-tab="layout" role="tab" id="tab-layout" hidden>Layout</button>
+            <button type="button" class="viewer-tab" data-tab="grounding" role="tab" id="tab-grounding" hidden>Sources (0)</button>
           </div>
           <div class="viewer-toolbar">
-            <button type="button" id="btn-export-txt">Export TXT</button>
-            <button type="button" id="btn-export-json">Export Metadata</button>
-            <button type="button" id="btn-export-png">Export PNG</button>
-            <button type="button" id="btn-export-pdf">Export PDF</button>
+            <button type="button" id="btn-viewer-open">Open…</button>
+            <div class="viewer-toolbar-actions">
+            <button type="button" id="btn-export-txt" hidden>Export TXT</button>
+            <button type="button" id="btn-export-json" hidden>Export Metadata</button>
+            <button type="button" id="btn-export-png" hidden>Export PNG</button>
+            <button type="button" id="btn-export-pdf" hidden>Export PDF</button>
             <button type="button" id="btn-export-media" hidden>Save MP4…</button>
             <button type="button" id="btn-extract-text" hidden>Extract Text…</button>
+            <button type="button" id="btn-extract-layout" hidden>Extract Layout…</button>
             <button type="button" id="btn-edit-image" hidden>Edit</button>
             <button type="button" id="btn-edit-video" hidden>Edit</button>
-            <button type="button" id="btn-use-basis">Use as Basis</button>
+            <button type="button" id="btn-use-basis" hidden>Use as Basis</button>
             <button type="button" id="btn-viewer-send-creator" hidden>Save and Send to Creator</button>
-            <button type="button" id="btn-copy-ascii">Copy ASCII</button>
-            <button type="button" id="btn-voice">Voice Reader</button>
+            <button type="button" id="btn-voice" hidden>Voice Reader</button>
+            </div>
           </div>
           <div id="doc-canvas" class="doc-canvas">
-            <p class="muted">Open a document from Archives or generate a new one.</p>
+            <div class="viewer-empty">
+              <p>
+                Open a <strong>text</strong> file, <strong>image</strong>, <strong>video</strong>,
+                or <strong>song</strong>. Tabs and tools change to match that type.
+              </p>
+              <p class="muted">
+                You can also generate in Creation Studio or pick an item in Archives.
+              </p>
+            </div>
           </div>
         </div>
         <div class="status-bar">
-          <p class="status-bar-field" id="viewer-status">No document loaded</p>
+          <p class="status-bar-field" id="viewer-status">No file loaded</p>
         </div>
       </div>
 
@@ -1056,6 +1073,6 @@
   <script src="vendor/jspdf.umd.min.js"></script>
   <script src="catalog.js"></script>
   <script src="image_edit.js"></script>
-  <script src="app.js?v=caret5"></script>
+  <script src="app.js?v=viewer-layout8"></script>
 </body>
 </html>

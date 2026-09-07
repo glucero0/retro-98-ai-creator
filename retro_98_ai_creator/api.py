@@ -937,6 +937,115 @@ class Api:
         threading.Thread(target=_run, daemon=True, name=job_id).start()
         return {"ok": True, "job_id": job_id}
 
+    def extract_creation_layout(self, creation_id: str) -> dict[str, Any]:
+        """Start UI layout extraction (image, or a still frame from video)."""
+        from .cancellation import GenerationCancelled
+        from .extract_layout import extract_layout_from_creation
+        from .media_store import resolve_media_path
+
+        creation_id = (creation_id or "").strip()
+        if not creation_id:
+            return {"ok": False, "error": "Missing creation id"}
+
+        target = next((c for c in self.store.load() if c.get("id") == creation_id), None)
+        if not target:
+            return {"ok": False, "error": "Creation not found"}
+        modality = str(target.get("modality") or "").lower()
+        if modality not in {"image", "video"}:
+            return {
+                "ok": False,
+                "error": "Extract Layout is only for image or video creations.",
+            }
+
+        path = resolve_media_path(target.get("mediaPath"), config=self.config)
+        if path is None:
+            return {"ok": False, "error": "Media file is missing on disk."}
+
+        if not self._gen_lock.acquire(blocking=False):
+            return {"ok": False, "error": "Another AI job is already in progress."}
+
+        job_id = f"layout_{uuid.uuid4().hex[:10]}"
+        cancel_evt = threading.Event()
+        with self._jobs_lock:
+            self._cancel_events[job_id] = cancel_evt
+        title = "Extracting layout"
+        self._set_job(
+            job_id,
+            status="running",
+            kind="layout",
+            progress={
+                "message": "Starting layout extraction…",
+                "percent": 0,
+                "phase": "layout",
+                "title": title,
+            },
+        )
+
+        def _progress(payload: Any) -> None:
+            from .cancellation import GenerationCancelled as _GC
+
+            if cancel_evt.is_set():
+                raise _GC("Cancelled by user")
+            self._on_job_progress(job_id, payload)
+
+        def _run() -> None:
+            try:
+                updated = extract_layout_from_creation(
+                    target,
+                    config=self.config,
+                    media_path=path,
+                    progress=_progress,
+                    cancel_event=cancel_evt,
+                )
+                if cancel_evt.is_set():
+                    raise GenerationCancelled("Cancelled by user")
+                saved = self.store.upsert(updated)
+                self._set_job(
+                    job_id,
+                    status="done",
+                    result=saved,
+                    progress={
+                        "message": "Ready",
+                        "percent": 100,
+                        "phase": "ready",
+                        "title": title,
+                    },
+                )
+            except GenerationCancelled:
+                logger.info("Extract layout cancelled: %s", job_id)
+                self._set_job(
+                    job_id,
+                    status="cancelled",
+                    error="Cancelled",
+                    progress={
+                        "message": "Cancelled",
+                        "percent": 100,
+                        "phase": "cancelled",
+                        "title": "Cancelled",
+                    },
+                )
+            except Exception as exc:  # noqa: BLE001
+                logger.exception("Extract layout failed")
+                err = str(exc)
+                retired = self._maybe_learn_retired_gemini(exc)
+                if retired:
+                    err = retired["message"]
+                    self._set_job(
+                        job_id,
+                        status="error",
+                        error=err,
+                        retired_model=retired,
+                    )
+                else:
+                    self._set_job(job_id, status="error", error=err)
+            finally:
+                with self._jobs_lock:
+                    self._cancel_events.pop(job_id, None)
+                self._gen_lock.release()
+
+        threading.Thread(target=_run, daemon=True, name=job_id).start()
+        return {"ok": True, "job_id": job_id}
+
     def _resolve_basis_media(self, creation_id: str) -> dict[str, Any]:
         """Load Archive media for Studio image/video → new media generation."""
         from .media_store import mime_for_path, read_media_bytes, resolve_media_path
@@ -970,29 +1079,35 @@ class Api:
             raw = read_media_bytes(source.get("mediaPath"), config=self.config)
             if not raw:
                 raise RuntimeError("Could not read basis image bytes.")
-            return {
+            payload = {
                 "modality": "image",
                 "bytes": raw,
                 "mime_type": mime or "image/png",
                 "creation_id": cid,
             }
+        else:
+            # Video basis: use a still frame as image reference for I2V / edit flows
+            from .video_edit import extract_video_frame_png
 
-        # Video basis: use a still frame as image reference for I2V / edit flows
-        from .video_edit import extract_video_frame_png
+            try:
+                frame = extract_video_frame_png(path, at_seconds=0.0)
+            except Exception as exc:
+                raise RuntimeError(
+                    f"Could not prepare video basis (need ffmpeg for a reference frame): {exc}"
+                ) from exc
+            payload = {
+                "modality": "video",
+                "bytes": frame,
+                "mime_type": "image/png",
+                "creation_id": cid,
+                "source_modality": "video",
+            }
+        from .extract_layout import get_extracted_layout
 
-        try:
-            frame = extract_video_frame_png(path, at_seconds=0.0)
-        except Exception as exc:
-            raise RuntimeError(
-                f"Could not prepare video basis (need ffmpeg for a reference frame): {exc}"
-            ) from exc
-        return {
-            "modality": "video",
-            "bytes": frame,
-            "mime_type": "image/png",
-            "creation_id": cid,
-            "source_modality": "video",
-        }
+        layout = get_extracted_layout(source)
+        if layout:
+            payload["extracted_layout"] = layout
+        return payload
 
     def get_media_payload(self, creation: dict[str, Any] | None = None) -> dict[str, Any]:
         """Return media for Viewer/Studio: data URL and/or same-origin HTTP URL."""
@@ -1081,9 +1196,10 @@ class Api:
         target["mediaPath"] = stored["mediaPath"]
         target["mimeType"] = stored["mimeType"]
         target["modality"] = "image"
+        from .extract_layout import clear_layout_fields
         from .extract_text import clear_extraction_fields
 
-        target = clear_extraction_fields(target)
+        target = clear_layout_fields(clear_extraction_fields(target))
         saved = self.store.upsert(target)
         return {"ok": True, "creation": saved}
 
@@ -1193,9 +1309,10 @@ class Api:
             target["mediaPath"] = stored["mediaPath"]
             target["mimeType"] = stored["mimeType"]
             target["modality"] = "video"
+            from .extract_layout import clear_layout_fields
             from .extract_text import clear_extraction_fields
 
-            target = clear_extraction_fields(target)
+            target = clear_layout_fields(clear_extraction_fields(target))
             saved = self.store.upsert(target)
             return {"ok": True, "creation": saved}
         except Exception as exc:  # noqa: BLE001
@@ -1446,22 +1563,26 @@ class Api:
         path.write_bytes(raw)
         return {"ok": True, "path": str(path)}
 
-    def import_text_file(self, save_to_archives: bool = False) -> dict[str, Any]:
-        """Open a text file for use as a Studio prompt / text basis."""
-        import webview
-
-        from .creation_utils import build_text_creation_from_plain
-
+    def _dialog_open_path(self, file_types: tuple[str, ...]) -> dict[str, Any]:
         if self._window is None:
             return {"ok": False, "error": "No window"}
         result = self._window.create_file_dialog(
             _file_dialog("open"),
             allow_multiple=False,
-            file_types=("Text Files (*.txt;*.md;*.markdown;*.csv)", "All Files (*.*)"),
+            file_types=file_types,
         )
         if not result:
             return {"ok": False, "cancelled": True}
         path = Path(result if isinstance(result, str) else result[0])
+        if not path.is_file():
+            return {"ok": False, "error": "File not found"}
+        return {"ok": True, "path": path}
+
+    def _import_text_from_path(
+        self, path: Path, save_to_archives: bool = False
+    ) -> dict[str, Any]:
+        from .creation_utils import build_text_creation_from_plain
+
         try:
             text = path.read_text(encoding="utf-8")
         except UnicodeDecodeError:
@@ -1486,46 +1607,16 @@ class Api:
             out["creation"] = self.store.upsert(creation)
         return out
 
-    def import_media_file(self, modality: str = "image") -> dict[str, Any]:
-        """Import an image, video, or audio file into Archives as a new creation."""
+    def _import_media_from_path(self, path: Path, modality: str) -> dict[str, Any]:
         import uuid
-
-        import webview
 
         from .creation_utils import build_media_creation
         from .media_store import mime_for_path, write_media_bytes
         from .modality import normalize_modality
 
-        if self._window is None:
-            return {"ok": False, "error": "No window"}
         mod = normalize_modality(modality, default="image")
         if mod not in {"image", "video", "audio"}:
             return {"ok": False, "error": "modality must be image, video, or audio"}
-
-        if mod == "image":
-            file_types = (
-                "Image Files (*.png;*.jpg;*.jpeg;*.webp;*.gif;*.bmp)",
-                "All Files (*.*)",
-            )
-        elif mod == "audio":
-            file_types = (
-                "Audio Files (*.mp3;*.wav;*.ogg;*.m4a;*.aac)",
-                "All Files (*.*)",
-            )
-        else:
-            file_types = (
-                "Video Files (*.mp4;*.webm;*.mov;*.mkv;*.avi)",
-                "All Files (*.*)",
-            )
-
-        result = self._window.create_file_dialog(
-            _file_dialog("open"),
-            allow_multiple=False,
-            file_types=file_types,
-        )
-        if not result:
-            return {"ok": False, "cancelled": True}
-        path = Path(result if isinstance(result, str) else result[0])
         if not path.is_file():
             return {"ok": False, "error": "File not found"}
 
@@ -1568,6 +1659,73 @@ class Api:
         )
         saved = self.store.upsert(creation)
         return {"ok": True, "creation": saved, "modality": mod}
+
+    def import_text_file(self, save_to_archives: bool = False) -> dict[str, Any]:
+        """Open a text file for use as a Studio prompt / text basis."""
+        picked = self._dialog_open_path(
+            ("Text Files (*.txt;*.md;*.markdown;*.csv)", "All Files (*.*)")
+        )
+        if not picked.get("ok"):
+            return picked
+        return self._import_text_from_path(picked["path"], save_to_archives)
+
+    def import_media_file(self, modality: str = "image") -> dict[str, Any]:
+        """Import an image, video, or audio file into Archives as a new creation."""
+        from .modality import normalize_modality
+
+        mod = normalize_modality(modality, default="image")
+        if mod not in {"image", "video", "audio"}:
+            return {"ok": False, "error": "modality must be image, video, or audio"}
+
+        if mod == "image":
+            file_types = (
+                "Image Files (*.png;*.jpg;*.jpeg;*.webp;*.gif;*.bmp)",
+                "All Files (*.*)",
+            )
+        elif mod == "audio":
+            file_types = (
+                "Audio Files (*.mp3;*.wav;*.ogg;*.m4a;*.aac)",
+                "All Files (*.*)",
+            )
+        else:
+            file_types = (
+                "Video Files (*.mp4;*.webm;*.mov;*.mkv;*.avi)",
+                "All Files (*.*)",
+            )
+
+        picked = self._dialog_open_path(file_types)
+        if not picked.get("ok"):
+            return picked
+        return self._import_media_from_path(picked["path"], mod)
+
+    def open_viewer_file(self) -> dict[str, Any]:
+        """Open any supported file in the Viewer and save it to Archives."""
+        from .media_store import modality_for_path
+
+        picked = self._dialog_open_path(
+            (
+                "All supported (*.txt;*.md;*.markdown;*.csv;*.png;*.jpg;*.jpeg;"
+                "*.webp;*.gif;*.bmp;*.mp4;*.webm;*.mov;*.mkv;*.avi;*.mp3;*.wav;"
+                "*.ogg;*.m4a;*.aac)",
+                "Text Files (*.txt;*.md;*.markdown;*.csv)",
+                "Image Files (*.png;*.jpg;*.jpeg;*.webp;*.gif;*.bmp)",
+                "Video Files (*.mp4;*.webm;*.mov;*.mkv;*.avi)",
+                "Audio Files (*.mp3;*.wav;*.ogg;*.m4a;*.aac)",
+                "All Files (*.*)",
+            )
+        )
+        if not picked.get("ok"):
+            return picked
+        path = picked["path"]
+        mod = modality_for_path(path)
+        if not mod:
+            return {
+                "ok": False,
+                "error": "Viewer can open text, images, video, or audio.",
+            }
+        if mod == "text":
+            return self._import_text_from_path(path, save_to_archives=True)
+        return self._import_media_from_path(path, mod)
 
     def duplicate_creation(self, creation_id: str) -> dict[str, Any]:
         """Clone a creation (and media file) so edits become a new Archive item."""

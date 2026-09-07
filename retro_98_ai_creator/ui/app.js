@@ -27,7 +27,7 @@
     archiveSort: { key: "created", dir: "desc" },
     presets: [],
     creationTypes: [],
-    studioBasis: null, // { creationId, modality, fileUrl, mimeType, title }
+    studioBasis: null, // { creationId, modality, fileUrl, mimeType, title, layout }
     studioTools: [], // selected Gemini tool aliases for this session
     geminiToolsCatalog: null, // from bootstrap / list_gemini_tools
     studioAddToolOpen: false,
@@ -1432,13 +1432,13 @@
     if (loadHint) {
       if (!enabled) {
         loadHint.textContent =
-          "Load Text into the prompt. Load Image / Video sets a media basis shown on the right — then describe the change and CREATE. To reuse something already in Archives, open it in the Viewer and choose Use as Basis. For a song, that reloads the prompt and lyrics as text — not the MP3.";
+          "Load Text into the prompt. Load Image / Video sets a media basis shown on the right — then describe the change and CREATE. On an image or video in Viewer, Extract Layout… finds UI chrome; Use as Basis then sends the screenshot plus layout JSON so Studio can recreate it as HTML/CSS or an app (or another mockup if you ask for an image). For a song, Use as Basis reloads the prompt and lyrics as text — not the MP3.";
       } else if (searchOn) {
         loadHint.textContent =
-          "Load Text into Search (optional). Load Image / Video sets a media basis shown on the right — then describe the change and CREATE. To reuse something already in Archives, open it in the Viewer and choose Use as Basis. For a song, that reloads the prompt and lyrics as text — not the MP3.";
+          "Load Text into Search (optional). Load Image / Video sets a media basis shown on the right — then describe the change and CREATE. On an image or video in Viewer, Extract Layout… finds UI chrome; Use as Basis then sends the screenshot plus layout JSON so Studio can recreate it as HTML/CSS or an app (or another mockup if you ask for an image). For a song, Use as Basis reloads the prompt and lyrics as text — not the MP3.";
       } else {
         loadHint.textContent =
-          "Google Search is off — only Tool Use runs. Load Image / Video sets a media basis shown on the right — then describe the change and CREATE. To reuse something already in Archives, open it in the Viewer and choose Use as Basis. For a song, that reloads the prompt and lyrics as text — not the MP3.";
+          "Google Search is off — only Tool Use runs. Load Image / Video sets a media basis shown on the right — then describe the change and CREATE. On an image or video in Viewer, Extract Layout… finds UI chrome; Use as Basis then sends the screenshot plus layout JSON so Studio can recreate it as HTML/CSS or an app (or another mockup if you ask for an image). For a song, Use as Basis reloads the prompt and lyrics as text — not the MP3.";
       }
     }
     renderStudioToolsList();
@@ -2338,9 +2338,12 @@
     const ok = await setStudioBasisFromCreation(creation);
     if (!ok) return;
     openWindow("form");
+    const layout = getExtractedLayout(creation);
     showToast(
-      (mod === "image" ? "Image" : "Video") +
-        " loaded as Studio basis — describe the change, then CREATE."
+      layout
+        ? "Screenshot plus extracted layout loaded into Studio. Describe the app or mockup to build, then CREATE."
+        : (mod === "image" ? "Image" : "Video") +
+            " loaded as Studio basis — describe the change, then CREATE."
     );
   }
 
@@ -2415,13 +2418,18 @@
       preview.appendChild(img);
     }
     if (label) {
+      const hasLayout = !!(basis.layout && typeof basis.layout === "object");
+      const kind = hasLayout
+        ? basis.modality === "video"
+          ? "Video + UI layout"
+          : "Image + UI layout"
+        : basis.modality === "video"
+          ? "Video basis"
+          : "Image basis";
       if (basis.title) {
-        label.textContent =
-          (basis.modality === "video" ? "Video basis: " : "Image basis: ") +
-          basis.title;
+        label.textContent = kind + ": " + basis.title;
       } else {
-        label.textContent =
-          basis.modality === "video" ? "Video basis" : "Image basis";
+        label.textContent = kind;
       }
     }
     requestAnimationFrame(() => syncDesktopScrollExtent());
@@ -2450,17 +2458,24 @@
       mimeType: payload.mimeType || creation.mimeType || "",
       title: anonymous ? "" : creationTitle(creation),
       mediaPath: creation.mediaPath || "",
+      layout: getExtractedLayout(creation),
     };
     if (!anonymous) {
-      if (!(getStudioPrompt() || "").trim() && (creation.prompt || "").trim()) {
+      const layout = getExtractedLayout(creation);
+      if (layout) {
+        setStudioPrompt(formatLayoutBasisPrompt(layout, getStudioPrompt()));
+        if (studioToolsEnabled()) {
+          setStudioSearch(formatLayoutBasisPrompt(layout, getStudioSearch()));
+        }
+      } else if (!(getStudioPrompt() || "").trim() && (creation.prompt || "").trim()) {
         setStudioPrompt(creation.prompt.trim());
-      }
-      if (
-        studioToolsEnabled() &&
-        !(getStudioSearch() || "").trim() &&
-        (creation.prompt || "").trim()
-      ) {
-        setStudioSearch(creation.prompt.trim());
+        if (
+          studioToolsEnabled() &&
+          !(getStudioSearch() || "").trim() &&
+          (creation.prompt || "").trim()
+        ) {
+          setStudioSearch(creation.prompt.trim());
+        }
       }
     }
     renderStudioBasisPanel();
@@ -3183,6 +3198,11 @@
       syncPromptEditorUi();
       refreshSavedPrompts();
     }
+    if (id === "viewer") {
+      showViewerOpenButton();
+      if (!state.active) prepareEmptyViewer();
+      else syncViewerChrome(state.active);
+    }
     if (el && !state.maximized[id]) layoutWindowInWorkArea(el);
     requestAnimationFrame(() => {
       if (el && !state.maximized[id]) layoutWindowInWorkArea(el);
@@ -3527,6 +3547,7 @@
     if (id === "viewer") {
       stopSpeech();
       stopViewerMedia();
+      renderDocument(null);
     }
     if (id === "image-edit") {
       imageEdit.sourceImg = null;
@@ -4061,11 +4082,12 @@
   }
 
   function setViewerTab(tab) {
+    if (!state.active) return;
     state.viewerTab = tab || "doc";
     document.querySelectorAll(".viewer-tab").forEach((btn) => {
       btn.classList.toggle("active", btn.getAttribute("data-tab") === state.viewerTab);
     });
-    if (state.active) renderDocument(state.active);
+    renderDocument(state.active);
   }
 
   function overviewIsTruncatedBody(creation) {
@@ -4324,6 +4346,166 @@
     return String(creation.meta.extractedText || "").trim();
   }
 
+  function getExtractedLayout(creation) {
+    if (!creation || !creation.meta) return null;
+    const layout = creation.meta.extractedLayout;
+    return layout && typeof layout === "object" ? layout : null;
+  }
+
+  const LAYOUT_BASIS_MARKER = "Layout JSON:";
+  const LAYOUT_BASIS_INTRO =
+    "The screenshot is attached as a Studio media basis. Use this extracted UI layout " +
+    "(element types, labels, pixel boxes, and flags) to recreate the interface — " +
+    "for example as HTML/CSS, a desktop app, or another mockup. Address any flags " +
+    "(overflow, uneven margins, unlabeled controls).\n\n" +
+    LAYOUT_BASIS_MARKER +
+    "\n";
+
+  function formatLayoutBasisPrompt(layout, existing) {
+    if (!layout || typeof layout !== "object") return String(existing || "").trim();
+    const block = LAYOUT_BASIS_INTRO + JSON.stringify(layout, null, 2);
+    const prior = String(existing || "").trim();
+    if (!prior) return block;
+    if (prior.indexOf(LAYOUT_BASIS_MARKER) !== -1) return prior;
+    return prior + "\n\n" + block;
+  }
+
+  function viewerShouldExportLayout(creation) {
+    return state.viewerTab === "layout" && !!getExtractedLayout(creation);
+  }
+
+  function renderLayoutTab(creation) {
+    const layout = getExtractedLayout(creation);
+    const meta = (creation && creation.meta) || {};
+    const modality = creationModality(creation);
+    let html = '<div class="layout-pane extracted-pane">';
+    html += '<div class="extracted-intro"><strong>UI layout</strong>';
+    if (meta.layoutExtractedAt || meta.layoutExtractionModel) {
+      html +=
+        '<span class="extracted-meta">' +
+        escapeHtml(
+          [
+            meta.layoutExtractionProvider,
+            meta.layoutExtractionModel,
+            meta.layoutSource,
+            meta.layoutExtractedAt,
+          ]
+            .filter(Boolean)
+            .join(" · ")
+        ) +
+        "</span>";
+    }
+    html += "</div>";
+    if (!layout) {
+      html +=
+        '<p class="muted">' +
+        (modality === "video"
+          ? "No layout yet. Click <strong>Extract Layout…</strong> to inspect a still frame for windows, buttons, and other chrome."
+          : "No layout yet. Click <strong>Extract Layout…</strong> to look for UI chrome (windows, buttons, fields) and build coordinate data.") +
+        "</p>";
+      html += "</div>";
+      return html;
+    }
+    const isUi = layout.isUi !== false;
+    const elements = Array.isArray(layout.elements) ? layout.elements : [];
+    const flags = Array.isArray(layout.flags) ? layout.flags : [];
+    if (!isUi) {
+      html +=
+        '<p class="muted">Gemini did not treat this as a user-interface screenshot. You can still inspect the JSON below, or try another image.</p>';
+    } else {
+      html +=
+        "<p>" +
+        escapeHtml(String(elements.length)) +
+        " element" +
+        (elements.length === 1 ? "" : "s") +
+        (typeof layout.confidence === "number"
+          ? " · confidence " + layout.confidence
+          : "") +
+        "</p>";
+    }
+    if (modality === "image") {
+      html += '<div class="layout-preview-wrap" id="layout-preview-wrap"></div>';
+    }
+    if (flags.length) {
+      html += '<ul class="layout-flags">';
+      flags.forEach((flag) => {
+        html +=
+          "<li><strong>" +
+          escapeHtml(flag.code || "flag") +
+          "</strong>" +
+          (flag.elementId ? " · " + escapeHtml(flag.elementId) : "") +
+          (flag.message ? " — " + escapeHtml(flag.message) : "") +
+          "</li>";
+      });
+      html += "</ul>";
+    }
+    html +=
+      '<textarea class="extracted-text layout-json" readonly>' +
+      escapeHtml(JSON.stringify(layout, null, 2)) +
+      "</textarea>";
+    html +=
+      '<div class="extracted-actions">' +
+      '<button type="button" id="btn-copy-layout">Copy JSON</button>' +
+      "</div>";
+    html += "</div>";
+    return html;
+  }
+
+  async function loadLayoutPreview(creation) {
+    const wrap = $("#layout-preview-wrap");
+    if (!wrap || !creation) return;
+    const layout = getExtractedLayout(creation);
+    if (!layout || creationModality(creation) !== "image") return;
+    const a = api();
+    if (!a) return;
+    try {
+      const res = await a.get_media_payload(creation);
+      const src = res && (res.fileUrl || res.dataUrl);
+      if (!res || !res.ok || !src) {
+        wrap.innerHTML = '<p class="muted">Could not load the image preview.</p>';
+        return;
+      }
+      const width = Number(layout.width) || 0;
+      const height = Number(layout.height) || 0;
+      const elements = Array.isArray(layout.elements) ? layout.elements : [];
+      let overlay = "";
+      if (width > 0 && height > 0) {
+        elements.forEach((el) => {
+          const box = el && el.box;
+          if (!box) return;
+          const left = (100 * Number(box.x || 0)) / width;
+          const top = (100 * Number(box.y || 0)) / height;
+          const w = (100 * Number(box.w || 0)) / width;
+          const h = (100 * Number(box.h || 0)) / height;
+          overlay +=
+            '<div class="layout-box" data-type="' +
+            escapeHtml(el.type || "other") +
+            '" title="' +
+            escapeHtml((el.type || "element") + (el.label ? ": " + el.label : "")) +
+            '" style="left:' +
+            left.toFixed(2) +
+            "%;top:" +
+            top.toFixed(2) +
+            "%;width:" +
+            w.toFixed(2) +
+            "%;height:" +
+            h.toFixed(2) +
+            '%"></div>';
+        });
+      }
+      wrap.innerHTML =
+        '<img class="layout-preview-img" alt="" src="' +
+        escapeHtml(src) +
+        '" />' +
+        '<div class="layout-overlay">' +
+        overlay +
+        "</div>";
+    } catch (err) {
+      wrap.innerHTML =
+        '<p class="muted">Preview failed: ' + escapeHtml(String(err)) + "</p>";
+    }
+  }
+
   function renderExtractedTab(creation) {
     const text = getExtractedText(creation);
     const meta = (creation && creation.meta) || {};
@@ -4364,46 +4546,61 @@
     return html;
   }
 
-  function renderPrintTab(creation) {
-    const meta = creation.meta || {};
-    let html = '<div class="print-layout">';
-    html += '<div class="print-header">';
-    html += "<h2>" + escapeHtml(creation.game) + "</h2>";
-    html +=
-      "<p><strong>QUICK REFERENCE · " +
-      escapeHtml((creation.platform || "").toUpperCase()) +
-      "</strong></p>";
-    html +=
-      "<p>Published by " +
-      escapeHtml(meta.publisher || "Publisher") +
-      " (" +
-      escapeHtml(meta.releaseYear || "N/A") +
-      ") · " +
-      escapeHtml(meta.systemRequirements || creation.platform || "") +
-      "</p></div>";
-    html += '<div class="print-grid">';
-    (creation.sections || []).forEach((sec) => {
-      html += '<div class="print-card">';
-      const secTitle = String(sec.title || "").trim();
-      if (!shouldHideSectionHeading(secTitle)) {
-        html += "<h3>" + escapeHtml(secTitle) + "</h3>";
+  function viewerEmptyHtml() {
+    return (
+      '<div class="viewer-empty">' +
+      "<p>Open a <strong>text</strong> file, <strong>image</strong>, <strong>video</strong>, " +
+      "or <strong>song</strong>. Tabs and tools change to match that type.</p>" +
+      '<p class="muted">You can also generate in Creation Studio or pick an item in Archives.</p>' +
+      "</div>"
+    );
+  }
+
+  function showViewerOpenButton() {
+    const btn = $("#btn-viewer-open");
+    if (btn) btn.hidden = false;
+  }
+
+  function prepareEmptyViewer() {
+    renderDocument(null);
+  }
+
+  async function viewerOpenFile() {
+    const a = api();
+    if (!a) {
+      showToast("Python bridge required to open files.");
+      return;
+    }
+    showViewerOpenButton();
+    try {
+      const res = await a.open_viewer_file();
+      if (!res || res.cancelled) return;
+      if (!res.ok) {
+        showToast(res.error || "Open failed");
+        return;
       }
-      html += "<p>" + escapeHtml(sec.content || "") + "</p>";
-      (sec.keyValues || []).forEach((kv) => {
-        html +=
-          '<div class="print-kv"><span>' +
-          escapeHtml(kv.label) +
-          "</span><span>" +
-          escapeHtml(kv.value) +
-          "</span></div>";
-      });
-      html += "</div>";
-    });
-    html += "</div>";
-    html +=
-      '<div class="print-footer">Fold or print on cardstock to place next to your keyboard or console.</div>';
-    html += "</div>";
-    return html;
+      if (!res.creation) {
+        showToast("Open failed");
+        return;
+      }
+      rememberImportedCreation(res.creation);
+      const mod = creationModality(res.creation);
+      state.viewerTab = isMediaModality(mod) ? "media" : "doc";
+      renderDocument(res.creation);
+      const label =
+        mod === "image"
+          ? "Image"
+          : mod === "video"
+            ? "Video"
+            : mod === "audio"
+              ? "Song"
+              : "Text";
+      showToast(label + " opened in Viewer");
+    } catch (err) {
+      showToast("Open failed: " + err);
+    } finally {
+      showViewerOpenButton();
+    }
   }
 
   function renderDocument(creation) {
@@ -4413,14 +4610,16 @@
 
     if (!creation) {
       stopSpeech();
-      canvas.classList.remove("tab-ascii", "doc-canvas-reading");
-      canvas.style.background = "";
-      canvas.style.color = "";
-      canvas.style.fontFamily = "";
-      canvas.innerHTML =
-        '<p class="muted">Open a creation from Archives or generate a new one.</p>';
-      $("#viewer-title").textContent = "Viewer";
-      $("#viewer-status").textContent = "No creation loaded";
+      stopViewerMedia();
+      if (canvas) {
+        canvas.classList.remove("doc-canvas-reading");
+        canvas.style.background = "";
+        canvas.style.color = "";
+        canvas.style.fontFamily = "";
+        canvas.innerHTML = viewerEmptyHtml();
+      }
+      if ($("#viewer-title")) $("#viewer-title").textContent = "Viewer";
+      if ($("#viewer-status")) $("#viewer-status").textContent = "No file loaded";
       if (groundingTab) groundingTab.textContent = "Sources (0)";
       syncViewerChrome(null);
       renderTaskbar();
@@ -4445,7 +4644,6 @@
       (created ? " · " + created : "");
 
     const tab = state.viewerTab || (modality === "text" ? "doc" : "media");
-    canvas.classList.toggle("tab-ascii", tab === "ascii");
     canvas.classList.remove("doc-canvas-reading");
 
     if (isMediaModality(modality)) {
@@ -4457,6 +4655,12 @@
         canvas.style.color = "#000000";
         canvas.style.fontFamily = "var(--ui-font)";
         canvas.innerHTML = renderExtractedTab(creation);
+      } else if (tab === "layout") {
+        canvas.style.background = "#ffffff";
+        canvas.style.color = "#000000";
+        canvas.style.fontFamily = "var(--ui-font)";
+        canvas.innerHTML = renderLayoutTab(creation);
+        loadLayoutPreview(creation);
       } else if (tab === "grounding") {
         canvas.style.background = "#ffffff";
         canvas.style.color = "#000000";
@@ -4466,24 +4670,11 @@
         canvas.innerHTML = renderMediaPlaceholder(creation, modality);
         loadMediaIntoCanvas(creation);
       }
-    } else if (tab === "ascii") {
-      canvas.style.background = "#000";
-      canvas.style.color = "#00ff66";
-      canvas.style.fontFamily = FONT_STACKS.mono;
-      canvas.innerHTML =
-        '<textarea class="ascii-pane" readonly>' +
-        escapeHtml(creationToAscii(creation)) +
-        "</textarea>";
     } else if (tab === "grounding") {
       canvas.style.background = "#ffffff";
       canvas.style.color = "#000000";
       canvas.style.fontFamily = "var(--ui-font)";
       canvas.innerHTML = renderGroundingTab(creation);
-    } else if (tab === "print") {
-      canvas.style.background = "#ffffff";
-      canvas.style.color = "#000000";
-      canvas.style.fontFamily = "var(--ui-font)";
-      canvas.innerHTML = renderPrintTab(creation);
     } else {
       canvas.classList.add("doc-canvas-reading");
       canvas.style.background = "";
@@ -4493,32 +4684,6 @@
     }
 
     openWindow("viewer");
-  }
-
-  function creationToAscii(c) {
-    if (!c) return "";
-    const lines = [];
-    const overview = String(c.overview || "").trim();
-    if (overview && !overviewIsTruncatedBody(c)) {
-      lines.push(overview);
-      lines.push("");
-    }
-    (c.sections || []).forEach((s) => {
-      const secTitle = String(s.title || "").trim();
-      if (!shouldHideSectionHeading(secTitle)) {
-        lines.push(secTitle);
-        lines.push("");
-      }
-      if (s.content) lines.push(s.content);
-      lines.push("");
-      if (s.keyValues && s.keyValues.length) {
-        s.keyValues.forEach((kv) => {
-          lines.push("  * " + (kv.label || "") + " : " + (kv.value || ""));
-        });
-        lines.push("");
-      }
-    });
-    return lines.join("\n").replace(/\n+$/, "\n");
   }
 
   function exportCreationMetadata(creation) {
@@ -4672,11 +4837,351 @@
     }
   }
 
+  function drawLayoutAnnotationCanvas(img, layout) {
+    const canvas = document.createElement("canvas");
+    const width = Math.max(1, img.naturalWidth || img.width || 1);
+    const height = Math.max(1, img.naturalHeight || img.height || 1);
+    canvas.width = width;
+    canvas.height = height;
+    const ctx = canvas.getContext("2d");
+    ctx.fillStyle = "#ffffff";
+    ctx.fillRect(0, 0, width, height);
+    ctx.drawImage(img, 0, 0, width, height);
+    const lw = Number(layout && layout.width) || width;
+    const lh = Number(layout && layout.height) || height;
+    const sx = lw > 0 ? width / lw : 1;
+    const sy = lh > 0 ? height / lh : 1;
+    const elements = layout && Array.isArray(layout.elements) ? layout.elements : [];
+    ctx.lineWidth = Math.max(2, Math.round(Math.min(width, height) / 400));
+    elements.forEach((el) => {
+      const box = el && el.box;
+      if (!box) return;
+      const x = Number(box.x || 0) * sx;
+      const y = Number(box.y || 0) * sy;
+      const w = Number(box.w || 0) * sx;
+      const h = Number(box.h || 0) * sy;
+      if (w <= 0 || h <= 0) return;
+      ctx.fillStyle = "rgba(255, 64, 64, 0.12)";
+      ctx.strokeStyle = "#cc2020";
+      ctx.fillRect(x, y, w, h);
+      ctx.strokeRect(x, y, w, h);
+    });
+    return canvas;
+  }
+
+  function layoutExportMetaLines(creation, layout) {
+    const meta = (creation && creation.meta) || {};
+    const elements = layout && Array.isArray(layout.elements) ? layout.elements : [];
+    const flags = layout && Array.isArray(layout.flags) ? layout.flags : [];
+    const lines = [];
+    lines.push(
+      "UI layout" +
+        (meta.layoutExtractionModel ? " · " + meta.layoutExtractionModel : "") +
+        (meta.layoutSource ? " · " + meta.layoutSource : "")
+    );
+    lines.push(
+      elements.length +
+        " element" +
+        (elements.length === 1 ? "" : "s") +
+        (typeof (layout && layout.confidence) === "number"
+          ? " · confidence " + layout.confidence
+          : "")
+    );
+    flags.forEach((flag) => {
+      lines.push(
+        (flag.code || "flag") +
+          (flag.elementId ? " · " + flag.elementId : "") +
+          (flag.message ? " — " + flag.message : "")
+      );
+    });
+    return lines;
+  }
+
+  async function loadLayoutExportImage(creation) {
+    if (creationModality(creation) !== "image") return null;
+    const a = api();
+    if (!a) return null;
+    const payload = await a.get_media_payload(creation);
+    const src = payload && payload.ok && (payload.dataUrl || payload.fileUrl);
+    if (!src) return null;
+    const img = new Image();
+    await new Promise((resolve, reject) => {
+      const timer = setTimeout(() => reject(new Error("Image load timed out")), 20000);
+      img.onload = () => {
+        clearTimeout(timer);
+        resolve();
+      };
+      img.onerror = () => {
+        clearTimeout(timer);
+        reject(new Error("Could not load screenshot for export"));
+      };
+      img.src = src;
+    });
+    return img;
+  }
+
+  function wrapCanvasLines(ctx, text, maxWidth) {
+    const out = [];
+    String(text || "")
+      .split(/\r?\n/)
+      .forEach((line) => {
+        if (!line) {
+          out.push("");
+          return;
+        }
+        if (ctx.measureText(line).width <= maxWidth) {
+          out.push(line);
+          return;
+        }
+        let buf = "";
+        for (let i = 0; i < line.length; i++) {
+          const next = buf + line[i];
+          if (buf && ctx.measureText(next).width > maxWidth) {
+            out.push(buf);
+            buf = line[i];
+          } else {
+            buf = next;
+          }
+        }
+        if (buf) out.push(buf);
+      });
+    return out;
+  }
+
+  function composeLayoutDocumentCanvas(annoCanvas, creation, layout) {
+    const pad = 24;
+    const maxDim = 16000;
+    const width = Math.max(960, annoCanvas ? annoCanvas.width : 0);
+    const header = layoutExportMetaLines(creation, layout).join("\n");
+    const json = JSON.stringify(layout, null, 2);
+    const body = header + "\n\n" + json;
+    const imgW = annoCanvas ? annoCanvas.width : 0;
+    const imgH = annoCanvas ? annoCanvas.height : 0;
+    const textWidth = width - pad * 2;
+    const titleH = 36;
+    const sectionH = 28;
+    const gap = 16;
+    let fontPx = 13;
+    let lineH = 18;
+    const measure = document.createElement("canvas").getContext("2d");
+    function layoutText(size) {
+      measure.font = size + 'px ui-monospace, Consolas, "Courier New", monospace';
+      return wrapCanvasLines(measure, body, textWidth);
+    }
+    let bodyLines = layoutText(fontPx);
+    let height =
+      pad +
+      titleH +
+      (annoCanvas ? imgH + gap : 0) +
+      sectionH +
+      bodyLines.length * lineH +
+      pad;
+    while (height > maxDim && fontPx > 9) {
+      fontPx -= 1;
+      lineH = Math.max(11, fontPx + 3);
+      bodyLines = layoutText(fontPx);
+      height =
+        pad +
+        titleH +
+        (annoCanvas ? imgH + gap : 0) +
+        sectionH +
+        bodyLines.length * lineH +
+        pad;
+    }
+    if (height > maxDim) {
+      const fixed =
+        pad + titleH + (annoCanvas ? imgH + gap : 0) + sectionH + pad + lineH;
+      const maxLines = Math.max(12, Math.floor((maxDim - fixed) / lineH));
+      if (bodyLines.length > maxLines) {
+        bodyLines = bodyLines.slice(0, maxLines);
+        bodyLines[maxLines - 1] =
+          "… truncated — use Save Layout PDF for the rest of the JSON.";
+      }
+      height =
+        pad +
+        titleH +
+        (annoCanvas ? imgH + gap : 0) +
+        sectionH +
+        bodyLines.length * lineH +
+        pad;
+    }
+    const canvas = document.createElement("canvas");
+    canvas.width = width;
+    canvas.height = Math.max(1, Math.min(maxDim, height));
+    const ctx = canvas.getContext("2d");
+    ctx.fillStyle = "#ffffff";
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    ctx.fillStyle = "#000000";
+    ctx.textBaseline = "top";
+    ctx.font = "bold 20px Helvetica, Arial, sans-serif";
+    ctx.fillText("UI layout", pad, pad);
+    let y = pad + titleH;
+    if (annoCanvas) {
+      const x = Math.round((width - imgW) / 2);
+      ctx.drawImage(annoCanvas, x, y, imgW, imgH);
+      y += imgH + gap;
+    }
+    ctx.font = "bold 16px Helvetica, Arial, sans-serif";
+    ctx.fillText("Layout flags and JSON", pad, y);
+    y += sectionH;
+    ctx.font = fontPx + 'px ui-monospace, Consolas, "Courier New", monospace';
+    bodyLines.forEach((line) => {
+      ctx.fillText(line, pad, y);
+      y += lineH;
+    });
+    return canvas;
+  }
+
+  function getJsPdfCtor() {
+    const ns = window.jspdf || window.jsPDF;
+    return ns && (ns.jsPDF || ns);
+  }
+
+  function addPdfImagePage(pdf, dataUrl, pixelW, pixelH) {
+    const pageW = pdf.internal.pageSize.getWidth();
+    const pageH = pdf.internal.pageSize.getHeight();
+    const margin = 12;
+    const maxW = pageW - margin * 2;
+    const maxH = pageH - margin * 2;
+    const scale = Math.min(maxW / pixelW, maxH / pixelH);
+    const w = pixelW * scale;
+    const h = pixelH * scale;
+    const x = (pageW - w) / 2;
+    const y = margin;
+    pdf.setFillColor(255, 255, 255);
+    pdf.rect(0, 0, pageW, pageH, "F");
+    pdf.addImage(dataUrl, "PNG", x, y, w, h);
+  }
+
+  function addPdfTextPages(pdf, title, body) {
+    const pageW = pdf.internal.pageSize.getWidth();
+    const pageH = pdf.internal.pageSize.getHeight();
+    const margin = 12;
+    const lineH = 4.2;
+    pdf.addPage();
+    pdf.setFillColor(255, 255, 255);
+    pdf.rect(0, 0, pageW, pageH, "F");
+    pdf.setTextColor(0, 0, 0);
+    pdf.setFont("helvetica", "bold");
+    pdf.setFontSize(14);
+    let y = margin + 4;
+    pdf.text(title, margin, y);
+    y += 8;
+    pdf.setFont("courier", "normal");
+    pdf.setFontSize(8);
+    const lines = pdf.splitTextToSize(String(body || ""), pageW - margin * 2);
+    lines.forEach((line) => {
+      if (y + lineH > pageH - margin) {
+        pdf.addPage();
+        pdf.setFillColor(255, 255, 255);
+        pdf.rect(0, 0, pageW, pageH, "F");
+        pdf.setTextColor(0, 0, 0);
+        pdf.setFont("courier", "normal");
+        pdf.setFontSize(8);
+        y = margin;
+      }
+      pdf.text(line, margin, y);
+      y += lineH;
+    });
+  }
+
+  async function exportLayoutDocument(format) {
+    const creation = state.active;
+    const layout = getExtractedLayout(creation);
+    const a = api();
+    if (!a || !creation || !layout) return;
+    const JsPDF = getJsPdfCtor();
+    if (format === "pdf" && !JsPDF) {
+      showToast("jsPDF is unavailable");
+      return;
+    }
+    showToast(format === "pdf" ? "Building layout PDF…" : "Capturing layout PNG…");
+    try {
+      const img = await loadLayoutExportImage(creation);
+      const anno = img ? drawLayoutAnnotationCanvas(img, layout) : null;
+      const base = exportBaseName(creation) + "_layout";
+      if (format === "png") {
+        const doc = composeLayoutDocumentCanvas(anno, creation, layout);
+        const pngDataUrl = doc.toDataURL("image/png");
+        const res = await a.save_binary_file_dialog(base + ".png", pngDataUrl);
+        if (res.ok) {
+          showToast("Saved layout PNG");
+        } else if (!res.cancelled) {
+          showToast(res.error || "PNG export failed");
+        }
+        return;
+      }
+      const landscape = !!(anno && anno.width > anno.height);
+      const pdf = new JsPDF({
+        orientation: landscape ? "landscape" : "portrait",
+        unit: "mm",
+        format: "a4",
+      });
+      if (anno) {
+        addPdfImagePage(pdf, anno.toDataURL("image/png"), anno.width, anno.height);
+      } else {
+        pdf.setFillColor(255, 255, 255);
+        pdf.rect(0, 0, pdf.internal.pageSize.getWidth(), pdf.internal.pageSize.getHeight(), "F");
+        pdf.setTextColor(0, 0, 0);
+        pdf.setFont("helvetica", "bold");
+        pdf.setFontSize(14);
+        pdf.text("UI layout", 12, 16);
+      }
+      const header = layoutExportMetaLines(creation, layout).join("\n");
+      const json = JSON.stringify(layout, null, 2);
+      addPdfTextPages(pdf, "Layout flags and JSON", header + "\n\n" + json);
+      const dataUri = pdf.output("datauristring");
+      const res = await a.save_binary_file_dialog(base + ".pdf", dataUri);
+      if (res.ok) {
+        showToast("Saved layout PDF");
+      } else if (!res.cancelled) {
+        showToast(res.error || "PDF export failed");
+      }
+    } catch (err) {
+      console.error(err);
+      showToast("Export failed: " + (err && err.message ? err.message : err));
+    }
+  }
+
+  function buildLayoutOverlayHtml(layout) {
+    const width = Number(layout && layout.width) || 0;
+    const height = Number(layout && layout.height) || 0;
+    const elements = layout && Array.isArray(layout.elements) ? layout.elements : [];
+    if (width <= 0 || height <= 0) return "";
+    let overlay = "";
+    elements.forEach((el) => {
+      const box = el && el.box;
+      if (!box) return;
+      const left = (100 * Number(box.x || 0)) / width;
+      const top = (100 * Number(box.y || 0)) / height;
+      const w = (100 * Number(box.w || 0)) / width;
+      const h = (100 * Number(box.h || 0)) / height;
+      overlay +=
+        '<div class="layout-box" data-type="' +
+        escapeHtml(el.type || "other") +
+        '" style="left:' +
+        left.toFixed(2) +
+        "%;top:" +
+        top.toFixed(2) +
+        "%;width:" +
+        w.toFixed(2) +
+        "%;height:" +
+        h.toFixed(2) +
+        '%"></div>';
+    });
+    return overlay;
+  }
+
   async function exportDocumentImage(format) {
     if (!state.active) return;
     const a = api();
     if (!a) return;
     const modality = creationModality(state.active);
+
+    if (viewerShouldExportLayout(state.active)) {
+      await exportLayoutDocument(format);
+      return;
+    }
 
     // Native image → PNG: copy original bytes; PDF: embed image full-bleed
     if (modality === "image") {
@@ -5075,18 +5580,23 @@
   }
 
   function syncViewerChrome(creation) {
+    showViewerOpenButton();
     const modality = creation ? creationModality(creation) : "";
     const isMedia = isMediaModality(modality);
     const extracted = getExtractedText(creation);
     const lyrics = modality === "audio" ? creationLyrics(creation) : "";
 
+    const tabs = $("#viewer-tabs");
     const tabDoc = $("#tab-doc");
     const tabMedia = $("#tab-media");
     const tabExtracted = $("#tab-extracted");
+    const tabLayout = $("#tab-layout");
     const tabGrounding = $("#tab-grounding");
-    const tabPrint = $("#tab-print");
-    const tabAscii = $("#tab-ascii");
-    if (tabDoc) tabDoc.hidden = isMedia;
+    if (tabs) tabs.hidden = !creation;
+    if (tabDoc) {
+      tabDoc.hidden = !creation || isMedia;
+      tabDoc.textContent = "Document";
+    }
     if (tabMedia) {
       tabMedia.hidden = !isMedia;
       tabMedia.textContent =
@@ -5101,23 +5611,25 @@
       tabExtracted.textContent =
         kind === "transcript" ? "Transcript" : "Extracted";
     }
-    if (tabPrint) tabPrint.hidden = isMedia || !creation;
-    if (tabAscii) tabAscii.hidden = isMedia || !creation;
+    if (tabLayout) tabLayout.hidden = !isMedia || modality === "audio";
     if (tabGrounding) {
       const sources = (creation && creation.groundingSources) || [];
       tabGrounding.hidden = !creation || (isMedia && !sources.length);
     }
 
     const showTxt = modality === "text" || (isMedia && !!extracted) || !!lyrics;
-    const showPng = modality === "text" || modality === "image";
-    const showPdf = modality === "text" || modality === "image";
+    const hasLayout = !!getExtractedLayout(creation);
+    const exportLayout = state.viewerTab === "layout" && hasLayout;
+    const showPng = modality === "text" || modality === "image" || exportLayout;
+    const showPdf = modality === "text" || modality === "image" || exportLayout;
     const showMp4 = modality === "video" || modality === "audio";
-    const showAscii = modality === "text";
     const showVoice = modality === "text";
     const showEditImage = modality === "image";
     const showEditVideo = modality === "video";
     const showExtract = isMedia && modality !== "audio";
+    const showLayout = showExtract;
     const showMetadata = !!creation;
+    const showBasis = !!creation;
 
     if ($("#btn-export-txt")) {
       $("#btn-export-txt").hidden = !showTxt;
@@ -5130,13 +5642,19 @@
     }
     if ($("#btn-export-png")) {
       $("#btn-export-png").hidden = !showPng;
-      $("#btn-export-png").textContent =
-        modality === "image" ? "Save PNG" : "Export PNG";
+      $("#btn-export-png").textContent = exportLayout
+        ? "Save Layout PNG"
+        : modality === "image"
+          ? "Save PNG"
+          : "Export PNG";
     }
     if ($("#btn-export-pdf")) {
       $("#btn-export-pdf").hidden = !showPdf;
-      $("#btn-export-pdf").textContent =
-        modality === "image" ? "Save PDF" : "Export PDF";
+      $("#btn-export-pdf").textContent = exportLayout
+        ? "Save Layout PDF"
+        : modality === "image"
+          ? "Save PDF"
+          : "Export PDF";
     }
     if ($("#btn-export-media")) {
       // Native media file — images use Save PNG / Save PDF
@@ -5152,13 +5670,19 @@
           ? "Transcribe…"
           : "Extract Text…";
     }
+    if ($("#btn-extract-layout")) {
+      $("#btn-extract-layout").hidden = !showLayout;
+      $("#btn-extract-layout").textContent = getExtractedLayout(creation)
+        ? "Re-extract Layout…"
+        : "Extract Layout…";
+    }
     if ($("#btn-edit-image")) $("#btn-edit-image").hidden = !showEditImage;
     if ($("#btn-edit-video")) $("#btn-edit-video").hidden = !showEditVideo;
     if ($("#btn-viewer-send-creator")) {
       $("#btn-viewer-send-creator").hidden = !(showEditImage || showEditVideo);
     }
-    if ($("#btn-copy-ascii")) $("#btn-copy-ascii").hidden = !showAscii;
     if ($("#btn-voice")) $("#btn-voice").hidden = !showVoice;
+    if ($("#btn-use-basis")) $("#btn-use-basis").hidden = !showBasis;
     if ($("#btn-export-json")) {
       $("#btn-export-json").hidden = !showMetadata;
       $("#btn-export-json").textContent = "Export Metadata";
@@ -5167,9 +5691,35 @@
     if (isMedia && (state.viewerTab === "doc" || state.viewerTab === "print" || state.viewerTab === "ascii")) {
       state.viewerTab = "media";
     }
-    if (!isMedia && (state.viewerTab === "media" || state.viewerTab === "extracted")) {
+    if (
+      isMedia &&
+      modality === "audio" &&
+      (state.viewerTab === "extracted" || state.viewerTab === "layout")
+    ) {
+      state.viewerTab = "media";
+    }
+    if (
+      !isMedia &&
+      creation &&
+      (state.viewerTab === "media" ||
+        state.viewerTab === "extracted" ||
+        state.viewerTab === "layout" ||
+        state.viewerTab === "print" ||
+        state.viewerTab === "ascii")
+    ) {
       state.viewerTab = "doc";
     }
+    if (!creation) {
+      state.viewerTab = "";
+    } else if (!state.viewerTab) {
+      state.viewerTab = isMedia ? "media" : "doc";
+    }
+    document.querySelectorAll(".viewer-tab").forEach((btn) => {
+      btn.classList.toggle(
+        "active",
+        !!creation && btn.getAttribute("data-tab") === state.viewerTab
+      );
+    });
   }
 
   function fillMediaFolderControls(paths) {
@@ -5872,6 +6422,71 @@
     playUiSound("success");
   }
 
+  function applyLayoutResult(creation) {
+    if (!creation) {
+      endBusy();
+      return;
+    }
+    endBusy("Ready");
+    state.creations = [creation].concat(
+      state.creations.filter((c) => c.id !== creation.id)
+    );
+    renderArchives();
+    state.viewerTab = "layout";
+    renderDocument(creation);
+    openWindow("viewer");
+    focusWindow("viewer");
+    const layout = getExtractedLayout(creation);
+    const count =
+      layout && Array.isArray(layout.elements) ? layout.elements.length : 0;
+    showToast(
+      layout && layout.isUi === false
+        ? "No UI chrome found."
+        : "Layout ready (" + count + " element" + (count === 1 ? "" : "s") + ")."
+    );
+    playUiSound("success");
+  }
+
+  async function extractCreationLayout() {
+    if (!state.active) return;
+    const modality = creationModality(state.active);
+    if (modality !== "image" && modality !== "video") {
+      showToast("Extract Layout is for images and videos.");
+      return;
+    }
+    if (state.generating) {
+      showToast("Wait for the current AI job to finish.");
+      return;
+    }
+    const a = api();
+    if (!a) {
+      showToast("Python bridge not ready.");
+      return;
+    }
+    beginBusy("Extracting layout…", "Starting…", {
+      delayMs: 0,
+      cancellable: true,
+      activity: "other",
+      hint:
+        modality === "video"
+          ? "Grabbing a still frame, then asking Gemini to list UI chrome and coordinates."
+          : "Asking Gemini to find windows, buttons, and other chrome, then build coordinate JSON.",
+    });
+    try {
+      const res = await a.extract_creation_layout(state.active.id);
+      if (!res || !res.ok) {
+        endBusy();
+        showToast((res && res.error) || "Could not start Extract Layout.");
+        return;
+      }
+      busy.jobId = res.job_id;
+      await pollJob(res.job_id, "layout");
+    } catch (err) {
+      endBusy();
+      showToast(String(err));
+    }
+  }
+
   async function extractCreationText() {
     if (!state.active) return;
     const modality = creationModality(state.active);
@@ -6032,6 +6647,8 @@
           applyGenerationResult(job.result);
         } else if (kind === "extract") {
           applyExtractResult(job.result);
+        } else if (kind === "layout") {
+          applyLayoutResult(job.result);
         } else {
           endBusy();
           showToast(job.error || "Unexpected job completed.");
@@ -6052,6 +6669,10 @@
         } else if (kind === "extract") {
           endBusy();
           showToast("Extract Text cancelled.");
+          playUiSound("cancel");
+        } else if (kind === "layout") {
+          endBusy();
+          showToast("Extract Layout cancelled.");
           playUiSound("cancel");
         } else {
           endBusy();
@@ -6076,6 +6697,10 @@
           endBusy();
           showToast(job.error || "Extract Text failed");
           playUiSound("error");
+        } else if (kind === "layout") {
+          endBusy();
+          showToast(job.error || "Extract Layout failed");
+          playUiSound("error");
         } else {
           endBusy();
           showToast(job.error || "Job failed");
@@ -6091,6 +6716,10 @@
     } else if (kind === "extract") {
       endBusy();
       showToast("Timed out waiting for Extract Text.");
+      playUiSound("error");
+    } else if (kind === "layout") {
+      endBusy();
+      showToast("Timed out waiting for Extract Layout.");
       playUiSound("error");
     } else {
       endBusy();
@@ -6208,6 +6837,8 @@
         } else if (wantsImage) {
           compatPrompt = "Create an image: " + prompt;
           wantsMedia = true;
+        } else if (state.studioBasis.layout) {
+          wantsMedia = false;
         } else if (state.studioBasis.modality === "video") {
           compatPrompt = "Generate a video: " + prompt;
           wantsMedia = true;
@@ -8431,6 +9062,15 @@
         showToast("Media basis cleared");
       });
     }
+    const viewerRoot = $("#win-viewer");
+    if (viewerRoot) {
+      viewerRoot.addEventListener("click", (e) => {
+        if (e.target.closest("#btn-viewer-open")) {
+          e.preventDefault();
+          viewerOpenFile();
+        }
+      });
+    }
     if ($("#btn-use-basis")) {
       $("#btn-use-basis").addEventListener("click", () =>
         useCreationAsBasis(state.active)
@@ -8540,15 +9180,30 @@
         extractCreationText();
       });
     }
+    if ($("#btn-extract-layout")) {
+      $("#btn-extract-layout").addEventListener("click", () => {
+        extractCreationLayout();
+      });
+    }
 
     const docCanvas = $("#doc-canvas");
     if (docCanvas) {
       docCanvas.addEventListener("click", async (e) => {
-        const btn = e.target && e.target.closest && e.target.closest("#btn-copy-extracted");
-        if (!btn) return;
-        const text = getExtractedText(state.active);
-        if (!text) return;
+        const copyExtracted =
+          e.target && e.target.closest && e.target.closest("#btn-copy-extracted");
+        const copyLayout =
+          e.target && e.target.closest && e.target.closest("#btn-copy-layout");
+        if (!copyExtracted && !copyLayout) return;
         try {
+          if (copyLayout) {
+            const layout = getExtractedLayout(state.active);
+            if (!layout) return;
+            await navigator.clipboard.writeText(JSON.stringify(layout, null, 2));
+            showToast("Copied layout JSON.");
+            return;
+          }
+          const text = getExtractedText(state.active);
+          if (!text) return;
           await navigator.clipboard.writeText(text);
           showToast("Copied extracted text.");
         } catch (_) {
@@ -8602,20 +9257,6 @@
       btn.addEventListener("click", () => {
         setViewerTab(btn.getAttribute("data-tab"));
       });
-    });
-
-    $("#btn-copy-ascii").addEventListener("click", async () => {
-      if (!state.active || creationModality(state.active) !== "text") {
-        showToast("ASCII copy is for text creations only.");
-        return;
-      }
-      const text = creationToAscii(state.active);
-      try {
-        await navigator.clipboard.writeText(text);
-        showToast("ASCII document copied to clipboard");
-      } catch (_) {
-        showToast("Clipboard unavailable");
-      }
     });
 
     ["hf-text-model", "hf-image-model", "hf-video-model"].forEach((id) => {
