@@ -220,6 +220,70 @@ def test_import_text_file_into_prompt(tmp_path, monkeypatch):
     assert "Hello studio basis" in res2["creation"]["sections"][0]["content"]
 
 
+def test_modality_for_path_detects_supported_types(tmp_path):
+    from retro_98_ai_creator.media_store import modality_for_path
+
+    assert modality_for_path(tmp_path / "notes.txt") == "text"
+    assert modality_for_path(tmp_path / "readme.markdown") == "text"
+    assert modality_for_path(tmp_path / "shot.png") == "image"
+    assert modality_for_path(tmp_path / "clip.mp4") == "video"
+    assert modality_for_path(tmp_path / "song.mp3") == "audio"
+    assert modality_for_path(tmp_path / "secret.pdf") is None
+    assert modality_for_path(tmp_path / "app.exe") is None
+
+
+def test_open_viewer_file_image(tmp_path, monkeypatch):
+    api = _api_with_tmp_store(tmp_path, monkeypatch)
+    src = tmp_path / "ui.png"
+    src.write_bytes(b"\x89PNG\r\n\x1a\nlayout")
+    win = MagicMock()
+    win.create_file_dialog.return_value = str(src)
+    api._window = win
+
+    res = api.open_viewer_file()
+    assert res["ok"] is True
+    assert res["modality"] == "image"
+    assert res["creation"]["modality"] == "image"
+    assert res["creation"]["title"] == "ui"
+
+
+def test_open_viewer_file_text(tmp_path, monkeypatch):
+    api = _api_with_tmp_store(tmp_path, monkeypatch)
+    src = tmp_path / "doc.md"
+    src.write_text("# Hello", encoding="utf-8")
+    win = MagicMock()
+    win.create_file_dialog.return_value = str(src)
+    api._window = win
+
+    res = api.open_viewer_file()
+    assert res["ok"] is True
+    assert res["modality"] == "text"
+    assert res["creation"]["modality"] == "text"
+    assert "# Hello" in res["creation"]["sections"][0]["content"]
+
+
+def test_open_viewer_file_rejects_unsupported(tmp_path, monkeypatch):
+    api = _api_with_tmp_store(tmp_path, monkeypatch)
+    src = tmp_path / "payload.pdf"
+    src.write_bytes(b"%PDF-1.4")
+    win = MagicMock()
+    win.create_file_dialog.return_value = str(src)
+    api._window = win
+
+    res = api.open_viewer_file()
+    assert res["ok"] is False
+    assert "text" in (res.get("error") or "").lower()
+
+
+def test_open_viewer_file_cancelled(tmp_path, monkeypatch):
+    api = _api_with_tmp_store(tmp_path, monkeypatch)
+    win = MagicMock()
+    win.create_file_dialog.return_value = None
+    api._window = win
+    res = api.open_viewer_file()
+    assert res.get("cancelled") is True
+
+
 def test_duplicate_image_copies_media(tmp_path, monkeypatch):
     api = _api_with_tmp_store(tmp_path, monkeypatch)
     (tmp_path / "media").mkdir(parents=True, exist_ok=True)

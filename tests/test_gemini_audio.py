@@ -400,3 +400,31 @@ def test_generate_with_gemini_routes_audio(monkeypatch):
     )
     assert out["modality"] == "audio"
     assert called["prompt"] == "Compose a song about starlight"
+
+
+def test_generate_with_gemini_layout_basis_routes_text(monkeypatch):
+    captured = {}
+
+    def fake_text(*args, **kwargs):
+        captured["basis"] = kwargs.get("basis_media")
+        return {"modality": "text", "prompt": kwargs.get("prompt_text")}
+
+    monkeypatch.setattr(
+        "retro_98_ai_creator.gemini_provider._generate_text_with_gemini",
+        fake_text,
+    )
+    out = generate_with_gemini(
+        "Prompt",
+        "General",
+        "Custom",
+        gemini_cfg={"api_key": "k", "text_model": "gemini-2.5-flash"},
+        creation_description="rebuild this window",
+        basis_media={
+            "modality": "image",
+            "bytes": b"\x89PNG",
+            "mime_type": "image/png",
+            "extracted_layout": {"isUi": True, "elements": []},
+        },
+    )
+    assert out["modality"] == "text"
+    assert captured["basis"]["extracted_layout"]["isUi"] is True

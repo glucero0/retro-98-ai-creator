@@ -14,17 +14,17 @@ A Windows 98–themed desktop studio for general-purpose AI creation: **text**, 
 - **Google Search enrichment** (optional, Gemini text) — when Search runs, the app can OCR images and pull YouTube captions from cited results before the tool or document pass
 - **Gemini** text, image, video, and music generation with separate model pickers per modality. Music uses **Lyria** (Clip for 30-second previews, **Lyria 3.5 / Lyria Pro** for full songs). Tracks are SynthID-watermarked by Google. Use an image as a Studio basis to compose from a picture; an existing MP3 cannot be sent as audio input.
 - **Archives** — every creation is saved automatically: text/lyrics/metadata in `archives.json`, binaries in the media folder; search, import/export JSON, or import existing text/image/video/audio files
-- **Viewer** — displays the active creation (document, image, video, or audio) with optional export buttons (already-saved work does not need to be exported) and a jump into editing
+- **Viewer** — a generic shell for **text, images, video, or audio**. **Open…** a file (or pick an Archive item / generate in Studio) and tabs plus tools switch to that type: **Document** (plus **Sources** when Google Search was used) vs Image/Video/Audio, Extract Text / Transcribe, **Extract Layout…** (UI chrome + coordinate JSON on images, or a still frame from video). On the **Layout** tab, **Save Layout PDF** is the paged document (boxed screenshot, then flags and JSON as black text). **Save Layout PNG** is one tall image of that same content — Windows Photos shrinks it to fit the window (it looks like a ribbon); Paint, a browser, or zoom shows it correctly. The Image tab still saves the original picture. Edit, and Save PNG/MP4/MP3. Already-saved work does not need to be exported.
 - **Image Edit** and **Video Edit** — standalone editors (and reachable via Viewer → Edit) for crop/rotate, color/filter adjustments, and (for video) a segment timeline for splitting/reordering/trimming clips
 - **Control Panel** — Gemini model pickers, Google Workspace OAuth, media folder, display themes, sound, CRT overlay, and UI scale
 - Cancel a generation in progress
-- "Use as Basis" / "Load…" — start a new creation from the Viewer's active item or an imported file, without touching the original. For songs this reloads the prompt and lyrics (Lyria cannot take an MP3 as input).
+- "Use as Basis" / "Load…" — start a new creation from the Viewer's active item or an imported file, without touching the original. For songs this reloads the prompt and lyrics (Lyria cannot take an MP3 as input). For a screenshot with extracted layout, Studio gets the image plus coordinate JSON so you can recreate the UI as text/code (or ask for an image/video instead).
 
 ## Requirements
 
 - Python 3.10+
 - A [Gemini API key](https://aistudio.google.com/apikey), set via **Control Panel** (saved to `config.yaml`)
-- **ffmpeg + ffprobe** — only needed for **Video Editor** (apply filters, split/reorder segments, export). See [Installing ffmpeg](#installing-ffmpeg) below.
+- **ffmpeg + ffprobe** — needed for **Video Editor** (apply filters, split/reorder segments, export) and for Viewer **Extract Layout…** on a video (grabs a still frame). See [Installing ffmpeg](#installing-ffmpeg) below.
 
 ## Quick start
 
@@ -110,7 +110,7 @@ Use a reasonably current build (roughly ffmpeg 4+). Very old copies on `PATH` (f
 | --- | --- |
 | **Creation Studio** | Type a prompt and hit **Create**. With **Enable Tools** off, one prompt box handles text/image/video/music. With **Enable Tools** on (Studio checkbox; Control Panel → Use Tools is the default after launch/Save), Studio shows **Search** (optional), a **Tools** panel, and **Tool Use** instead — text only. Load text/image/video files or use the Viewer's active item as a basis. |
 | **Archives** | The library of everything you've generated or imported (catalog in `archives.json`; PNG/MP4/MP3 files in the media folder). Search, delete, import/export JSON, or import a text/image/video/audio file directly. |
-| **Viewer** | Shows the active creation — rendered document, image, video, or audio — with optional export buttons (TXT/JSON/PNG/PDF/MP4/MP3 depending on type) and an **Edit** shortcut into Image Edit or Video Edit. |
+| **Viewer** | Generic viewer for text, images, video, or audio. **Open…** stays on the toolbar. Starts empty; opening a file or Archive item switches tabs/tools to that type. Closing Viewer returns to the empty Open shell (files remain in Archives). Text uses **Document** (and **Sources** when search grounding is present). Images and videos also get **Extract Text…** / **Extract Layout…**. On the Layout tab, **Save Layout PDF** writes an A4 file (boxed screenshot, then flags and JSON as selectable black text). **Save Layout PNG** is one tall image of the same content. |
 | **Image Edit** | Crop, rotate, and adjust (brightness/contrast/saturation/hue/sepia/blur/exposure/gamma/vignette/tint, grayscale, threshold, sharpen, background removal). Opened standalone or via Viewer → Edit. |
 | **Video Edit** | Same filter/crop/rotate toolset plus a **segment timeline**: split at the playhead, delete/reorder segments, then re-render. Requires ffmpeg. Opened standalone or via Viewer → Edit. |
 | **Control Panel** | Gemini model pickers, Gemini search/tools toggles, **Storage** / media folder picker, display theme, sound, CRT scanlines, UI scale. **Save** writes `config.yaml` and resets Studio’s **Enable Tools** checkbox to the saved **Use Tools** default (search field visibility and model labels also update). |
@@ -123,7 +123,8 @@ In **Creation Studio**, open the **Saved prompt** dropdown and pick a name. The 
 
 ### Send to Creator vs Use as Basis
 
-- **Use as Basis** (Viewer) — load the Archive item’s media into Studio without copying it. The original stays in Archives.
+- **Use as Basis** (Viewer) — load the Archive item into Studio without copying it. The original stays in Archives. For an image or video with **Extract Layout** data, Studio gets the screenshot **and** the layout JSON so you can recreate the UI as HTML/CSS or an app (say “create an image…” if you want another mockup instead). For songs this reloads the prompt and lyrics as text — not the MP3.
+- **Open…** (Viewer) — always on the Viewer toolbar. Pick a text, image, video, or song file from disk. It is saved to Archives and the Viewer chrome switches to that type. On an image or video, **Extract Layout…** asks Gemini to find UI chrome and stores coordinate JSON (plus a box overlay on still images). On the **Layout** tab, **Save Layout PDF** is a multi-page A4 document (screenshot, then flags and JSON as text); **Save Layout PNG** is one tall image of that same dump (Windows Photos fits the whole strip in the window; zoom or Paint to read it). Switch to Image to save the original picture. Closing the Viewer returns to this empty Open shell; the file stays in Archives.
 - **Save and Send to Creator** (Viewer, Image Editor, Video Editor) — for images and videos only. Saves the current editor/viewer state, then sends that media into Studio as an anonymous basis. The next **CREATE** is stored as a **new** Archive item rather than overwriting the source.
 
 ### Image Editor / Video Editor: Apply vs. Save
@@ -311,7 +312,7 @@ Creations are saved automatically when you generate or import. You do **not** ha
 | **PNG, JPEG, MP4, MP3, WAV** (generated or imported) | **Media folder** — default `media/` next to the app, or the folder you pick in Control Panel → Display & Sound → **Storage** |
 | **Text documents** (full body) | `archives.json` (project root, gitignored) — not a `.txt` in the media folder |
 | **Lyrics** (from Lyria) | `archives.json`, on the song’s Archive record |
-| **Prompts, titles, model ids, timestamps, extracted text** | `archives.json` (each media item also stores a `mediaPath` pointer to its file) |
+| **Prompts, titles, model ids, timestamps, extracted text, extracted UI layout** | `archives.json` (each media item also stores a `mediaPath` pointer to its file) |
 | **API keys and settings** | `config.yaml` (gitignored) |
 
 Viewer **Export TXT** / **Export Lyrics** / **Export Metadata** dump what is already in `archives.json`. **Save PNG / MP4 / MP3** copies a file that is already in the media folder.

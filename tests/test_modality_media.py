@@ -96,6 +96,24 @@ def test_resolve_generation_modality_prompt_wins_over_image_basis():
         )
         == "audio"
     )
+    assert infer_prompt_modality("recreate this dialog as HTML") == "text"
+    assert infer_prompt_modality("generate a web app from this screenshot") == "text"
+    assert (
+        resolve_generation_modality(
+            "rebuild this window",
+            basis_modality="image",
+            layout_basis=True,
+        )
+        == "text"
+    )
+    assert (
+        resolve_generation_modality(
+            "create an image of a cleaner mockup",
+            basis_modality="image",
+            layout_basis=True,
+        )
+        == "image"
+    )
 
 
 def test_gemini_routes_music_prompt_ok():

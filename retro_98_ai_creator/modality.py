@@ -159,6 +159,10 @@ _TEXT_PROMPT_RE = re.compile(
       | \bkeybindings?\b
       | \bwalkthrough\b
       | \bcheat\s*sheet\b
+      | \b(?:html|css|javascript|typescript)\b
+      | \b(?:web\s+)?(?:app(?:lication)?|website|web\s*page)\b
+      | \brecreate\b.{0,48}?\b(?:ui|interface|layout|dialog|window)\b
+      | \b(?:source\s+)?code\b.{0,24}?\b(?:for|from|of)\b
     )
     """,
     re.IGNORECASE | re.VERBOSE | re.DOTALL,
@@ -273,13 +277,16 @@ def resolve_generation_modality(
     prompt: str,
     *,
     basis_modality: str | None = None,
+    layout_basis: bool = False,
 ) -> Modality | None:
     """
     Choose text/image/video/audio for a Studio CREATE.
 
     Clear prompt intent (including \"generate a video\" with an image basis →
     image-to-video, or \"generate music\" with an image basis → image-to-music)
-    wins. Otherwise a media basis keeps the same modality.
+    wins. An extracted UI layout defaults to text (rebuild as HTML/app) unless
+    the prompt asks for image/video/music. Otherwise a media basis keeps the
+    same modality.
     """
     prompt_mod = infer_prompt_modality(prompt)
     basis = (basis_modality or "").strip().lower()
@@ -288,6 +295,10 @@ def resolve_generation_modality(
 
     if prompt_mod in {"image", "video", "audio"}:
         return prompt_mod
+    if prompt_mod == "text":
+        return "text"
+    if layout_basis:
+        return "text"
     if basis:
         return basis  # type: ignore[return-value]
     return prompt_mod
