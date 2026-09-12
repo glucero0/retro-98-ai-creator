@@ -1,43 +1,43 @@
 /* Retro 98 AI Creator — single-window app frame (modern.css overrides Win98 leftovers) */
 
 :root {
-  --desktop-bg: #008080;
-  --desktop-bg-mid: #008080;
-  --desktop-bg-deep: #006666;
+  --desktop-bg: #ffffff;
+  --desktop-bg-mid: #ffffff;
+  --desktop-bg-deep: #ffffff;
   --desktop-wallpaper: none;
-  --app-accent: #000080;
-  --app-header: #000080;
-  --app-card: #c0c0c0;
+  --app-accent: #000000;
+  --app-header: #ffffff;
+  --app-card: #ffffff;
   --app-text: #000000;
-  --icon-fg: #ffffff;
+  --icon-fg: #000000;
   --icon-shadow: #000000;
-  --icon-glyph-bg: #c0c0c0;
+  --icon-glyph-bg: #ffffff;
   --app-frame-h: 40px;
   --app-menu-h: 32px;
   --app-status-h: 28px;
 
   /* Full app chrome (windows, controls, text) */
-  --ui-window: #c0c0c0;
-  --ui-text: #222222;
+  --ui-window: #ffffff;
+  --ui-text: #000000;
   --ui-muted: #555555;
-  --ui-title: #000080;
-  --ui-title-mid: #1084d0;
-  --ui-title-text: #ffffff;
-  --ui-title-inactive: #808080;
-  --ui-title-inactive-mid: #b5b5b5;
-  --ui-title-text-inactive: #d4d4d4;
-  --ui-accent: #000080;
+  --ui-title: #ffffff;
+  --ui-title-mid: #ffffff;
+  --ui-title-text: #000000;
+  --ui-title-inactive: #f2f2f2;
+  --ui-title-inactive-mid: #f2f2f2;
+  --ui-title-text-inactive: #555555;
+  --ui-accent: #000000;
   --ui-accent-text: #ffffff;
-  --ui-button: #c0c0c0;
-  --ui-button-text: #222222;
+  --ui-button: #ffffff;
+  --ui-button-text: #000000;
   --ui-input: #ffffff;
   --ui-input-text: #000000;
-  --ui-taskbar: #c0c0c0;
-  --ui-highlight: #ffffd0;
+  --ui-taskbar: #ffffff;
+  --ui-highlight: #f2f2f2;
   --ui-border-light: #ffffff;
-  --ui-border-mid: #dfdfdf;
+  --ui-border-mid: #d0d0d0;
   --ui-border-dark: #808080;
-  --ui-border-darker: #0a0a0a;
+  --ui-border-darker: #000000;
   --ui-font: Inter, "Segoe UI", Tahoma, sans-serif;
   /* Display scaling (DPI). Layout is 1/scale of the viewport, then zoomed. */
   --ui-scale: 1;
@@ -150,27 +150,8 @@ body {
   color: var(--ui-title-text);
 }
 
-#app-frame-top label {
-  font-weight: 700;
-}
-
 #app-frame-top select {
   min-width: 200px;
-}
-
-#app-menubar {
-  flex-shrink: 0;
-  display: flex;
-  align-items: stretch;
-  gap: 2px;
-  min-height: var(--app-menu-h);
-  padding: 2px 6px;
-  background: var(--ui-window);
-  border-bottom: 1px solid var(--ui-border-dark);
-}
-
-#app-menubar[data-empty="1"] {
-  display: none;
 }
 
 .app-menu {
@@ -178,24 +159,34 @@ body {
 }
 
 .app-menu-btn {
-  min-width: 48px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  min-width: 36px;
+  min-height: 32px;
+  padding: 0;
+}
+
+.app-menu-icon {
+  display: block;
+  width: 16px;
+  height: 2px;
+  background: currentColor;
+  box-shadow: 0 -5px currentColor, 0 5px currentColor;
 }
 
 .app-menu-panel {
   position: absolute;
-  top: 100%;
+  top: calc(100% + 4px);
   left: 0;
   z-index: 40;
-  min-width: 220px;
+  min-width: 240px;
   display: flex;
   flex-direction: column;
-  padding: 4px;
+  padding: 4px 0;
   background: var(--ui-window);
-  box-shadow:
-    inset -1px -1px var(--ui-border-darker),
-    inset 1px 1px var(--ui-border-mid),
-    inset -2px -2px var(--ui-border-dark),
-    inset 2px 2px var(--ui-border-light);
+  border: 1px solid var(--ui-border-dark);
 }
 
 .app-menu-panel[hidden] {
@@ -205,20 +196,36 @@ body {
 .app-menu-panel .menu-group {
   display: none;
   flex-direction: column;
-  gap: 2px;
 }
 
 .app-menu-panel .menu-group[data-active="1"] {
   display: flex;
 }
 
-.app-menu-panel button[hidden] {
+.app-menu-panel .menu-group[data-active="1"] + .menu-group[data-active="1"] {
+  border-top: 1px solid var(--ui-border-mid);
+  margin-top: 4px;
+  padding-top: 4px;
+}
+
+.app-menu-panel [role="menuitem"][hidden] {
   display: none !important;
 }
 
-.app-menu-panel button {
+.app-menu-panel [role="menuitem"] {
+  appearance: none;
+  display: block;
+  width: 100%;
   justify-content: flex-start;
   text-align: left;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  color: var(--ui-text);
+  box-shadow: none;
+  min-height: 0;
+  padding: 8px 14px;
+  font-weight: 400;
 }
 
 #app-status {
@@ -812,21 +819,12 @@ ul[role="tablist"] li[role="tab"] a:focus {
 .viewer-tabs {
   display: flex;
   flex-wrap: wrap;
-  gap: 2px;
-  border-bottom: 1px solid var(--ui-border-dark);
+  align-items: center;
+  gap: 0;
 }
 
 .viewer-tab {
   margin: 0;
-  font-size: 11px;
-  padding: 3px 10px;
-}
-
-.viewer-tab.active {
-  font-weight: bold;
-  position: relative;
-  bottom: -1px;
-  border-bottom-color: var(--ui-window);
 }
 
 .viewer-toolbar {
@@ -1331,31 +1329,55 @@ html[data-reading-surface="dark"] .doc-canvas.doc-canvas-reading {
   display: flex;
   flex-direction: column;
   min-height: 0;
-  align-self: stretch;
+  align-self: flex-start;
 }
 
 #win-form.has-studio-basis .studio-basis-panel fieldset {
   display: flex;
   flex-direction: column;
-  flex: 1 1 auto;
   min-height: 0;
 }
 
-#win-form.has-studio-basis .studio-basis-preview {
-  flex: 1 1 auto;
-  min-height: 120px;
-  max-height: none;
+.studio-basis-splitter {
+  flex: 0 0 8px;
+  position: relative;
+  align-self: stretch;
+  cursor: col-resize;
+  touch-action: none;
+  background: transparent;
 }
 
-#win-form.has-studio-basis .studio-basis-preview img,
-#win-form.has-studio-basis .studio-basis-preview video {
-  max-height: 100%;
+.studio-basis-splitter::before {
+  content: "";
+  position: absolute;
+  top: 16%;
+  bottom: 16%;
+  left: 3px;
+  width: 1px;
+  background: var(--ui-border-dark);
+}
+
+.studio-basis-splitter:hover::before,
+.studio-basis-splitter:focus::before,
+.studio-basis-splitter.is-dragging::before {
+  left: 2px;
+  width: 2px;
+}
+
+.studio-basis-splitter:focus {
+  outline: none;
+}
+
+.studio-basis-splitter[hidden] {
+  display: none !important;
 }
 
 .studio-basis-panel {
-  flex: 0 0 280px;
-  max-width: 300px;
-  min-width: 220px;
+  flex: 0 0 auto;
+  width: 280px;
+  min-width: 160px;
+  max-width: none;
+  overflow: auto;
 }
 
 .studio-basis-panel fieldset {
@@ -1363,26 +1385,21 @@ html[data-reading-surface="dark"] .doc-canvas.doc-canvas-reading {
 }
 
 .studio-basis-preview {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  min-height: 140px;
-  max-height: 320px;
+  display: block;
+  min-height: 0;
+  max-height: none;
   overflow: hidden;
-  background: #111;
-  box-shadow:
-    inset -1px -1px var(--ui-border-light),
-    inset 1px 1px var(--ui-border-dark);
+  background: transparent;
 }
 
 .studio-basis-preview img,
 .studio-basis-preview video {
   display: block;
-  max-width: 100%;
-  max-height: 320px;
-  width: auto;
+  width: 100%;
   height: auto;
-  background: #000;
+  max-width: 100%;
+  max-height: none;
+  background: transparent;
 }
 
 .studio-basis-preview .muted {
@@ -1440,24 +1457,6 @@ html[data-reading-surface="dark"] .doc-canvas.doc-canvas-reading {
   flex-wrap: wrap;
   align-items: center;
   gap: 6px;
-}
-
-.theme-custom-controls {
-  margin-top: 8px;
-  padding-top: 6px;
-  border-top: 1px solid var(--ui-border-dark);
-}
-
-.theme-custom-controls .field-row label {
-  min-width: 72px;
-}
-
-.theme-custom-controls input[type="color"] {
-  width: 48px;
-  height: 24px;
-  padding: 0;
-  border: 1px solid var(--ui-border-darker);
-  background: var(--ui-button);
 }
 
 .editor-app-toolbar .label-hint {
@@ -1674,7 +1673,7 @@ html[data-reading-surface="dark"] .doc-canvas.doc-canvas-reading {
 .sources-list a {
   font-weight: bold;
   word-break: break-all;
-  color: var(--ui-accent);
+  color: var(--ui-text);
 }
 
 .sources-url {
@@ -2340,8 +2339,7 @@ code {
 #win-control .control-pane,
 #win-control fieldset,
 #win-control .field-row-stacked,
-#win-control .field-row,
-#win-control .theme-custom-controls {
+#win-control .field-row {
   max-width: 100%;
   min-width: 0;
   box-sizing: border-box;
@@ -2444,9 +2442,9 @@ html[data-ui-button-dark="1"] legend {
 
 html[data-ui-button-dark="1"] select:focus,
 html[data-ui-button-dark="1"] select:focus-visible {
-  background-color: var(--ui-accent);
+  background-color: var(--ui-input);
   background-image: var(--combo-arrow);
-  color: var(--ui-accent-text);
+  color: var(--ui-input-text);
 }
 
 html[data-ui-button-dark="1"] option {
@@ -2510,8 +2508,9 @@ html[data-ui-button-dark="1"] input[type="radio"]:checked + label:after {
 
 html[data-ui-button-dark="1"] #btn-generate,
 html[data-ui-button-dark="1"] button.default {
-  background: var(--ui-accent);
-  text-shadow: 0 0 var(--ui-accent-text);
+  background: var(--ui-button);
+  color: var(--ui-button-text);
+  text-shadow: none;
 }
 
 html[data-ui-button-dark="1"] .studio-tool-chip {

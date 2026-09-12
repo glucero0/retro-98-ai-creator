@@ -28,15 +28,10 @@ ui:
   ui_scale: 1.0  # Display scaling (DPI). Desktop stays screen-sized; fonts and chrome grow together.
   # App chrome font (Control Panel → Display). Default Inter is more readable than Retro Pixel.
   ui_font: inter
-  app_theme: light  # light | dark | custom
-  custom_theme:
-    desktop_color: "#008080"
-    window_color: "#c0c0c0"
-    title_color: "#000080"
-    text_color: "#222222"
-    font: sans  # legacy; ui_font is preferred
+  app_theme: light  # light | dark
   window_width: 1280
   window_height: 800
+  studio_basis_width: 280  # Creation Studio Media basis pane width (px)
   title: "Retro 98 AI Creator"
 
 paths:

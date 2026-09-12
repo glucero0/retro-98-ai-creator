@@ -14,6 +14,7 @@ from retro_98_ai_creator.config import (
     load_config,
     normalize_google_workspace_cfg,
     normalize_media_folder,
+    normalize_studio_basis_width,
     prompts_path,
     save_config,
 )
@@ -156,10 +157,32 @@ def test_normalize_gemini_model():
     assert normalize_gemini_model(None) == "gemini-2.5-flash"
 
 
+def test_normalize_studio_basis_width():
+    assert normalize_studio_basis_width(440) == 440
+    assert normalize_studio_basis_width(50) == 160
+    assert normalize_studio_basis_width(9999) == 1200
+    assert normalize_studio_basis_width("nope") == 280
+    assert normalize_studio_basis_width(None) == 280
+
+
+def test_save_config_persists_studio_basis_width(tmp_path, monkeypatch):
+    dest = tmp_path / "config.yaml"
+    monkeypatch.setattr("retro_98_ai_creator.config.DEFAULT_CONFIG_PATH", dest)
+    existing = copy.deepcopy(DEFAULTS)
+    out = save_config({"ui": {"studio_basis_width": 440}}, existing=existing)
+    assert out["ui"]["studio_basis_width"] == 440
+    written = yaml.safe_load(dest.read_text(encoding="utf-8"))
+    assert written["ui"]["studio_basis_width"] == 440
+
+    out2 = save_config({"ui": {"studio_basis_width": 12}}, existing=out)
+    assert out2["ui"]["studio_basis_width"] == 160
+
+
 def test_ui_app_theme_defaults():
     ui = DEFAULTS["ui"]
     assert ui["app_theme"] == "light"
     assert ui["ui_font"] == "inter"
+    assert ui["studio_basis_width"] == 280
     custom = ui["custom_theme"]
     assert custom["desktop_color"] == "#008080"
     assert custom["window_color"] == "#c0c0c0"
@@ -173,9 +196,7 @@ def test_load_config_preserves_app_theme_keys():
     ui = cfg.get("ui") or {}
     assert "app_theme" in ui
     assert "ui_font" in ui
-    assert ui["app_theme"] in {"light", "dark", "custom"} or isinstance(
-        ui["app_theme"], str
-    )
+    assert ui["app_theme"] in {"light", "dark"} or isinstance(ui["app_theme"], str)
     custom = ui.get("custom_theme") or {}
     for key in (
         "desktop_color",

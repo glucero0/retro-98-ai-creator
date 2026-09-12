@@ -4,28 +4,26 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Retro 98 AI Creator</title>
-  <link rel="stylesheet" href="styles.css?v=modern2" />
-  <link rel="stylesheet" href="modern.css?v=modern2" />
+  <link rel="stylesheet" href="styles.css?v=modern9" />
+  <link rel="stylesheet" href="modern.css?v=modern9" />
 </head>
 <body>
   <div id="desktop">
     <div id="app-shell">
       <header id="app-frame-top">
-        <label for="screen-select">Screen</label>
-        <select id="screen-select" aria-label="Switch screen">
-          <option value="form">Creation Studio</option>
-          <option value="library">Archives</option>
-          <option value="viewer">Viewer</option>
-          <option value="image-edit">Image Editor</option>
-          <option value="video-edit">Video Editor</option>
-          <option value="prompt-editor">Prompt Editor</option>
-          <option value="control">Settings</option>
-        </select>
-      </header>
-      <nav id="app-menubar" aria-label="Menus">
-        <div class="app-menu" id="menu-file" hidden>
-          <button type="button" class="app-menu-btn" id="menu-file-btn" aria-haspopup="true" aria-expanded="false">File</button>
-          <div class="app-menu-panel" id="menu-file-panel" hidden role="menu">
+        <div class="app-menu" id="app-overflow-menu">
+          <button
+            type="button"
+            class="app-menu-btn"
+            id="menu-app-btn"
+            aria-haspopup="menu"
+            aria-expanded="false"
+            aria-controls="menu-app-panel"
+            aria-label="Menu"
+          >
+            <span class="app-menu-icon" aria-hidden="true"></span>
+          </button>
+          <div class="app-menu-panel" id="menu-app-panel" hidden role="menu">
             <div class="menu-group" data-screen="form">
               <button type="button" id="btn-studio-load-text" role="menuitem">Load Text…</button>
               <button type="button" id="btn-studio-load-image" role="menuitem">Load Image…</button>
@@ -47,23 +45,6 @@
               <button type="button" id="btn-export-pdf" hidden role="menuitem">Export PDF</button>
               <button type="button" id="btn-export-media" hidden role="menuitem">Save MP4…</button>
             </div>
-            <div class="menu-group" data-screen="image-edit">
-              <button type="button" id="btn-iedit-load" role="menuitem">Load Image…</button>
-              <button type="button" id="btn-edit-save" class="default" hidden role="menuitem">Save</button>
-              <button type="button" id="btn-edit-save-as" role="menuitem">Save As…</button>
-              <button type="button" id="btn-edit-send-creator" role="menuitem">Save and Send to Creator</button>
-            </div>
-            <div class="menu-group" data-screen="video-edit">
-              <button type="button" id="btn-vedit-load" role="menuitem">Load Video…</button>
-              <button type="button" id="btn-vedit-save" class="default" hidden role="menuitem">Save</button>
-              <button type="button" id="btn-vedit-save-as" role="menuitem">Save As…</button>
-              <button type="button" id="btn-vedit-send-creator" role="menuitem">Save and Send to Creator</button>
-            </div>
-          </div>
-        </div>
-        <div class="app-menu" id="menu-ai" hidden>
-          <button type="button" class="app-menu-btn" id="menu-ai-btn" aria-haspopup="true" aria-expanded="false">AI</button>
-          <div class="app-menu-panel" id="menu-ai-panel" hidden role="menu">
             <div class="menu-group" data-screen="viewer">
               <button type="button" id="btn-extract-text" hidden role="menuitem">Extract Text…</button>
               <button type="button" id="btn-extract-layout" hidden role="menuitem">Extract Layout…</button>
@@ -71,18 +52,34 @@
               <button type="button" id="btn-viewer-send-creator" hidden role="menuitem">Save and Send to Creator</button>
               <button type="button" id="btn-voice" hidden role="menuitem">Voice Reader</button>
             </div>
-          </div>
-        </div>
-        <div class="app-menu" id="menu-edit" hidden>
-          <button type="button" class="app-menu-btn" id="menu-edit-btn" aria-haspopup="true" aria-expanded="false">Edit</button>
-          <div class="app-menu-panel" id="menu-edit-panel" hidden role="menu">
             <div class="menu-group" data-screen="viewer">
               <button type="button" id="btn-edit-image" hidden role="menuitem">Edit Image</button>
               <button type="button" id="btn-edit-video" hidden role="menuitem">Edit Video</button>
             </div>
+            <div class="menu-group" data-screen="image-edit">
+              <button type="button" id="btn-iedit-load" role="menuitem">Load Image…</button>
+              <button type="button" id="btn-edit-save" hidden role="menuitem">Save</button>
+              <button type="button" id="btn-edit-save-as" role="menuitem">Save As…</button>
+              <button type="button" id="btn-edit-send-creator" role="menuitem">Save and Send to Creator</button>
+            </div>
+            <div class="menu-group" data-screen="video-edit">
+              <button type="button" id="btn-vedit-load" role="menuitem">Load Video…</button>
+              <button type="button" id="btn-vedit-save" hidden role="menuitem">Save</button>
+              <button type="button" id="btn-vedit-save-as" role="menuitem">Save As…</button>
+              <button type="button" id="btn-vedit-send-creator" role="menuitem">Save and Send to Creator</button>
+            </div>
           </div>
         </div>
-      </nav>
+        <select id="screen-select" aria-label="Switch screen">
+          <option value="form">Creation Studio</option>
+          <option value="library">Archives</option>
+          <option value="viewer">Viewer</option>
+          <option value="image-edit">Image Editor</option>
+          <option value="video-edit">Video Editor</option>
+          <option value="prompt-editor">Prompt Editor</option>
+          <option value="control">Settings</option>
+        </select>
+      </header>
       <div id="windows-layer">
 
       <!-- Creation Studio -->
@@ -161,8 +158,9 @@
                   <button type="button" id="btn-generate" class="default">⚡ CREATE</button>
                 </div>
                 <p class="hint" id="studio-load-hint">
-                  File → Load Text puts text in the prompt. File → Load Image / Video sets a
-                  media basis shown on the right — then describe the change and CREATE.
+                  Menu → Load Text puts text in the prompt. Menu → Load Image / Video sets a
+                  media basis on the right (drag the divider to resize) — then describe the change
+                  and CREATE.
                   The Viewer can <strong>Open…</strong> a text, image, video, or song file
                   (tabs and tools switch to that type). On an image or video, Viewer
                   <strong>Extract Layout…</strong> finds UI regions; <strong>Use as Basis</strong>
@@ -173,6 +171,16 @@
               </form>
             </div>
 
+            <div
+              class="studio-basis-splitter"
+              id="studio-basis-splitter"
+              role="separator"
+              aria-orientation="vertical"
+              aria-label="Resize media basis"
+              aria-controls="studio-basis-panel"
+              tabindex="0"
+              hidden
+            ></div>
             <aside class="studio-basis-panel" id="studio-basis-panel" hidden>
               <fieldset>
                 <legend>Media basis</legend>
@@ -450,31 +458,9 @@
                     <select id="app-theme">
                       <option value="light">Light Mode (Day)</option>
                       <option value="dark">Dark Mode (Night)</option>
-                      <option value="custom">Customize…</option>
                     </select>
                     <p class="hint">
-                      Recolors the whole app — page, panels, buttons, and text.
-                    </p>
-                  </div>
-                  <div id="app-theme-custom" class="theme-custom-controls" hidden>
-                    <div class="field-row">
-                      <label for="custom-desktop-color">Page</label>
-                      <input type="color" id="custom-desktop-color" value="#f4f6f8" />
-                    </div>
-                    <div class="field-row">
-                      <label for="custom-window-color">Panel</label>
-                      <input type="color" id="custom-window-color" value="#ffffff" />
-                    </div>
-                    <div class="field-row">
-                      <label for="custom-title-color">Accent</label>
-                      <input type="color" id="custom-title-color" value="#1565c0" />
-                    </div>
-                    <div class="field-row">
-                      <label for="custom-text-color">Text</label>
-                      <input type="color" id="custom-text-color" value="#1c1c1c" />
-                    </div>
-                    <p class="hint">
-                      Customize is only available when selected above. Light and Dark use fixed palettes.
+                      Light is white with black text. Dark is black with white text.
                     </p>
                   </div>
                 </fieldset>
@@ -966,6 +952,6 @@
   <script src="vendor/jspdf.umd.min.js"></script>
   <script src="catalog.js"></script>
   <script src="image_edit.js"></script>
-  <script src="app.js?v=modern1"></script>
+  <script src="app.js?v=modern9"></script>
 </body>
 </html>

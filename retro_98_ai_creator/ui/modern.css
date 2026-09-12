@@ -6,6 +6,10 @@
   --shadow: 0 8px 24px rgba(0, 0, 0, 0.12);
 }
 
+html {
+  accent-color: var(--ui-text);
+}
+
 html,
 body,
 button,
@@ -17,6 +21,10 @@ legend,
 table {
   font-family: var(--ui-font);
   -webkit-font-smoothing: antialiased;
+}
+
+a {
+  color: var(--ui-text);
 }
 
 button,
@@ -48,10 +56,11 @@ input[type="button"]:not(:disabled):active {
 
 button.default,
 input[type="submit"].default {
-  background: var(--ui-accent);
-  color: var(--ui-accent-text);
-  border-color: transparent;
+  background: var(--ui-button);
+  color: var(--ui-button-text);
+  border-color: var(--ui-border-dark);
   box-shadow: none;
+  font-weight: 600;
 }
 
 input[type="text"],
@@ -75,17 +84,27 @@ select {
 
 select {
   padding-right: 28px;
-  background-image: url("data:image/svg+xml;charset=utf-8,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath fill='%23555' d='M1 1l5 5 5-5'/%3E%3C/svg%3E");
+  background-image: url("data:image/svg+xml;charset=utf-8,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath fill='%23000000' d='M1 1l5 5 5-5'/%3E%3C/svg%3E");
   background-repeat: no-repeat;
   background-position: right 10px center;
   background-size: 12px 8px;
+}
+
+html[data-app-theme="dark"] select {
+  background-image: url("data:image/svg+xml;charset=utf-8,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath fill='%23ffffff' d='M1 1l5 5 5-5'/%3E%3C/svg%3E");
+}
+
+input[type="range"],
+input[type="checkbox"],
+input[type="radio"] {
+  accent-color: var(--ui-text);
 }
 
 select:focus,
 select:focus-visible,
 input:focus,
 textarea:focus {
-  outline: 2px solid var(--ui-accent);
+  outline: 2px solid var(--ui-text);
   outline-offset: 1px;
   background-color: var(--ui-input);
   color: var(--ui-input-text);
@@ -165,13 +184,14 @@ legend {
 }
 
 #app-frame-top {
-  background: var(--ui-title);
-  color: var(--ui-title-text);
+  background: var(--ui-window);
+  color: var(--ui-text);
+  border-bottom: 1px solid var(--ui-border-mid);
 }
 
-#app-menubar {
-  background: var(--ui-window);
-  border-bottom: 1px solid var(--ui-border-mid);
+.app-menu-btn {
+  border-color: transparent;
+  background: transparent;
 }
 
 .app-menu-panel {
@@ -179,7 +199,24 @@ legend {
   border-radius: var(--radius-sm);
   box-shadow: var(--shadow);
   background: var(--ui-window);
-  padding: 6px;
+  padding: 4px 0;
+}
+
+.app-menu-panel [role="menuitem"] {
+  background: transparent;
+  color: var(--ui-text);
+  border: 0;
+  border-radius: 0;
+  box-shadow: none;
+  font-weight: 400;
+}
+
+.app-menu-panel [role="menuitem"]:hover,
+.app-menu-panel [role="menuitem"]:focus {
+  background: var(--ui-text);
+  color: var(--ui-window);
+  filter: none;
+  outline: none;
 }
 
 .app-window {
@@ -208,21 +245,55 @@ legend {
 .progress-indicator-bar {
   display: block;
   height: 100%;
-  background: var(--ui-accent);
+  background: var(--ui-text);
 }
 
 .viewer-tabs {
   display: flex;
-  gap: 6px;
+  align-items: center;
   flex-wrap: wrap;
+  gap: 0;
   margin-bottom: 8px;
+  border-bottom: 0;
+}
+
+.viewer-tab {
+  appearance: none;
+  position: relative;
+  background: transparent;
+  color: var(--ui-muted);
+  border: 0;
+  border-radius: 0;
+  box-shadow: none;
+  min-height: 0;
+  padding: 8px 16px;
+  font-size: 0.95em;
+  font-weight: 400;
+}
+
+.viewer-tab:not(:disabled):hover,
+.viewer-tab:not(:disabled):active {
+  filter: none;
+  background: transparent;
+  color: var(--ui-text);
+}
+
+.viewer-tab:not([hidden]) ~ .viewer-tab:not([hidden])::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 28%;
+  height: 44%;
+  width: 1px;
+  background: var(--ui-border-dark);
 }
 
 .viewer-tab[aria-selected="true"],
 .viewer-tab.active {
-  background: var(--ui-accent);
-  color: var(--ui-accent-text);
-  border-color: transparent;
+  background: transparent;
+  color: var(--ui-text);
+  border: 0;
+  font-weight: 600;
 }
 
 .archive-table {
@@ -257,7 +328,7 @@ legend {
   gap: 4px;
   padding: 12px 8px;
   border-right: 1px solid var(--ui-border-mid);
-  background: var(--desktop-bg);
+  background: var(--ui-window);
   overflow: auto;
 }
 
@@ -271,8 +342,8 @@ legend {
 }
 
 .settings-nav-item[aria-current="page"] {
-  background: var(--ui-accent);
-  color: var(--ui-accent-text);
+  background: var(--ui-text);
+  color: var(--ui-window);
 }
 
 .settings-pages {

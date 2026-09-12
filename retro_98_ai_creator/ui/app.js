@@ -28,6 +28,7 @@
     presets: [],
     creationTypes: [],
     studioBasis: null, // { creationId, modality, fileUrl, mimeType, title, layout }
+    studioBasisWidth: 280, // persisted as ui.studio_basis_width
     studioTools: [], // selected Gemini tool aliases for this session
     geminiToolsCatalog: null, // from bootstrap / list_gemini_tools
     studioAddToolOpen: false,
@@ -42,10 +43,10 @@
     studioCaret: { fieldId: "studio-prompt", start: 0, end: 0 },
     appTheme: "light",
     customTheme: {
-      desktopColor: "#f4f6f8",
+      desktopColor: "#ffffff",
       windowColor: "#ffffff",
-      titleColor: "#1565c0",
-      textColor: "#1c1c1c",
+      titleColor: "#000000",
+      textColor: "#000000",
       font: "sans",
     },
   };
@@ -491,39 +492,27 @@
   const APP_THEME_PRESETS = {
     light: {
       themeName: "Light Mode (Day)",
-      bgColor: "#f4f6f8",
+      bgColor: "#ffffff",
       cardBg: "#ffffff",
-      textColor: "#1c1c1c",
-      accentColor: "#1565c0",
-      headerBg: "#1565c0",
+      textColor: "#000000",
+      accentColor: "#000000",
+      headerBg: "#ffffff",
       fontStyle: "sans",
     },
     dark: {
       themeName: "Dark Mode (Night)",
-      bgColor: "#181818",
-      cardBg: "#2c2c2c",
-      textColor: "#e6e6e6",
-      accentColor: "#4e8ec8",
-      headerBg: "#242424",
+      bgColor: "#000000",
+      cardBg: "#000000",
+      textColor: "#ffffff",
+      accentColor: "#ffffff",
+      headerBg: "#000000",
       fontStyle: "sans",
     },
   };
 
   function resolveAppThemeKey(key) {
     const k = (key || "").trim().toLowerCase();
-    if (k === "light" || k === "dark" || k === "custom") return k;
-    // Migrate legacy console/app theme keys → closest preset
-    if (
-      k === "win98" ||
-      k === "wii-menu" ||
-      k === "xbox-360" ||
-      k === "dreamcast" ||
-      k === "nes" ||
-      k === "sinclair-spectrum"
-    ) {
-      return "light";
-    }
-    if (k) return "dark";
+    if (k === "dark") return "dark";
     return "light";
   }
 
@@ -550,161 +539,44 @@
     return "sans";
   }
 
-  function readCustomThemeFromControls() {
-    return {
-      desktopColor: normalizeHexColor(
-        $("#custom-desktop-color") && $("#custom-desktop-color").value,
-        state.customTheme.desktopColor
-      ),
-      windowColor: normalizeHexColor(
-        $("#custom-window-color") && $("#custom-window-color").value,
-        state.customTheme.windowColor
-      ),
-      titleColor: normalizeHexColor(
-        $("#custom-title-color") && $("#custom-title-color").value,
-        state.customTheme.titleColor
-      ),
-      textColor: normalizeHexColor(
-        $("#custom-text-color") && $("#custom-text-color").value,
-        state.customTheme.textColor
-      ),
-      // Legacy field; app chrome font is state.uiFont / #ui-font
-      font: state.customTheme.font || "sans",
-    };
-  }
-
-  function writeCustomThemeToControls(custom) {
-    const c = custom || state.customTheme;
-    if ($("#custom-desktop-color")) $("#custom-desktop-color").value = c.desktopColor;
-    if ($("#custom-window-color")) $("#custom-window-color").value = c.windowColor;
-    if ($("#custom-title-color")) $("#custom-title-color").value = c.titleColor;
-    if ($("#custom-text-color")) $("#custom-text-color").value = c.textColor;
-  }
-
-  function syncCustomThemeControlsVisibility() {
-    const panel = $("#app-theme-custom");
-    if (!panel) return;
-    const key =
-      ($("#app-theme") && $("#app-theme").value) || state.appTheme || "light";
-    panel.hidden = key !== "custom";
-  }
-
   function getAppThemePalette(themeKey) {
     const key = resolveAppThemeKey(themeKey);
-    if (key === "custom") {
-      const c = state.customTheme;
-      return {
-        themeName: "Customize",
-        bgColor: c.desktopColor,
-        cardBg: c.windowColor,
-        textColor: c.textColor,
-        accentColor: c.titleColor,
-        headerBg: c.titleColor,
-        fontStyle: c.font,
-      };
-    }
     return APP_THEME_PRESETS[key] || APP_THEME_PRESETS.light;
-  }
-
-  function _hexToRgb(hex) {
-    const h = String(hex || "").replace("#", "").trim();
-    if (h.length === 3) {
-      return {
-        r: parseInt(h[0] + h[0], 16),
-        g: parseInt(h[1] + h[1], 16),
-        b: parseInt(h[2] + h[2], 16),
-      };
-    }
-    if (h.length >= 6) {
-      return {
-        r: parseInt(h.slice(0, 2), 16),
-        g: parseInt(h.slice(2, 4), 16),
-        b: parseInt(h.slice(4, 6), 16),
-      };
-    }
-    return { r: 0, g: 128, b: 128 };
-  }
-
-  function _mixHex(a, b, t) {
-    const A = _hexToRgb(a);
-    const B = _hexToRgb(b);
-    const m = (x, y) => Math.round(x + (y - x) * t);
-    const to = (n) => n.toString(16).padStart(2, "0");
-    return "#" + to(m(A.r, B.r)) + to(m(A.g, B.g)) + to(m(A.b, B.b));
-  }
-
-  function _luminance(hex) {
-    const { r, g, b } = _hexToRgb(hex);
-    return (0.299 * r + 0.587 * g + 0.114 * b) / 255;
   }
 
   /** Desktop is a solid theme color (no patterned wallpaper). */
   function applyAppTheme(themeKey) {
     const key = resolveAppThemeKey(themeKey);
-    if (key === "custom") {
-      state.customTheme = readCustomThemeFromControls();
-    }
     const t = getAppThemePalette(key);
     state.appTheme = key;
 
     const root = document.documentElement;
-    const mid = _mixHex(t.bgColor, "#ffffff", 0.12);
-    const deep = _mixHex(t.bgColor, "#000000", 0.28);
-    const lightDesktop = _luminance(t.bgColor) > 0.55;
-
-    // Window surface: prefer cardBg; nudge pure white toward classic silver for chrome feel
-    let windowBg = t.cardBg || "#ffffff";
-    const text = t.textColor || "#222222";
-    const title = t.headerBg || t.accentColor || "#000080";
-    const accent = t.accentColor || "#000080";
-    const titleText = _luminance(title) > 0.55 ? "#111111" : "#e6e6e6";
-    const lightWin = _luminance(windowBg) > 0.45;
-    let titleMid;
-    let titleInactive;
-    let titleInactiveMid;
-    let buttonFace;
-    let inputBg;
-    let muted;
-    let taskbar;
-    let highlight;
-    let borderLight;
-    let borderMid;
-    let borderDark;
-    let borderDarker;
-    if (lightWin) {
-      titleMid = _mixHex(title, accent, 0.4);
-      titleInactive = _mixHex(title, "#808080", 0.55);
-      titleInactiveMid = _mixHex(titleInactive, "#ffffff", 0.18);
-      buttonFace = _mixHex(windowBg, "#dfdfdf", 0.25);
-      inputBg = _mixHex(windowBg, "#ffffff", 0.65);
-      muted = _mixHex(text, windowBg, 0.42);
-      taskbar = _mixHex(windowBg, "#b0b0b0", 0.2);
-      highlight = _mixHex("#ffffd0", accent, 0.12);
-      borderLight = "#ffffff";
-      borderMid = "#dfdfdf";
-      borderDark = "#808080";
-      borderDarker = "#0a0a0a";
-    } else {
-      // Quiet dark chrome: depth from tone, not chalky 98.css highlights.
-      titleMid = _mixHex(title, "#ffffff", 0.06);
-      titleInactive = _mixHex(title, "#000000", 0.22);
-      titleInactiveMid = _mixHex(titleInactive, "#ffffff", 0.05);
-      buttonFace = _mixHex(windowBg, "#ffffff", 0.07);
-      inputBg = _mixHex(windowBg, "#000000", 0.16);
-      muted = _mixHex(text, windowBg, 0.26);
-      taskbar = _mixHex(windowBg, "#000000", 0.12);
-      highlight = _mixHex(windowBg, accent, 0.12);
-      borderLight = _mixHex(windowBg, "#ffffff", 0.13);
-      borderMid = _mixHex(windowBg, "#ffffff", 0.07);
-      borderDark = _mixHex(windowBg, "#000000", 0.32);
-      borderDarker = _mixHex(windowBg, "#000000", 0.5);
-    }
-    const titleTextInactive =
-      _luminance(titleInactive) > 0.55 ? "#333333" : "#bdbdbd";
-    const buttonText = _luminance(buttonFace) > 0.5 ? "#222222" : "#e6e6e6";
-    const darkButtons = _luminance(buttonFace) <= 0.5;
-    const inputText = _luminance(inputBg) > 0.5 ? "#111111" : text;
-    const accentText = _luminance(accent) > 0.55 ? "#111111" : "#ffffff";
+    const isDark = key === "dark";
+    const windowBg = isDark ? "#000000" : "#ffffff";
+    const text = isDark ? "#ffffff" : "#000000";
+    const muted = isDark ? "#b3b3b3" : "#555555";
+    const borderLight = isDark ? "#1a1a1a" : "#ffffff";
+    const borderMid = isDark ? "#333333" : "#d0d0d0";
+    const borderDark = isDark ? "#666666" : "#808080";
+    const borderDarker = "#000000";
+    const title = windowBg;
+    const titleText = text;
+    const titleMid = windowBg;
+    const titleInactive = isDark ? "#1a1a1a" : "#f2f2f2";
+    const titleInactiveMid = titleInactive;
+    const titleTextInactive = muted;
+    const buttonFace = windowBg;
+    const buttonText = text;
+    const inputBg = windowBg;
+    const inputText = text;
+    const accent = text;
+    const accentText = windowBg;
+    const taskbar = windowBg;
+    const highlight = isDark ? "#1a1a1a" : "#f2f2f2";
+    const mid = windowBg;
+    const deep = windowBg;
+    const lightDesktop = !isDark;
+    const darkButtons = isDark;
 
     root.style.setProperty("--desktop-bg", t.bgColor);
     root.style.setProperty("--desktop-bg-mid", mid);
@@ -753,17 +625,14 @@
       "data-ui-button-dark",
       darkButtons ? "1" : "0"
     );
-    const readingDark =
-      key === "dark" || (key === "custom" && !lightDesktop);
     document.documentElement.setAttribute(
       "data-reading-surface",
-      readingDark ? "dark" : "light"
+      key === "dark" ? "dark" : "light"
     );
 
     if ($("#app-theme") && [...$("#app-theme").options].some((o) => o.value === key)) {
       $("#app-theme").value = key;
     }
-    syncCustomThemeControlsVisibility();
   }
 
   function _normHex(hex) {
@@ -1422,13 +1291,13 @@
     if (loadHint) {
       if (!enabled) {
         loadHint.textContent =
-          "File → Load Text puts text in the prompt. File → Load Image / Video sets a media basis shown on the right — then describe the change and CREATE. On an image or video in Viewer, Extract Layout… finds UI regions; Use as Basis then sends the screenshot plus layout JSON so Studio can recreate it as HTML/CSS or an app (or another mockup if you ask for an image). For a song, Use as Basis reloads the prompt and lyrics as text — not the MP3.";
+          "Menu → Load Text puts text in the prompt. Menu → Load Image / Video sets a media basis on the right (drag the divider to resize) — then describe the change and CREATE. On an image or video in Viewer, Extract Layout… finds UI regions; Use as Basis then sends the screenshot plus layout JSON so Studio can recreate it as HTML/CSS or an app (or another mockup if you ask for an image). For a song, Use as Basis reloads the prompt and lyrics as text — not the MP3.";
       } else if (searchOn) {
         loadHint.textContent =
-          "File → Load Text puts text in Search (optional). File → Load Image / Video sets a media basis shown on the right — then describe the change and CREATE. On an image or video in Viewer, Extract Layout… finds UI regions; Use as Basis then sends the screenshot plus layout JSON so Studio can recreate it as HTML/CSS or an app (or another mockup if you ask for an image). For a song, Use as Basis reloads the prompt and lyrics as text — not the MP3.";
+          "Menu → Load Text puts text in Search (optional). Menu → Load Image / Video sets a media basis on the right (drag the divider to resize) — then describe the change and CREATE. On an image or video in Viewer, Extract Layout… finds UI regions; Use as Basis then sends the screenshot plus layout JSON so Studio can recreate it as HTML/CSS or an app (or another mockup if you ask for an image). For a song, Use as Basis reloads the prompt and lyrics as text — not the MP3.";
       } else {
         loadHint.textContent =
-          "Google Search is off — only Tool Use runs. File → Load Image / Video sets a media basis shown on the right — then describe the change and CREATE. On an image or video in Viewer, Extract Layout… finds UI regions; Use as Basis then sends the screenshot plus layout JSON so Studio can recreate it as HTML/CSS or an app (or another mockup if you ask for an image). For a song, Use as Basis reloads the prompt and lyrics as text — not the MP3.";
+          "Google Search is off — only Tool Use runs. Menu → Load Image / Video sets a media basis on the right (drag the divider to resize) — then describe the change and CREATE. On an image or video in Viewer, Extract Layout… finds UI regions; Use as Basis then sends the screenshot plus layout JSON so Studio can recreate it as HTML/CSS or an app (or another mockup if you ask for an image). For a song, Use as Basis reloads the prompt and lyrics as text — not the MP3.";
       }
     }
     renderStudioToolsList();
@@ -1569,6 +1438,7 @@
 
   let _settingsSaving = false;
   let _settingsSaveTimer = null;
+  let _studioBasisWidthSaveTimer = null;
 
   async function saveControlPanelSettings(opts) {
     opts = opts || {};
@@ -2390,9 +2260,61 @@
     renderStudioBasisPanel();
   }
 
+  function parseStudioBasisWidth(width) {
+    const raw = Number(width);
+    if (!Number.isFinite(raw)) return 280;
+    return Math.round(Math.max(160, Math.min(raw, 1200)));
+  }
+
+  function clampStudioBasisWidth(width, layoutEl) {
+    const layout = layoutEl || $("#studio-layout");
+    const raw = parseStudioBasisWidth(width);
+    const layoutW = layout ? layout.clientWidth : 0;
+    const minW = 160;
+    const reserved = 280;
+    const maxW =
+      layoutW > minW + reserved ? layoutW - reserved : Math.max(minW, layoutW - 80);
+    return Math.round(Math.max(minW, Math.min(raw, maxW || raw)));
+  }
+
+  function applyStudioBasisWidth(width, opts) {
+    const panel = $("#studio-basis-panel");
+    const splitter = $("#studio-basis-splitter");
+    const next = clampStudioBasisWidth(width);
+    state.studioBasisWidth = next;
+    if (panel) panel.style.width = next + "px";
+    if (splitter) {
+      splitter.setAttribute("aria-valuenow", String(next));
+      splitter.setAttribute("aria-valuemin", "160");
+      splitter.setAttribute("aria-valuemax", "1200");
+    }
+    if (opts && opts.persist) persistStudioBasisWidthSoon();
+  }
+
+  function persistStudioBasisWidthSoon() {
+    clearTimeout(_studioBasisWidthSaveTimer);
+    _studioBasisWidthSaveTimer = setTimeout(() => {
+      void persistStudioBasisWidth();
+    }, 250);
+  }
+
+  async function persistStudioBasisWidth() {
+    const a = api();
+    if (!a) return;
+    try {
+      const res = await a.save_settings({
+        ui: { studio_basis_width: parseStudioBasisWidth(state.studioBasisWidth) },
+      });
+      if (res && res.config) state.config = res.config;
+    } catch (_) {
+      /* ignore */
+    }
+  }
+
   function renderStudioBasisPanel() {
     const win = $("#win-form");
     const panel = $("#studio-basis-panel");
+    const splitter = $("#studio-basis-splitter");
     const preview = $("#studio-basis-preview");
     const label = $("#studio-basis-label");
     const layout = $("#studio-layout");
@@ -2401,12 +2323,8 @@
 
     if (!basis) {
       panel.hidden = true;
-      if (win) {
-        win.classList.remove("has-studio-basis");
-        if (!win.style.width || parseInt(win.style.width, 10) >= 700) {
-          win.style.width = "440px";
-        }
-      }
+      if (splitter) splitter.hidden = true;
+      if (win) win.classList.remove("has-studio-basis");
       if (layout) layout.classList.remove("has-basis");
       preview.innerHTML = '<p class="muted">No media loaded</p>';
       if (label) label.textContent = "";
@@ -2415,12 +2333,10 @@
     }
 
     panel.hidden = false;
+    if (splitter) splitter.hidden = false;
     if (layout) layout.classList.add("has-basis");
-    if (win) {
-      win.classList.add("has-studio-basis");
-      const w = parseInt(win.style.width, 10);
-      if (!Number.isFinite(w) || w < 720) win.style.width = "780px";
-    }
+    if (win) win.classList.add("has-studio-basis");
+    applyStudioBasisWidth(state.studioBasisWidth);
 
     preview.innerHTML = "";
     if (basis.modality === "video") {
@@ -3179,54 +3095,46 @@
     "prompt-editor",
     "control",
   ];
-  const SCREEN_MENUS = {
-    form: ["file"],
-    library: ["file"],
-    viewer: ["file", "ai", "edit"],
-    "image-edit": ["file"],
-    "video-edit": ["file"],
-    "prompt-editor": [],
-    control: [],
+  const SCREENS_WITH_MENU = {
+    form: true,
+    library: true,
+    viewer: true,
+    "image-edit": true,
+    "video-edit": true,
   };
 
   function closeAppMenus() {
-    document.querySelectorAll(".app-menu-panel").forEach((p) => {
-      p.hidden = true;
-    });
-    document.querySelectorAll(".app-menu-btn").forEach((b) => {
-      b.setAttribute("aria-expanded", "false");
-    });
+    const panel = $("#menu-app-panel");
+    const btn = $("#menu-app-btn");
+    if (panel) panel.hidden = true;
+    if (btn) btn.setAttribute("aria-expanded", "false");
   }
 
-  function toggleAppMenu(name, force) {
-    const panel = $("#menu-" + name + "-panel");
-    const btn = $("#menu-" + name + "-btn");
+  function toggleAppMenu(force) {
+    const panel = $("#menu-app-panel");
+    const btn = $("#menu-app-btn");
     if (!panel || !btn) return;
     const open = typeof force === "boolean" ? force : panel.hidden;
-    closeAppMenus();
     if (open) {
       panel.hidden = false;
       btn.setAttribute("aria-expanded", "true");
+    } else {
+      closeAppMenus();
     }
   }
 
   function syncAppMenus(id) {
-    const wanted = SCREEN_MENUS[id] || [];
-    ["file", "ai", "edit"].forEach((name) => {
-      const wrap = $("#menu-" + name);
-      if (!wrap) return;
-      wrap.hidden = wanted.indexOf(name) === -1;
-      const panel = $("#menu-" + name + "-panel");
-      if (!panel) return;
+    const panel = $("#menu-app-panel");
+    if (panel) {
       panel.querySelectorAll(".menu-group").forEach((g) => {
         g.setAttribute(
           "data-active",
           g.getAttribute("data-screen") === id ? "1" : "0"
         );
       });
-    });
-    const bar = $("#app-menubar");
-    if (bar) bar.setAttribute("data-empty", wanted.length ? "0" : "1");
+    }
+    const wrap = $("#app-overflow-menu");
+    if (wrap) wrap.hidden = !SCREENS_WITH_MENU[id];
     closeAppMenus();
   }
 
@@ -5885,13 +5793,12 @@
     fillUiFontSelect();
     const custom = ui.custom_theme || {};
     state.customTheme = {
-      desktopColor: normalizeHexColor(custom.desktop_color, "#f4f6f8"),
+      desktopColor: normalizeHexColor(custom.desktop_color, "#ffffff"),
       windowColor: normalizeHexColor(custom.window_color, "#ffffff"),
-      titleColor: normalizeHexColor(custom.title_color, "#1565c0"),
-      textColor: normalizeHexColor(custom.text_color, "#1c1c1c"),
+      titleColor: normalizeHexColor(custom.title_color, "#000000"),
+      textColor: normalizeHexColor(custom.text_color, "#000000"),
       font: resolveCustomFontKey(custom.font || "sans"),
     };
-    writeCustomThemeToControls(state.customTheme);
     state.uiFont = resolveUiFontKey(
       ui.ui_font || (custom.font === "serif" || custom.font === "mono" ? custom.font : null) || "inter"
     );
@@ -5901,6 +5808,12 @@
       $("#app-theme").value = state.appTheme;
     }
     applyAppTheme(state.appTheme);
+
+    state.studioBasisWidth = parseStudioBasisWidth(ui.studio_basis_width);
+    const basisPanel = $("#studio-basis-panel");
+    if (basisPanel && !basisPanel.hidden) {
+      applyStudioBasisWidth(state.studioBasisWidth);
+    }
 
     updateStudioBackendLabel(boot);
     syncStudioToolsPanel();
@@ -6190,20 +6103,17 @@
         ui_scale: 1,
         ui_font:
           ($("#ui-font") && $("#ui-font").value) || state.uiFont || "inter",
-        app_theme: ($("#app-theme") && $("#app-theme").value) || state.appTheme || "light",
-        custom_theme: (function () {
-          const c =
-            (($("#app-theme") && $("#app-theme").value) || state.appTheme) === "custom"
-              ? readCustomThemeFromControls()
-              : state.customTheme;
-          return {
-            desktop_color: c.desktopColor,
-            window_color: c.windowColor,
-            title_color: c.titleColor,
-            text_color: c.textColor,
-            font: c.font || "sans",
-          };
-        })(),
+        app_theme: resolveAppThemeKey(
+          ($("#app-theme") && $("#app-theme").value) || state.appTheme || "light"
+        ),
+        custom_theme: {
+          desktop_color: state.customTheme.desktopColor,
+          window_color: state.customTheme.windowColor,
+          title_color: state.customTheme.titleColor,
+          text_color: state.customTheme.textColor,
+          font: state.customTheme.font || "sans",
+        },
+        studio_basis_width: parseStudioBasisWidth(state.studioBasisWidth),
       },
     };
   }
@@ -6296,7 +6206,6 @@
     [
       ["light", "Light Mode (Day)"],
       ["dark", "Dark Mode (Night)"],
-      ["custom", "Customize…"],
     ].forEach(([value, label]) => {
       const opt = document.createElement("option");
       opt.value = value;
@@ -6304,8 +6213,6 @@
       dst.appendChild(opt);
     });
     dst.value = prev;
-    writeCustomThemeToControls(state.customTheme);
-    syncCustomThemeControlsVisibility();
   }
 
   function applyCreationPlaceholders(template, game, platform) {
@@ -8975,6 +8882,76 @@
     setupVideoEditCropInteraction();
   }
 
+  function wireStudioBasisSplitter() {
+    const splitter = $("#studio-basis-splitter");
+    if (!splitter || splitter.dataset.wired === "1") return;
+    splitter.dataset.wired = "1";
+    let drag = null;
+
+    splitter.addEventListener("pointerdown", (e) => {
+      if (e.button !== 0 || splitter.hidden) return;
+      const panel = $("#studio-basis-panel");
+      const layout = $("#studio-layout");
+      if (!panel || !layout || panel.hidden) return;
+      const scale = Number(state.uiScale) || 1;
+      drag = {
+        pointerId: e.pointerId,
+        startX: e.clientX,
+        startW: panel.getBoundingClientRect().width / scale,
+        scale,
+      };
+      splitter.classList.add("is-dragging");
+      try {
+        splitter.setPointerCapture(e.pointerId);
+      } catch (_) {
+        /* ignore */
+      }
+      e.preventDefault();
+    });
+
+    splitter.addEventListener("pointermove", (e) => {
+      if (!drag || e.pointerId !== drag.pointerId) return;
+      const delta = (drag.startX - e.clientX) / drag.scale;
+      applyStudioBasisWidth(drag.startW + delta);
+    });
+
+    const endDrag = (e) => {
+      if (!drag) return;
+      if (e && e.pointerId != null && e.pointerId !== drag.pointerId) return;
+      try {
+        splitter.releasePointerCapture(drag.pointerId);
+      } catch (_) {
+        /* ignore */
+      }
+      splitter.classList.remove("is-dragging");
+      drag = null;
+      persistStudioBasisWidthSoon();
+    };
+
+    splitter.addEventListener("pointerup", endDrag);
+    splitter.addEventListener("pointercancel", endDrag);
+    splitter.addEventListener("dblclick", () => {
+      applyStudioBasisWidth(280, { persist: true });
+    });
+    splitter.addEventListener("keydown", (e) => {
+      if (splitter.hidden) return;
+      const step = e.shiftKey ? 40 : 16;
+      if (e.key === "ArrowLeft") {
+        applyStudioBasisWidth(state.studioBasisWidth + step, { persist: true });
+        e.preventDefault();
+      } else if (e.key === "ArrowRight") {
+        applyStudioBasisWidth(state.studioBasisWidth - step, { persist: true });
+        e.preventDefault();
+      } else if (e.key === "Home") {
+        applyStudioBasisWidth(160, { persist: true });
+        e.preventDefault();
+      } else if (e.key === "End") {
+        applyStudioBasisWidth(1200, { persist: true });
+        e.preventDefault();
+      }
+    });
+  }
+
   function wireEvents() {
     if ($("#screen-select")) {
       $("#screen-select").addEventListener("change", () => {
@@ -8982,22 +8959,25 @@
       });
     }
 
-    ["file", "ai", "edit"].forEach((name) => {
-      const btn = $("#menu-" + name + "-btn");
-      if (!btn) return;
-      btn.addEventListener("click", (e) => {
+    if ($("#menu-app-btn")) {
+      $("#menu-app-btn").addEventListener("click", (e) => {
         e.preventDefault();
         e.stopPropagation();
-        toggleAppMenu(name);
+        toggleAppMenu();
       });
-    });
+    }
+    wireStudioBasisSplitter();
 
     document.addEventListener("click", (e) => {
       if (e.target.closest(".app-menu")) {
-        if (e.target.closest(".app-menu-panel button")) closeAppMenus();
+        if (e.target.closest(".app-menu-panel [role='menuitem']")) closeAppMenus();
         return;
       }
       closeAppMenus();
+    });
+
+    document.addEventListener("keydown", (e) => {
+      if (e.key === "Escape") closeAppMenus();
     });
 
     document.addEventListener("focusin", (e) => {
@@ -9501,7 +9481,6 @@
     }
     if ($("#app-theme")) {
       $("#app-theme").addEventListener("change", () => {
-        syncCustomThemeControlsVisibility();
         applyAppTheme($("#app-theme").value);
       });
     }
@@ -9510,19 +9489,6 @@
         applyUiFont($("#ui-font").value);
       });
     }
-    [
-      "custom-desktop-color",
-      "custom-window-color",
-      "custom-title-color",
-      "custom-text-color",
-    ].forEach((id) => {
-      const el = $("#" + id);
-      if (!el) return;
-      el.addEventListener("input", () => {
-        if ((($("#app-theme") && $("#app-theme").value) || "") !== "custom") return;
-        applyAppTheme("custom");
-      });
-    });
 
     wireImageEditEvents();
     wireVideoEditEvents();
@@ -9543,6 +9509,10 @@
     showScreen("form");
     window.addEventListener("resize", () => {
       syncDesktopScrollExtent();
+      const basisPanel = $("#studio-basis-panel");
+      if (basisPanel && !basisPanel.hidden) {
+        applyStudioBasisWidth(state.studioBasisWidth);
+      }
     });
 
     const a = await waitForApi();
