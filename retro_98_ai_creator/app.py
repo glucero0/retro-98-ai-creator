@@ -1,4 +1,4 @@
-"""Application entry — pywebview + 98.css desktop UI."""
+"""Application entry — pywebview + single-window web UI."""
 
 from __future__ import annotations
 
@@ -29,7 +29,7 @@ _api_bridge: Api | None = None
 
 
 class _AppRequestHandler(SimpleHTTPRequestHandler):
-    """Serve the 98.css UI and configured media folder over the same localhost origin."""
+    """Serve the web UI and configured media folder over the same localhost origin."""
 
     ui_root: Path = UI_DIR
     media_root: Path = PROJECT_ROOT / "media"

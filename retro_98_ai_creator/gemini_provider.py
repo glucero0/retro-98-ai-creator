@@ -129,7 +129,7 @@ def learn_retired_gemini_model(
     replacement: str | None = None,
 ) -> dict[str, Any]:
     """
-    Persist a retired model alias, clear the active Control Panel slot if it
+    Persist a retired model alias, clear the active Settings slot if it
     matched, and return UI-facing details.
     """
     from .config import save_config
@@ -174,7 +174,7 @@ def learn_retired_gemini_model(
         f'Gemini model "{mid}" is retired or unavailable for this API key. '
         f"It was removed from the picker"
         + (f' and {modality} was switched to "{repl}"' if switched else "")
-        + ". Open Control Panel → AI Model to confirm or choose another model."
+        + ". Open Settings → AI Model to confirm or choose another model."
     )
     return {
         "retired": mid,
@@ -733,7 +733,7 @@ def _generate_text_with_gemini(
     api_key = resolve_api_key(gemini_cfg)
     if not api_key:
         raise RuntimeError(
-            "Gemini API key missing. Paste your key in Control Panel → AI Model (Gemini)."
+            "Gemini API key missing. Paste your key in Settings → AI Model (Gemini)."
         )
 
     from .gemini_tools import normalize_tool_aliases

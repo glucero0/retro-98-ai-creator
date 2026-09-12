@@ -1,29 +1,29 @@
 # Retro 98 AI Creator
 
-A Windows 98–themed desktop studio for general-purpose AI creation: **text**, **images**, **video**, and **music** — with built-in editors, an archive of everything you make, and a fully skinnable retro desktop.
+A single-window studio for general-purpose AI creation: **text**, **images**, **video**, and **music** — with built-in editors, an archive of everything you make, and Settings that save when you leave a Settings page.
 
 > **Work in progress.** This project is under active development. Features, APIs, config, and storage formats may change without notice. **Use at your own risk** — there is no warranty of any kind. You are responsible for API costs and any data you generate or store. Do not rely on it for production, critical, or irreversible work.
 
-**Backend: Google Gemini** — text, image, Veo video, and Lyria music via separate model pickers in Control Panel.
+**Backend: Google Gemini** — text, image, Veo video, and Lyria music via separate model pickers in Settings.
 
 ## Features
 
-- Win98 desktop UI (98.css) with draggable/minimizable windows, a taskbar, and a Start menu
-- **Creation Studio** — one freeform prompt box; the app infers text/image/video/music from your prompt and generation intent. Turn on **Enable Tools** in Studio (or set the Control Panel default) to switch to **Search** (optional) + **Tool Use** for file, PowerShell, Gmail, Drive, Docs, Calendar, Tasks, and web-browse automation.
+- Single-window app: pick a screen from the top dropdown. A hamburger menu holds occasional actions for the current screen; each screen keeps its contents when you switch
+- **Creation Studio** — one freeform prompt box; the app infers text/image/video/music from your prompt and generation intent. Turn on **Enable Tools** in Studio (or set the Settings default) to switch to **Search** (optional) + **Tool Use** for file, PowerShell, Gmail, Drive, Docs, Calendar, Tasks, and web-browse automation.
 - **Gemini Use Tools** (optional) — attach built-in tools (`read_json`, `write_json`, `read_text`, `write_text`, `execute_powershell`, `search_gmail`, `search_drive`, `create_drive_file`, `read_google_doc`, `create_google_doc`, `edit_google_doc`, `list_calendar_events`, `create_calendar_event`, `edit_calendar_event`, `list_tasks`, `create_task`, `edit_task`, `browse_web`) and describe steps in natural language; Gemini calls them via function calling (text generations only, Windows for PowerShell)
 - **Google Search enrichment** (optional, Gemini text) — when Search runs, the app can OCR images and pull YouTube captions from cited results before the tool or document pass
 - **Gemini** text, image, video, and music generation with separate model pickers per modality. Music uses **Lyria** (Clip for 30-second previews, **Lyria 3.5 / Lyria Pro** for full songs). Tracks are SynthID-watermarked by Google. Use an image as a Studio basis to compose from a picture; an existing MP3 cannot be sent as audio input.
 - **Archives** — every creation is saved automatically: text/lyrics/metadata in `archives.json`, binaries in the media folder; search, import/export JSON, or import existing text/image/video/audio files
 - **Viewer** — a generic shell for **text, images, video, or audio**. **Open…** a file (or pick an Archive item / generate in Studio) and tabs plus tools switch to that type: **Document** (plus **Sources** when Google Search was used) vs Image/Video/Audio, Extract Text / Transcribe, **Extract Layout…** (UI chrome + coordinate JSON on images, or a still frame from video). On the **Layout** tab, **Save Layout PDF** is the paged document (boxed screenshot, then flags and JSON as black text). **Save Layout PNG** is one tall image of that same content — Windows Photos shrinks it to fit the window (it looks like a ribbon); Paint, a browser, or zoom shows it correctly. The Image tab still saves the original picture. Edit, and Save PNG/MP4/MP3. Already-saved work does not need to be exported.
 - **Image Edit** and **Video Edit** — standalone editors (and reachable via Viewer → Edit) for crop/rotate, color/filter adjustments, and (for video) a segment timeline for splitting/reordering/trimming clips
-- **Control Panel** — Gemini model pickers, Google Workspace OAuth, media folder, display themes, sound, CRT overlay, and UI scale
+- **Settings** — left-hand list: Models, Generation, Google, Storage, Appearance. Changes save when you switch Settings pages or leave Settings. Open-source UI fonts; no CRT overlay or display scaling.
 - Cancel a generation in progress
 - "Use as Basis" / "Load…" — start a new creation from the Viewer's active item or an imported file, without touching the original. For songs this reloads the prompt and lyrics (Lyria cannot take an MP3 as input). For a screenshot with extracted layout, Studio gets the image plus coordinate JSON so you can recreate the UI as text/code (or ask for an image/video instead).
 
 ## Requirements
 
 - Python 3.10+
-- A [Gemini API key](https://aistudio.google.com/apikey), set via **Control Panel** (saved to `config.yaml`)
+- A [Gemini API key](https://aistudio.google.com/apikey), set via **Settings** (saved to `config.yaml`)
 - **ffmpeg + ffprobe** — needed for **Video Editor** (apply filters, split/reorder segments, export) and for Viewer **Extract Layout…** on a video (grabs a still frame). See [Installing ffmpeg](#installing-ffmpeg) below.
 
 ## Quick start
@@ -40,7 +40,7 @@ pip install -r requirements.txt
 python -m retro_98_ai_creator
 ```
 
-Then open **Control Panel** → paste your Gemini API key → pick a **Text**, **Image**, **Video**, and/or **Audio (Lyria)** model → **Save**. Enable Lyria (and Lyria Pro / 3.5 if you want full-length songs) for that API key in [Google AI Studio](https://aistudio.google.com/) or the linked Cloud project if the Audio picker is empty after **Refresh…**.
+Then open **Settings** → **Models** → paste your Gemini API key and pick a **Text**, **Image**, **Video**, and/or **Audio (Lyria)** model. Settings save when you switch Settings pages or leave Settings via the screen dropdown. Enable Lyria (and Lyria Pro / 3.5 if you want full-length songs) for that API key in [Google AI Studio](https://aistudio.google.com/) or the linked Cloud project if the Audio picker is empty after **Refresh…**.
 
 ## Installing ffmpeg
 
@@ -106,14 +106,14 @@ ffprobe -version
 Use a reasonably current build (roughly ffmpeg 4+). Very old copies on `PATH` (for example ancient helper scripts) can break Video Editor — remove or reorder `PATH` so the modern `ffmpeg` wins.
 ## The apps
 
-| Window | What it does |
+| Screen | What it does |
 | --- | --- |
-| **Creation Studio** | Type a prompt and hit **Create**. With **Enable Tools** off, one prompt box handles text/image/video/music. With **Enable Tools** on (Studio checkbox; Control Panel → Use Tools is the default after launch/Save), Studio shows **Search** (optional), a **Tools** panel, and **Tool Use** instead — text only. Load text/image/video files or use the Viewer's active item as a basis. |
-| **Archives** | The library of everything you've generated or imported (catalog in `archives.json`; PNG/MP4/MP3 files in the media folder). Search, delete, import/export JSON, or import a text/image/video/audio file directly. |
-| **Viewer** | Generic viewer for text, images, video, or audio. **Open…** stays on the toolbar. Starts empty; opening a file or Archive item switches tabs/tools to that type. Closing Viewer returns to the empty Open shell (files remain in Archives). Text uses **Document** (and **Sources** when search grounding is present). Images and videos also get **Extract Text…** / **Extract Layout…**. On the Layout tab, **Save Layout PDF** writes an A4 file (boxed screenshot, then flags and JSON as selectable black text). **Save Layout PNG** is one tall image of the same content. |
-| **Image Edit** | Crop, rotate, and adjust (brightness/contrast/saturation/hue/sepia/blur/exposure/gamma/vignette/tint, grayscale, threshold, sharpen, background removal). Opened standalone or via Viewer → Edit. |
-| **Video Edit** | Same filter/crop/rotate toolset plus a **segment timeline**: split at the playhead, delete/reorder segments, then re-render. Requires ffmpeg. Opened standalone or via Viewer → Edit. |
-| **Control Panel** | Gemini model pickers, Gemini search/tools toggles, **Storage** / media folder picker, display theme, sound, CRT scanlines, UI scale. **Save** writes `config.yaml` and resets Studio’s **Enable Tools** checkbox to the saved **Use Tools** default (search field visibility and model labels also update). |
+| **Creation Studio** | Type a prompt and hit **Create**. With **Enable Tools** off, one prompt box handles text/image/video/music. With **Enable Tools** on (Studio checkbox; Settings → Use Tools is the default after launch), Studio shows **Search** (optional), a **Tools** panel, and **Tool Use** instead — text only. **Menu** → Load text/image/video, or use the Viewer's active item as a basis. An image or video basis appears in a **Media basis** pane you can drag-resize; the preview hugs the picture (no letterbox bars). The pane width is remembered in `config.yaml`. |
+| **Archives** | The library of everything you've generated or imported (catalog in `archives.json`; PNG/MP4/MP3 files in the media folder). Search and sort stay on the page. The menu has import/export JSON and import text/image/video/audio. |
+| **Viewer** | Generic viewer for text, images, video, or audio. **Menu → Open…** starts empty; opening a file or Archive item switches tabs/tools to that type. Switching away keeps the current item. Text uses **Document** (and **Sources** when Google Search was used) vs Image/Video/Audio. The menu has Extract Text / Extract Layout / Use as Basis / Voice Reader, and Edit Image / Edit Video. On the Layout tab, **Save Layout PDF** writes an A4 file (boxed screenshot, then flags and JSON as selectable black text). **Save Layout PNG** is one tall image of the same content. |
+| **Image Editor** | Crop, rotate, and adjust (brightness/contrast/saturation/hue/sepia/blur/exposure/gamma/vignette/tint, grayscale, threshold, sharpen, background removal). The menu has Load / Save / Save As / Send to Creator. Opened standalone or via Viewer → **Edit Image**. |
+| **Video Editor** | Same filter/crop/rotate toolset plus a **segment timeline**: split at the playhead, delete/reorder segments, then re-render. Requires ffmpeg. The menu has Load / Save / Save As / Send to Creator. Opened standalone or via Viewer → **Edit Video**. |
+| **Settings** | Left-hand list: **Models** (API key and Text / Image / Video / Audio pickers), **Generation** (search, two-pass, Use Tools, OCR, YouTube captions, temperature, extra instructions), **Google** (Workspace OAuth), **Storage** (media folder), **Appearance** (light / dark, open-source UI font, sound). Changes write `config.yaml` when you switch Settings pages or leave Settings, then update Studio’s **Enable Tools** default (search field visibility and model labels also update). |
 
 ### Prompt Editor and Saved prompt
 
@@ -124,7 +124,7 @@ In **Creation Studio**, open the **Saved prompt** dropdown and pick a name. The 
 ### Send to Creator vs Use as Basis
 
 - **Use as Basis** (Viewer) — load the Archive item into Studio without copying it. The original stays in Archives. For an image or video with **Extract Layout** data, Studio gets the screenshot **and** the layout JSON so you can recreate the UI as HTML/CSS or an app (say “create an image…” if you want another mockup instead). For songs this reloads the prompt and lyrics as text — not the MP3.
-- **Open…** (Viewer) — always on the Viewer toolbar. Pick a text, image, video, or song file from disk. It is saved to Archives and the Viewer chrome switches to that type. On an image or video, **Extract Layout…** asks Gemini to find UI chrome and stores coordinate JSON (plus a box overlay on still images). On the **Layout** tab, **Save Layout PDF** is a multi-page A4 document (screenshot, then flags and JSON as text); **Save Layout PNG** is one tall image of that same dump (Windows Photos fits the whole strip in the window; zoom or Paint to read it). Switch to Image to save the original picture. Closing the Viewer returns to this empty Open shell; the file stays in Archives.
+- **Open…** (Viewer menu) — pick a text, image, video, or song file from disk. It is saved to Archives and the Viewer switches tabs/tools to that type. On an image or video, **Extract Layout…** asks Gemini to find UI regions and stores coordinate JSON (plus a box overlay on still images). On the **Layout** tab, **Save Layout PDF** is a multi-page A4 document (screenshot, then flags and JSON as text); **Save Layout PNG** is one tall image of that same dump (Windows Photos fits the whole strip in the window; zoom or Paint to read it). Switch to Image to save the original picture. Switching away from Viewer keeps the current item; the file stays in Archives.
 - **Save and Send to Creator** (Viewer, Image Editor, Video Editor) — for images and videos only. Saves the current editor/viewer state, then sends that media into Studio as an anonymous basis. The next **CREATE** is stored as a **new** Archive item rather than overwriting the source.
 
 ### Image Editor / Video Editor: Apply vs. Save
@@ -135,30 +135,30 @@ In **Creation Studio**, open the **Saved prompt** dropdown and pick a name. The 
 ## Gemini setup
 
 1. Create a key at https://aistudio.google.com/apikey
-2. Open **Control Panel** → paste the key → pick Text / Image / Video / Audio models → **Save**
+2. Open **Settings** → **Models** → paste the key → pick Text / Image / Video / Audio models (saves when you leave the page)
 3. Model lists are fetched live from Google once a key is saved; each list only shows models compatible with that modality
 
-### Control Panel → what affects Creation Studio
+### Settings → what affects Creation Studio
 
-After **Save**, these settings apply on the next **Create** (no app restart):
+These settings apply on the next **Create** (no app restart):
 
 | Setting | Effect on Studio |
 | --- | --- |
 | **Text / Image / Video / Audio models** | Shown on the Studio model field; routing still follows prompt intent (e.g. “generate a video” uses Veo, “compose a song” uses the Lyria Audio slot) |
 | **Google Search grounding (text)** | When on, an optional **Search** field appears in tools mode. When off, Search is hidden and no web research pass runs |
 | **Two-pass verify** | Gemini text only, when Google Search is on and tools are off — extract with sources, then verify at temperature 0 |
-| **Use Tools** | Saved default for Studio’s **Enable Tools** checkbox (applied on launch and after Save). Studio can still toggle tools for the current session without opening Control Panel. Text generations only |
+| **Use Tools** | Saved default for Studio’s **Enable Tools** checkbox (applied on launch and when Settings are saved). Studio can still toggle tools for the current session without opening Settings. Text generations only |
 | **OCR search images** | When a Search pass returns cited pages, download and OCR images (diagrams, scanned tables) into the research brief |
 | **YouTube search captions** | When Search cites YouTube URLs, pull captions into the research brief |
 | **Temperature** | Generation temperature for Gemini |
 | **Extra system instructions** | Appended to every generation prompt |
-| **Media folder** | Where new **PNG / MP4 / MP3** files are written — not text, lyrics, or metadata (those stay in `archives.json`). **Save** may offer to move existing media into the new folder; declining leaves old files where they are |
+| **Media folder** | Where new **PNG / MP4 / MP3** files are written — not text, lyrics, or metadata (those stay in `archives.json`). Changing the folder may offer to move existing media; declining leaves old files where they are |
 
 ## Lyria music generation (Gemini)
 
 Music is a fourth Gemini slot (alongside text, image, and Veo). Studio routes prompts such as “compose a song”, “generate a music clip”, or “background music, instrumental only” to the **Audio (Lyria)** model.
 
-Enable the music models for your Gemini API key in [Google AI Studio](https://aistudio.google.com/) or the Google Cloud project tied to that key, then Control Panel → **Refresh…** so they appear in the Audio picker.
+Enable the music models for your Gemini API key in [Google AI Studio](https://aistudio.google.com/) or the Google Cloud project tied to that key, then Settings → **Refresh…** so they appear in the Audio picker.
 
 | Picker label | Model id | Best for |
 | --- | --- | --- |
@@ -202,11 +202,11 @@ Walking through the neon glow…
 
 ## Gemini Use Tools (optional)
 
-In **Creation Studio**, check **Enable Tools**. That is a per-session override — you do not need to open Control Panel. Control Panel → **Use Tools (local file read/write)** is only the default after launch or **Save**.
+In **Creation Studio**, check **Enable Tools**. That is a per-session override — you do not need to open Settings. Settings → **Use Tools (local file read/write)** is only the default after launch or when that setting changes.
 
 When tools are on, Studio hides the normal prompt and shows:
 
-1. **Search** *(optional)* — what Google should look up for this run. Leave blank for tool-only workflows. Hidden entirely when Google Search is off in Control Panel.
+1. **Search** *(optional)* — what Google should look up for this run. Leave blank for tool-only workflows. Hidden entirely when Google Search is off in Settings.
 2. **Tools** — attach one or more built-in tools with **Add Tool…**
 3. **Tool Use** — describe what to do. You must mention at least one attached tool alias (e.g. `execute_powershell`, `write_text`, `browse_web`) so the app knows which capabilities you intend.
 
@@ -239,7 +239,7 @@ One desktop OAuth client and one stored token cover all of these tools. **Google
 
 1. In [Google Cloud Console](https://console.cloud.google.com/), create a project and enable the **Gmail**, **Google Drive**, **Google Docs**, **Google Calendar**, and **Google Tasks** APIs.
 2. Create an OAuth client (**Desktop application**) and download the client JSON file.
-3. Control Panel → **Gemini** → **Google Workspace**: **Pick OAuth JSON…**, **Save**, then **Connect Google Workspace…** (browser sign-in). Re-connect after adding APIs so the new scopes are granted.
+3. Settings → **Google**: **Pick OAuth JSON…**, then **Connect Google Workspace…** (browser sign-in). Re-connect after adding APIs so the new scopes are granted.
 4. In Creation Studio, attach the tools you need (`search_gmail`, `search_drive`, `read_google_doc`, `create_calendar_event`, …) and describe the work in **Tool Use**.
 
 When any Google Workspace tool is attached, the app injects the machine’s current date, time, timezone, and the upcoming week into the prompt behind the scenes. You can say “this coming Wednesday at 9:45am” or “mail from yesterday” — you do not type RFC3339 or today’s date. Calendar events and Task due times use that local clock with a UTC offset (not `Z` unless you asked for UTC). Gmail and Drive search resolve relative windows the same way (`after:`, `newer_than:`, `modifiedTime`). Local file tools and `browse_web` do not get the clock.
@@ -254,7 +254,7 @@ All paths for file tools must be **absolute** (e.g. `C:\data\step1.json`). The m
 
 ### Example: Browse a URL (no Google Search)
 
-1. Studio: **Enable Tools** on (or Control Panel **Use Tools** on → **Save**)
+1. Studio: **Enable Tools** on (or Settings **Use Tools** on)
 2. Attach `browse_web`
 3. Tool Use:
 
@@ -266,7 +266,7 @@ All paths for file tools must be **absolute** (e.g. `C:\data\step1.json`). The m
 
 ### Example: PowerShell → text file (no web search)
 
-1. Studio: **Enable Tools** on; Control Panel **Google Search** off (or on with blank Search)
+1. Studio: **Enable Tools** on; Settings **Google Search** off (or on with blank Search)
 2. Studio: attach `execute_powershell` and `write_text`
 3. Tool Use:
 
@@ -278,7 +278,7 @@ All paths for file tools must be **absolute** (e.g. `C:\data\step1.json`). The m
 
 ### Example: Search + write JSON
 
-1. Studio: **Enable Tools** on; Control Panel **Google Search** on
+1. Studio: **Enable Tools** on; Settings **Google Search** on
 2. Studio: attach `write_json`
 3. Search: `Watch Dogs PS4 DualShock button bindings complete table`
 4. Tool Use: `write_json the findings to C:\output\bindings.json` (mention `write_json`)
@@ -292,16 +292,19 @@ All paths for file tools must be **absolute** (e.g. `C:\data\step1.json`). The m
 
 **Security note:** tools read and write files on your machine, `execute_powershell` runs scripts you point at, Google tools use your connected Gmail/Drive/Docs/Calendar account, and `browse_web` fetches http(s) pages you (or the model) choose. Only attach tools you trust.
 
-## Display, sound, and UI scale
+## Appearance, sound, and storage
 
-Control Panel → **Display & Sound**:
+Settings uses a left-hand list (Models, Generation, Google, Storage, Appearance). Theme and font preview live as you change them; they write `config.yaml` when you switch pages or leave Settings.
 
-- **Appearance**: **Light Mode (Day)** or **Dark Mode (Night)** — both stay Windows 98 chrome; Dark inverts the palette.
-- **UI font**: Inter by default; Retro Pixel for the classic Win98 look (open-source fonts load from the network the first time you pick them)
-- **Sound effects** on/off
-- **CRT scanlines** overlay on/off
-- **UI scale** from 75%–200%, for high-DPI displays or larger text
-- **Storage / Media folder**: **Browse…** or **Use project default**, then **Save**. This folder holds PNG/MP4/MP3 only (text and lyrics stay in `archives.json`). Default is the project `media/` folder (you can also set an absolute path). Changing the folder does not move files until you Save — then you can choose to move existing media. Declining leaves old files where they are; Archives still opens items left in the project `media/` folder.
+Settings → **Appearance**:
+
+- **Theme**: **Light Mode (Day)** (white, black text) or **Dark Mode (Night)** (black, white text)
+- **UI font**: Inter by default, plus other open-source/free fonts (they load from the network the first time you pick them)
+- **Sound effects** on/off and volume
+
+Settings → **Storage**:
+
+- **Media folder**: **Browse…** or **Use project default**. This folder holds PNG/MP4/MP3 only (text and lyrics stay in `archives.json`). Default is the project `media/` folder (you can also set an absolute path). Changing the folder can offer to move existing media. Declining leaves old files where they are; Archives still opens items left in the project `media/` folder.
 
 ## Data & storage
 
@@ -309,7 +312,7 @@ Creations are saved automatically when you generate or import. You do **not** ha
 
 | What | Where it lives |
 | --- | --- |
-| **PNG, JPEG, MP4, MP3, WAV** (generated or imported) | **Media folder** — default `media/` next to the app, or the folder you pick in Control Panel → Display & Sound → **Storage** |
+| **PNG, JPEG, MP4, MP3, WAV** (generated or imported) | **Media folder** — default `media/` next to the app, or the folder you pick in Settings → **Storage** |
 | **Text documents** (full body) | `archives.json` (project root, gitignored) — not a `.txt` in the media folder |
 | **Lyrics** (from Lyria) | `archives.json`, on the song’s Archive record |
 | **Prompts, titles, model ids, timestamps, extracted text, extracted UI layout** | `archives.json` (each media item also stores a `mediaPath` pointer to its file) |
@@ -317,13 +320,13 @@ Creations are saved automatically when you generate or import. You do **not** ha
 
 Viewer **Export TXT** / **Export Lyrics** / **Export Metadata** dump what is already in `archives.json`. **Save PNG / MP4 / MP3** copies a file that is already in the media folder.
 
-Changing the media folder does not move files by itself. After **Save**, the app can offer to move existing images/video/audio; declining leaves them in place. Leftover files in the project `media/` folder still open. Text and lyrics are unaffected — they stay in `archives.json`.
+Changing the media folder does not move files by itself. The app can offer to move existing images/video/audio; declining leaves them in place. Leftover files in the project `media/` folder still open. Text and lyrics are unaffected — they stay in `archives.json`.
 
 Everything above is local. Nothing is uploaded except your prompts (and any image basis) to Gemini.
 
 ## config.yaml (excerpt)
 
-All settings, including API keys, live in `config.yaml` (gitignored). Control Panel writes here. Copy `config.example.yaml` to get started, or just use Control Panel.
+All settings, including API keys, live in `config.yaml` (gitignored). Settings writes here when you switch Settings pages or leave Settings. Browse / OAuth pickers, Refresh, and Recommend also save immediately so those actions have the latest key and paths. Copy `config.example.yaml` to get started, or just use Settings.
 
 ```yaml
 backend:
@@ -348,17 +351,14 @@ prompt:
 ui:
   app_theme: light    # light | dark
   sound_enabled: true
-  crt_enabled: false
-  ui_scale: 1.0
-  ui_font: inter
+  ui_font: inter      # open-source UI fonts (Inter, Roboto, …)
+  studio_basis_width: 280  # Creation Studio Media basis pane (px)
 
 paths:
   archives: archives.json
-  media: media   # or an absolute folder set from Control Panel
+  media: media   # or an absolute folder set from Settings
 ```
 
 ## License
 
-MIT — see [LICENSE](LICENSE).
-
-98.css is MIT-licensed by [Jordan Scales / jdan](https://github.com/jdan/98.css).
+MIT — see [LICENSE](LICENSE). UI fonts are loaded from Google Fonts (open-source licenses such as OFL and Apache 2.0).

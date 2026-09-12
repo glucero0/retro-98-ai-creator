@@ -137,7 +137,7 @@ def extract_text_from_creation(
     model_id, provider = _active_model_and_provider(config)
     if provider != "gemini":
         raise RuntimeError(
-            "Extract Text requires Gemini. Paste a Gemini API key in Control Panel."
+            "Extract Text requires Gemini. Paste a Gemini API key in Settings."
         )
 
     path = media_path
@@ -205,7 +205,7 @@ def ocr_image_bytes(
     model_id, provider = _active_model_and_provider(config)
     if provider != "gemini":
         raise RuntimeError(
-            "Search image OCR requires a Gemini API key. Paste it in Control Panel."
+            "Search image OCR requires a Gemini API key. Paste it in Settings."
         )
     return _extract_image(
         raw,
@@ -340,7 +340,7 @@ def _gemini_multimodal(
     api_key = resolve_api_key(gemini_cfg)
     if not api_key:
         raise RuntimeError(
-            "Gemini API key missing. Paste your key in Control Panel → AI Model (Gemini)."
+            "Gemini API key missing. Paste your key in Settings → AI Model (Gemini)."
         )
     model_name = normalize_gemini_model(model_id or gemini_cfg.get("text_model"))
 

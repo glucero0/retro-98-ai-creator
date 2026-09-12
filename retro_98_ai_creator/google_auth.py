@@ -61,7 +61,7 @@ SCOPE_PRODUCTS: list[tuple[str, tuple[str, ...]]] = [
 DEFAULT_TOKEN_REL = ".retro-98-ai-creator/google_workspace_token.json"
 LEGACY_TOKEN_REL = ".retro-98-ai-creator/gmail_token.json"
 CONNECT_HINT = (
-    "Google Workspace is not authorized. Open Control Panel → Gemini → "
+    "Google Workspace is not authorized. Open Settings → Gemini → "
     "Google Workspace and click Connect Google Workspace after saving your "
     "OAuth client JSON path."
 )
@@ -221,7 +221,7 @@ def authorize_google(cfg: dict[str, Any] | None = None) -> dict[str, Any]:
             "ok": False,
             "error": (
                 "Google Workspace OAuth client JSON path is not set. Pick "
-                "credentials in Control Panel → Gemini → Google Workspace, then Save."
+                "credentials in Settings → Gemini → Google Workspace, then connect."
             ),
         }
     if not creds_path.is_file():
@@ -299,7 +299,7 @@ def build_google_service(
         if not has_scope(creds, scope):
             raise RuntimeError(
                 f"Google Workspace token is missing {scope}. Click "
-                "Connect Google Workspace in Control Panel to grant the updated scopes."
+                "Connect Google Workspace in Settings to grant the updated scopes."
             )
     return build(api_name, api_version, credentials=creds, cache_discovery=False)
 

@@ -72,6 +72,7 @@ DEFAULTS: dict[str, Any] = {
         },
         "window_width": 1280,
         "window_height": 800,
+        "studio_basis_width": 280,
         "title": "Retro 98 AI Creator",
     },
     "paths": {
@@ -87,6 +88,10 @@ DEFAULTS: dict[str, Any] = {
         "token_path": ".retro-98-ai-creator/google_workspace_token.json",
     },
 }
+
+STUDIO_BASIS_WIDTH_MIN = 160
+STUDIO_BASIS_WIDTH_MAX = 1200
+STUDIO_BASIS_WIDTH_DEFAULT = 280
 
 
 def _deep_merge(base: dict[str, Any], override: dict[str, Any]) -> dict[str, Any]:
@@ -189,6 +194,11 @@ def load_config() -> dict[str, Any]:
     paths["media"] = normalize_media_folder(paths.get("media"))
     if not paths.get("prompts"):
         paths["prompts"] = DEFAULTS["paths"]["prompts"]
+    ui = cfg.setdefault("ui", {})
+    if isinstance(ui, dict):
+        ui["studio_basis_width"] = normalize_studio_basis_width(
+            ui.get("studio_basis_width")
+        )
     return cfg
 
 
@@ -248,6 +258,9 @@ def save_config(updates: dict[str, Any], existing: dict[str, Any] | None = None)
     paths.pop("media_resolved", None)
     paths["media"] = normalize_media_folder(paths.get("media"))
     ui_out = dict(merged.get("ui") or {})
+    ui_out["studio_basis_width"] = normalize_studio_basis_width(
+        ui_out.get("studio_basis_width")
+    )
 
     gemini_out = normalize_gemini_cfg(merged.get("gemini") or {})
     prompt_out = dict(merged.get("prompt") or {})
@@ -278,6 +291,15 @@ def save_config(updates: dict[str, Any], existing: dict[str, Any] | None = None)
     merged.pop("huggingface", None)
     merged["ui"] = ui_out
     return merged
+
+
+def normalize_studio_basis_width(raw: Any) -> int:
+    """Clamp Creation Studio Media basis pane width (px) for config I/O."""
+    try:
+        value = int(round(float(raw)))
+    except (TypeError, ValueError):
+        return STUDIO_BASIS_WIDTH_DEFAULT
+    return max(STUDIO_BASIS_WIDTH_MIN, min(STUDIO_BASIS_WIDTH_MAX, value))
 
 
 def normalize_media_folder(raw: str | None) -> str:

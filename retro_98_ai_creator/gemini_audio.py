@@ -78,7 +78,7 @@ def lyria_user_error(exc: BaseException | str, *, model_name: str = "") -> str:
         return (
             f"Lyria rejected this request format ({mid}). "
             "The music API did not accept the app’s audio output settings. "
-            "Try Control Panel → Refresh the Audio picker, or "
+            "Try Settings → Refresh the Audio picker, or "
             "pip install -U google-genai, then retry."
         )
     if is_lyria_policy_block(exc):
@@ -88,12 +88,12 @@ def lyria_user_error(exc: BaseException | str, *, model_name: str = "") -> str:
             "full-length Pro / 3.5 songs than on 30-second Clip. Avoid artist "
             "names, copyrighted lyrics, or sounding like a specific performer. "
             "Try a more original description, an instrumental-only prompt, or "
-            "Control Panel → Audio model → Lyria 3 Clip."
+            "Settings → Audio model → Lyria 3 Clip."
         )
     if is_lyria_model_unavailable(exc):
         return (
             f'Lyria model "{mid}" is not available for this API key. '
-            "Open Control Panel, Refresh the Audio picker, and choose "
+            "Open Settings, Refresh the Audio picker, and choose "
             "lyria-3.5 (full songs) or lyria-3-clip-preview (30 seconds)."
         )
     return f"Gemini music generation error: {exc}"
@@ -243,7 +243,7 @@ def generate_audio_with_gemini(
     api_key = resolve_api_key(gemini_cfg)
     if not api_key:
         raise RuntimeError(
-            "Gemini API key missing. Paste your key in Control Panel → AI Model (Gemini)."
+            "Gemini API key missing. Paste your key in Settings → AI Model (Gemini)."
         )
     prompt = (prompt or "").strip()
     if not prompt:
