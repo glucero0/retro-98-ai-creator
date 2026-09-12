@@ -5,7 +5,7 @@ from __future__ import annotations
 from datetime import datetime, timedelta, timezone
 from unittest.mock import MagicMock, patch
 
-from retro_98_ai_creator.tasks_client import (
+from synthetic_text_extruder.tasks_client import (
     _normalize_due,
     create_task,
     edit_task,
@@ -27,7 +27,7 @@ def test_list_tasks_returns_items():
         ]
     }
     with patch(
-        "retro_98_ai_creator.tasks_client.build_google_service",
+        "synthetic_text_extruder.tasks_client.build_google_service",
         return_value=service,
     ):
         result = list_tasks(query="milk")
@@ -50,7 +50,7 @@ def test_create_task_inserts():
         "status": "needsAction",
     }
     with patch(
-        "retro_98_ai_creator.tasks_client.build_google_service",
+        "synthetic_text_extruder.tasks_client.build_google_service",
         return_value=service,
     ):
         result = create_task("Call Sam")

@@ -189,7 +189,7 @@ def main() -> int:
     width = max(900, int(ui_cfg.get("window_width") or 1280))
     height = max(600, int(ui_cfg.get("window_height") or 800))
     window = webview.create_window(
-        title=ui_cfg.get("title") or "Retro 98 AI Creator",
+        title=ui_cfg.get("title") or "Synthetic Text Extruder",
         url=url,
         js_api=api,
         width=width,
@@ -251,7 +251,7 @@ def main() -> int:
     if hasattr(window.events, "resized"):
         window.events.resized += _remember_size
 
-    logger.info("Starting Retro 98 AI Creator")
+    logger.info("Starting Synthetic Text Extruder")
     logger.info("UI: %s", url)
     logger.info("Media HTTP: %s/media/", origin)
     logger.info("Window: %sx%s", width, height)

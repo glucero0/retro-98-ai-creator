@@ -5,11 +5,12 @@ from pathlib import Path
 
 import yaml
 
-from retro_98_ai_creator.config import (
+from synthetic_text_extruder.config import (
     DEFAULTS,
     PROJECT_ROOT,
     archives_path,
     expand_path,
+    is_legacy_app_token_path,
     is_legacy_gmail_token_path,
     load_config,
     normalize_google_workspace_cfg,
@@ -18,8 +19,8 @@ from retro_98_ai_creator.config import (
     prompts_path,
     save_config,
 )
-from retro_98_ai_creator.creation_utils import extract_json_object
-from retro_98_ai_creator.gemini_provider import normalize_gemini_model
+from synthetic_text_extruder.creation_utils import extract_json_object
+from synthetic_text_extruder.gemini_provider import normalize_gemini_model
 
 
 def test_default_backend_is_gemini():
@@ -44,7 +45,7 @@ def test_load_config_has_sections():
 
 
 def test_load_config_strips_deprecated_backends(tmp_path, monkeypatch):
-    from retro_98_ai_creator import config as config_mod
+    from synthetic_text_extruder import config as config_mod
 
     cfg_path = tmp_path / "config.yaml"
     cfg_path.write_text(
@@ -70,6 +71,12 @@ def test_is_legacy_gmail_token_path_accepts_windows_separators():
     ) is False
 
 
+def test_is_legacy_app_token_path():
+    assert is_legacy_app_token_path(".retro-98-ai-creator/google_workspace_token.json")
+    assert is_legacy_app_token_path(r".retro-98-ai-creator\gmail_token.json")
+    assert is_legacy_app_token_path(".synthetic-text-extruder/google_workspace_token.json") is False
+
+
 def test_normalize_google_workspace_reads_legacy_gmail():
     out = normalize_google_workspace_cfg(
         {
@@ -80,7 +87,7 @@ def test_normalize_google_workspace_reads_legacy_gmail():
         }
     )
     assert out["credentials_path"] == "C:/secrets/client.json"
-    assert out["token_path"] == ".retro-98-ai-creator/google_workspace_token.json"
+    assert out["token_path"] == ".synthetic-text-extruder/google_workspace_token.json"
 
 
 def test_normalize_google_workspace_prefers_new_section():
@@ -125,7 +132,7 @@ def test_normalize_media_folder_keeps_other_absolute(tmp_path):
 
 def test_save_config_persists_paths_media(tmp_path, monkeypatch):
     dest = tmp_path / "config.yaml"
-    monkeypatch.setattr("retro_98_ai_creator.config.DEFAULT_CONFIG_PATH", dest)
+    monkeypatch.setattr("synthetic_text_extruder.config.DEFAULT_CONFIG_PATH", dest)
     custom = (tmp_path / "my-media").resolve()
     existing = copy.deepcopy(DEFAULTS)
     out = save_config(
@@ -167,7 +174,7 @@ def test_normalize_studio_basis_width():
 
 def test_save_config_persists_studio_basis_width(tmp_path, monkeypatch):
     dest = tmp_path / "config.yaml"
-    monkeypatch.setattr("retro_98_ai_creator.config.DEFAULT_CONFIG_PATH", dest)
+    monkeypatch.setattr("synthetic_text_extruder.config.DEFAULT_CONFIG_PATH", dest)
     existing = copy.deepcopy(DEFAULTS)
     out = save_config({"ui": {"studio_basis_width": 440}}, existing=existing)
     assert out["ui"]["studio_basis_width"] == 440

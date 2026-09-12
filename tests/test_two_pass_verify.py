@@ -1,8 +1,8 @@
 """Two-pass Gemini search/verify helpers and prompts."""
 
-from retro_98_ai_creator.creation_utils import finalize_creation, normalize_source_snippets
-from retro_98_ai_creator.gemini_provider import _two_pass_enabled
-from retro_98_ai_creator.prompts import (
+from synthetic_text_extruder.creation_utils import finalize_creation, normalize_source_snippets
+from synthetic_text_extruder.gemini_provider import _two_pass_enabled
+from synthetic_text_extruder.prompts import (
     build_search_extract_prompt,
     build_verification_prompt,
 )

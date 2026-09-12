@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from unittest.mock import MagicMock, patch
 
-from retro_98_ai_creator.docs_client import (
+from synthetic_text_extruder.docs_client import (
     create_google_doc,
     edit_google_doc,
     read_google_doc,
@@ -39,7 +39,7 @@ def test_read_google_doc_extracts_text():
     service = MagicMock()
     service.documents.return_value.get.return_value.execute.return_value = _doc_payload()
     with patch(
-        "retro_98_ai_creator.docs_client.build_google_service",
+        "synthetic_text_extruder.docs_client.build_google_service",
         return_value=service,
     ):
         result = read_google_doc("d1")
@@ -61,7 +61,7 @@ def test_edit_google_doc_replace():
     )
     service.documents.return_value.batchUpdate.return_value.execute.return_value = {}
     with patch(
-        "retro_98_ai_creator.docs_client.build_google_service",
+        "synthetic_text_extruder.docs_client.build_google_service",
         return_value=service,
     ):
         result = edit_google_doc("d1", text="New", mode="replace")

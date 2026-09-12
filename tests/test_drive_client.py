@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from unittest.mock import MagicMock, patch
 
-from retro_98_ai_creator.drive_client import create_drive_file, search_drive
+from synthetic_text_extruder.drive_client import create_drive_file, search_drive
 
 
 def test_search_drive_requires_query():
@@ -28,7 +28,7 @@ def test_search_drive_returns_files():
         ]
     }
     with patch(
-        "retro_98_ai_creator.drive_client.build_google_service",
+        "synthetic_text_extruder.drive_client.build_google_service",
         return_value=service,
     ):
         result = search_drive("name contains 'Budget'", max_results=5)
@@ -55,7 +55,7 @@ def test_create_drive_file_uploads_text():
     }
     with (
         patch(
-            "retro_98_ai_creator.drive_client.build_google_service",
+            "synthetic_text_extruder.drive_client.build_google_service",
             return_value=service,
         ),
         patch("googleapiclient.http.MediaInMemoryUpload", return_value=MagicMock()),

@@ -6,8 +6,8 @@ import json
 
 import pytest
 
-from retro_98_ai_creator.api import Api
-from retro_98_ai_creator.storage import PromptStore
+from synthetic_text_extruder.api import Api
+from synthetic_text_extruder.storage import PromptStore
 
 
 def test_prompt_store_upsert_and_list(tmp_path):

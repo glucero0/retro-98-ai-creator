@@ -1,4 +1,4 @@
-# Retro 98 AI Creator
+# Synthetic Text Extruder
 
 A single-window studio for general-purpose AI creation: **text**, **images**, **video**, and **music** — with built-in editors, an archive of everything you make, and Settings that save when you leave a Settings page.
 
@@ -37,7 +37,7 @@ source .venv/bin/activate
 
 pip install -r requirements.txt
 
-python -m retro_98_ai_creator
+python -m synthetic_text_extruder
 ```
 
 Then open **Settings** → **Models** → paste your Gemini API key and pick a **Text**, **Image**, **Video**, and/or **Audio (Lyria)** model. Settings save when you switch Settings pages or leave Settings via the screen dropdown. Enable Lyria (and Lyria Pro / 3.5 if you want full-length songs) for that API key in [Google AI Studio](https://aistudio.google.com/) or the linked Cloud project if the Audio picker is empty after **Refresh…**.
@@ -248,7 +248,7 @@ Example Gmail queries: `is:unread in:inbox`, `category:purchases`, `subject:trac
 
 Example Drive queries: `name contains 'budget'`, `mimeType = 'application/vnd.google-apps.document'`.
 
-**Security note:** the token can read and write Gmail, Drive, Docs, Calendar, and Tasks data you grant at consent. It is stored as `.retro-98-ai-creator/google_workspace_token.json` (the whole `.retro-98-ai-creator/` folder is gitignored). An OAuth app in Testing must reconnect about every 7 days. Existing `gmail_token.json` files are migrated on the next successful connect or refresh.
+**Security note:** the token can read and write Gmail, Drive, Docs, Calendar, and Tasks data you grant at consent. It is stored as `.synthetic-text-extruder/google_workspace_token.json` (the whole `.synthetic-text-extruder/` folder is gitignored). An OAuth app in Testing must reconnect about every 7 days. Tokens left under `.retro-98-ai-creator/` or as `gmail_token.json` are copied to the new path on the next successful connect or refresh.
 
 All paths for file tools must be **absolute** (e.g. `C:\data\step1.json`). The model infers call order from your Tool Use text once tools are attached.
 

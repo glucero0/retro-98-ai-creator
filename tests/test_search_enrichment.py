@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from unittest.mock import patch
 
-from retro_98_ai_creator.search_enrichment import apply_search_enrichment
+from synthetic_text_extruder.search_enrichment import apply_search_enrichment
 
 
 def test_apply_search_enrichment_combines_blocks():
@@ -12,11 +12,11 @@ def test_apply_search_enrichment_combines_blocks():
 
     with (
         patch(
-            "retro_98_ai_creator.research_images.enrich_research_with_image_ocr",
+            "synthetic_text_extruder.research_images.enrich_research_with_image_ocr",
             return_value=("IMAGE OCR FINDINGS:\n- img\n  text", {"ocrImageCount": 1}),
         ),
         patch(
-            "retro_98_ai_creator.research_youtube.enrich_research_with_youtube_captions",
+            "synthetic_text_extruder.research_youtube.enrich_research_with_youtube_captions",
             return_value=(
                 "YOUTUBE CAPTION FINDINGS:\n- vid\n  captions",
                 {"youtubeCaptionCount": 1},

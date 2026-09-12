@@ -2,12 +2,12 @@
 
 from __future__ import annotations
 
-from retro_98_ai_creator.api import Api
-from retro_98_ai_creator.creation_utils import (
+from synthetic_text_extruder.api import Api
+from synthetic_text_extruder.creation_utils import (
     build_media_creation,
     build_text_creation_from_plain,
 )
-from retro_98_ai_creator.storage import ArchiveStore
+from synthetic_text_extruder.storage import ArchiveStore
 
 
 def test_duplicate_text_creation(tmp_path):

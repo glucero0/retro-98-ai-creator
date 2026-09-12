@@ -6,7 +6,7 @@ from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import MagicMock, patch
 
-from retro_98_ai_creator.google_auth import (
+from synthetic_text_extruder.google_auth import (
     DEFAULT_TOKEN_REL,
     DRIVE_READONLY,
     GMAIL_MODIFY,
@@ -70,7 +70,7 @@ def test_get_google_credentials_requires_requested_scope(tmp_path: Path):
     creds.scopes = [GMAIL_READONLY]
 
     with patch(
-        "retro_98_ai_creator.google_auth._load_stored_credentials",
+        "synthetic_text_extruder.google_auth._load_stored_credentials",
         return_value=creds,
     ):
         assert get_google_credentials(cfg) is creds

@@ -73,7 +73,7 @@ DEFAULTS: dict[str, Any] = {
         "window_width": 1280,
         "window_height": 800,
         "studio_basis_width": 280,
-        "title": "Retro 98 AI Creator",
+        "title": "Synthetic Text Extruder",
     },
     "paths": {
         # Relative paths resolve against the project root
@@ -85,7 +85,7 @@ DEFAULTS: dict[str, Any] = {
         # OAuth client JSON from Google Cloud (Desktop app) — set via Control Panel
         "credentials_path": None,
         # Authorized-user token (gitignored). Default path keeps older Gmail tokens.
-        "token_path": ".retro-98-ai-creator/google_workspace_token.json",
+        "token_path": ".synthetic-text-extruder/google_workspace_token.json",
     },
 }
 
@@ -207,6 +207,12 @@ def is_legacy_gmail_token_path(rel: str) -> bool:
     return Path(str(rel).replace("\\", "/")).name == "gmail_token.json"
 
 
+def is_legacy_app_token_path(rel: str) -> bool:
+    """True for tokens stored under the pre-rename app folder."""
+    posix = Path(str(rel).replace("\\", "/")).as_posix()
+    return posix == ".retro-98-ai-creator" or posix.startswith(".retro-98-ai-creator/")
+
+
 def normalize_google_workspace_cfg(cfg: dict[str, Any] | None) -> dict[str, Any]:
     """Prefer google_workspace; copy leftover gmail: keys if needed."""
     cfg = cfg or {}
@@ -224,7 +230,7 @@ def normalize_google_workspace_cfg(cfg: dict[str, Any] | None) -> dict[str, Any]
         "token_path", DEFAULTS["google_workspace"]["token_path"]
     )
     token_rel = str(workspace.get("token_path") or "")
-    if is_legacy_gmail_token_path(token_rel):
+    if is_legacy_gmail_token_path(token_rel) or is_legacy_app_token_path(token_rel):
         workspace["token_path"] = DEFAULTS["google_workspace"]["token_path"]
     if workspace.get("credentials_path") == "":
         workspace["credentials_path"] = None

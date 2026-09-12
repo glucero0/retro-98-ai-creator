@@ -6,7 +6,7 @@ import base64
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
-from retro_98_ai_creator.gmail_client import (
+from synthetic_text_extruder.gmail_client import (
     _extract_plain_body,
     authorize_gmail,
     get_gmail_credentials,
@@ -36,7 +36,7 @@ def test_search_gmail_not_authorized():
         }
     }
     with patch(
-        "retro_98_ai_creator.gmail_client.build_google_service",
+        "synthetic_text_extruder.gmail_client.build_google_service",
         side_effect=RuntimeError("Google Workspace is not authorized."),
     ):
         result = search_gmail("is:unread", cfg=cfg)
@@ -74,7 +74,7 @@ def test_search_gmail_returns_messages(tmp_path: Path):
     service.users.return_value.messages.return_value.get.return_value.execute.return_value = detail
 
     with patch(
-        "retro_98_ai_creator.gmail_client._build_gmail_service",
+        "synthetic_text_extruder.gmail_client._build_gmail_service",
         return_value=service,
     ):
         result = search_gmail("is:unread", max_results=5, cfg=cfg)
@@ -144,11 +144,11 @@ def test_get_gmail_credentials_returns_none_when_refresh_fails(tmp_path: Path):
 
     with (
         patch(
-            "retro_98_ai_creator.google_auth._load_stored_credentials",
+            "synthetic_text_extruder.google_auth._load_stored_credentials",
             return_value=expired,
         ),
         patch(
-            "retro_98_ai_creator.google_auth._refresh_credentials",
+            "synthetic_text_extruder.google_auth._refresh_credentials",
             side_effect=RuntimeError("invalid_grant"),
         ),
     ):

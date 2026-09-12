@@ -5,7 +5,7 @@ from unittest.mock import patch
 
 import pytest
 
-from retro_98_ai_creator.video_edit import (
+from synthetic_text_extruder.video_edit import (
     DEFAULT_FILTERS,
     assemble_segments,
     build_filtergraph,
@@ -87,11 +87,11 @@ def test_ffmpeg_available_shape():
 
 
 def test_apply_edits_requires_file(tmp_path):
-    from retro_98_ai_creator.video_edit import apply_edits
+    from synthetic_text_extruder.video_edit import apply_edits
 
     missing = tmp_path / "nope.mp4"
     dest = tmp_path / "out.mp4"
-    with patch("retro_98_ai_creator.video_edit._require_ffmpeg", return_value="ffmpeg"):
+    with patch("synthetic_text_extruder.video_edit._require_ffmpeg", return_value="ffmpeg"):
         with pytest.raises(FileNotFoundError):
             apply_edits(missing, dest, filters={"brightness": 10})
 
@@ -114,7 +114,7 @@ def test_assemble_segments_requires_ranges(tmp_path):
 
 
 def test_trim_segment_requires_file(tmp_path):
-    with patch("retro_98_ai_creator.video_edit._require_ffmpeg", return_value="ffmpeg"):
+    with patch("synthetic_text_extruder.video_edit._require_ffmpeg", return_value="ffmpeg"):
         with pytest.raises(FileNotFoundError):
             trim_segment(tmp_path / "missing.mp4", tmp_path / "out.mp4", 0, 1)
 
@@ -122,7 +122,7 @@ def test_trim_segment_requires_file(tmp_path):
 def test_trim_segment_rejects_too_short(tmp_path):
     src = tmp_path / "src.mp4"
     src.write_bytes(b"fake")
-    with patch("retro_98_ai_creator.video_edit._require_ffmpeg", return_value="ffmpeg"):
+    with patch("synthetic_text_extruder.video_edit._require_ffmpeg", return_value="ffmpeg"):
         with pytest.raises(ValueError, match="too short"):
             trim_segment(src, tmp_path / "out.mp4", 1.0, 1.02)
 
@@ -139,7 +139,7 @@ def test_assemble_segments_single_range_uses_apply_edits(tmp_path):
         Path(out).write_bytes(b"assembled")
         return Path(out)
 
-    with patch("retro_98_ai_creator.video_edit.apply_edits", side_effect=fake_apply):
+    with patch("synthetic_text_extruder.video_edit.apply_edits", side_effect=fake_apply):
         result = assemble_segments(
             src,
             dest,
@@ -162,7 +162,7 @@ def test_assemble_segments_drops_short_keeps_valid(tmp_path):
         Path(out).write_bytes(b"ok")
         return Path(out)
 
-    with patch("retro_98_ai_creator.video_edit.apply_edits", side_effect=fake_apply):
+    with patch("synthetic_text_extruder.video_edit.apply_edits", side_effect=fake_apply):
         assemble_segments(
             src,
             dest,
@@ -201,10 +201,10 @@ def test_assemble_segments_multi_calls_trim_then_concat(tmp_path):
         return Path(out)
 
     with (
-        patch("retro_98_ai_creator.video_edit.trim_segment", side_effect=fake_trim),
-        patch("retro_98_ai_creator.video_edit.concat_videos", side_effect=fake_concat),
-        patch("retro_98_ai_creator.video_edit.apply_edits", side_effect=fake_apply),
-        patch("retro_98_ai_creator.video_edit.temp_mp4_path", side_effect=fake_temp),
+        patch("synthetic_text_extruder.video_edit.trim_segment", side_effect=fake_trim),
+        patch("synthetic_text_extruder.video_edit.concat_videos", side_effect=fake_concat),
+        patch("synthetic_text_extruder.video_edit.apply_edits", side_effect=fake_apply),
+        patch("synthetic_text_extruder.video_edit.temp_mp4_path", side_effect=fake_temp),
     ):
         result = assemble_segments(
             src,

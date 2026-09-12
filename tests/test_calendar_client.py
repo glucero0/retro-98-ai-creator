@@ -5,7 +5,7 @@ from __future__ import annotations
 from datetime import datetime, timedelta, timezone, tzinfo
 from unittest.mock import MagicMock, patch
 
-from retro_98_ai_creator.calendar_client import (
+from synthetic_text_extruder.calendar_client import (
     _event_time,
     create_calendar_event,
     edit_calendar_event,
@@ -28,7 +28,7 @@ def test_list_calendar_events_returns_items():
         ]
     }
     with patch(
-        "retro_98_ai_creator.calendar_client.build_google_service",
+        "synthetic_text_extruder.calendar_client.build_google_service",
         return_value=service,
     ):
         result = list_calendar_events(time_min="2026-08-30T00:00:00Z")
@@ -54,7 +54,7 @@ def test_create_calendar_event_inserts():
         "status": "confirmed",
     }
     with patch(
-        "retro_98_ai_creator.calendar_client.build_google_service",
+        "synthetic_text_extruder.calendar_client.build_google_service",
         return_value=service,
     ):
         result = create_calendar_event(
@@ -127,7 +127,7 @@ def test_create_calendar_event_naive_stamp_gets_offset():
         "status": "confirmed",
     }
     with patch(
-        "retro_98_ai_creator.calendar_client.build_google_service",
+        "synthetic_text_extruder.calendar_client.build_google_service",
         return_value=service,
     ):
         result = create_calendar_event(

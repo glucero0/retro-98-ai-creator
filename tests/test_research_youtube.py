@@ -4,8 +4,8 @@ from __future__ import annotations
 
 from unittest.mock import patch
 
-from retro_98_ai_creator.config import DEFAULTS
-from retro_98_ai_creator.research_youtube import (
+from synthetic_text_extruder.config import DEFAULTS
+from synthetic_text_extruder.research_youtube import (
     discover_youtube_urls,
     enrich_research_with_youtube_captions,
     extract_youtube_video_id,
@@ -39,7 +39,7 @@ def test_enrich_research_with_youtube_captions_appends_block():
     sources = [{"title": "Controls", "url": "https://www.youtube.com/watch?v=abc123XYZ12"}]
 
     with patch(
-        "retro_98_ai_creator.research_youtube._fetch_captions",
+        "synthetic_text_extruder.research_youtube._fetch_captions",
         return_value="Press R1 to sprint.",
     ):
         block, meta = enrich_research_with_youtube_captions(
