@@ -2,7 +2,7 @@
 
 import pytest
 
-from retro_98_ai_creator.creation_utils import (
+from synthetic_text_extruder.creation_utils import (
     AmbiguousGameError,
     GameNotFoundError,
     extract_json_object,
@@ -11,7 +11,7 @@ from retro_98_ai_creator.creation_utils import (
     is_game_not_found,
     normalize_candidates,
 )
-from retro_98_ai_creator.prompts import build_prompt
+from synthetic_text_extruder.prompts import build_prompt
 
 
 def test_extract_plain_json():

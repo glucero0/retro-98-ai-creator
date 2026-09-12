@@ -7,14 +7,14 @@ import threading
 
 import pytest
 
-from retro_98_ai_creator.api import Api
-from retro_98_ai_creator.creation_utils import build_media_creation
-from retro_98_ai_creator.extract_text import (
+from synthetic_text_extruder.api import Api
+from synthetic_text_extruder.creation_utils import build_media_creation
+from synthetic_text_extruder.extract_text import (
     apply_extraction_fields,
     clear_extraction_fields,
     get_extracted_text,
 )
-from retro_98_ai_creator.storage import ArchiveStore
+from synthetic_text_extruder.storage import ArchiveStore
 
 
 def _api_with_tmp_store(tmp_path, monkeypatch) -> Api:
@@ -25,9 +25,9 @@ def _api_with_tmp_store(tmp_path, monkeypatch) -> Api:
         "paths": {"archives": str(tmp_path / "archives.json"), "media": "media"},
     }
     api.store = ArchiveStore(path=tmp_path / "archives.json")
-    monkeypatch.setattr("retro_98_ai_creator.media_store.PROJECT_ROOT", tmp_path)
+    monkeypatch.setattr("synthetic_text_extruder.media_store.PROJECT_ROOT", tmp_path)
     monkeypatch.setattr(
-        "retro_98_ai_creator.media_store.load_config",
+        "synthetic_text_extruder.media_store.load_config",
         lambda: api.config,
     )
     return api
@@ -159,7 +159,7 @@ def test_extract_creation_text_job_persists(tmp_path, monkeypatch):
         )
 
     monkeypatch.setattr(
-        "retro_98_ai_creator.extract_text.extract_text_from_creation",
+        "synthetic_text_extruder.extract_text.extract_text_from_creation",
         fake_extract,
     )
 

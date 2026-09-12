@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import pytest
 
-from retro_98_ai_creator.recommend_models import (
+from synthetic_text_extruder.recommend_models import (
     _by_modality,
     _pick_from_prefs,
     normalize_criteria,

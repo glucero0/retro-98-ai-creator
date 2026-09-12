@@ -1,12 +1,12 @@
 """Platform catalog and hardware prompt block."""
 
-from retro_98_ai_creator.presets import (
+from synthetic_text_extruder.presets import (
     PLATFORM_OPTIONS,
     PLATFORMS,
     platform_button_labels,
     platform_for,
 )
-from retro_98_ai_creator.prompts import _platform_hardware_block
+from synthetic_text_extruder.prompts import _platform_hardware_block
 
 
 def test_platforms_catalog_loaded():

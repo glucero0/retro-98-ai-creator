@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from retro_98_ai_creator.gemini_provider import (
+from synthetic_text_extruder.gemini_provider import (
     extract_model_from_gemini_error,
     is_retired_gemini_error,
     learn_retired_gemini_model,
@@ -28,7 +28,7 @@ def test_detect_ignores_unrelated_errors():
 
 
 def test_learn_retired_persists_and_switches_slot(tmp_path, monkeypatch):
-    from retro_98_ai_creator import config as config_mod
+    from synthetic_text_extruder import config as config_mod
 
     monkeypatch.setattr(config_mod, "DEFAULT_CONFIG_PATH", tmp_path / "config.yaml")
     cfg = {
@@ -71,15 +71,15 @@ def test_merged_aliases_learned_override_builtin():
 
 
 def test_suggested_list_includes_veo_31_fast():
-    from retro_98_ai_creator.gemini_provider import SUGGESTED_GEMINI_MODELS
+    from synthetic_text_extruder.gemini_provider import SUGGESTED_GEMINI_MODELS
 
     ids = {m["repo_id"] for m in SUGGESTED_GEMINI_MODELS}
     assert "veo-3.1-fast-generate-preview" in ids
 
 
 def test_bootstrap_exposes_retired_and_keeps_veo_fast(tmp_path, monkeypatch):
-    import retro_98_ai_creator.api as api_mod
-    from retro_98_ai_creator.api import Api
+    import synthetic_text_extruder.api as api_mod
+    from synthetic_text_extruder.api import Api
 
     cfg = {
         "backend": {"provider": "gemini"},

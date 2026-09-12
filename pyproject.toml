@@ -3,13 +3,13 @@ requires = ["setuptools>=68", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "retro-98-ai-creator"
+name = "synthetic-text-extruder"
 version = "0.1.0"
 description = "Single-window general AI studio for text, images, video, and music"
 readme = "README.md"
 license = { text = "MIT" }
 requires-python = ">=3.10"
-authors = [{ name = "Retro 98 AI Creator contributors" }]
+authors = [{ name = "Synthetic Text Extruder contributors" }]
 keywords = ["ai", "studio", "documentation", "gemini", "lyria"]
 classifiers = [
   "Development Status :: 3 - Alpha",
@@ -32,11 +32,11 @@ dependencies = [
 dev = ["pytest>=8.0", "ruff>=0.5"]
 
 [project.scripts]
-retro-98-ai-creator = "retro_98_ai_creator.app:main"
+synthetic-text-extruder = "synthetic_text_extruder.app:main"
 
 [tool.setuptools.packages.find]
 where = ["."]
-include = ["retro_98_ai_creator*"]
+include = ["synthetic_text_extruder*"]
 
 [tool.setuptools.package-data]
-retro_98_ai_creator = ["ui/**/*", "data/**/*"]
+synthetic_text_extruder = ["ui/**/*", "data/**/*"]

@@ -5,7 +5,7 @@ from __future__ import annotations
 from io import BytesIO
 from unittest.mock import MagicMock, patch
 
-from retro_98_ai_creator.web_browse import (
+from synthetic_text_extruder.web_browse import (
     _html_to_text_and_links,
     _normalize_http_url,
     browse_web,
@@ -61,7 +61,7 @@ def test_browse_web_fetches_html_page():
     resp.__enter__.return_value = resp
     resp.__exit__.return_value = False
 
-    with patch("retro_98_ai_creator.web_browse.urlopen", return_value=resp):
+    with patch("synthetic_text_extruder.web_browse.urlopen", return_value=resp):
         result = browse_web("https://example.com/")
 
     assert result["ok"] is True
@@ -80,7 +80,7 @@ def test_browse_web_can_omit_links():
     resp.__enter__.return_value = resp
     resp.__exit__.return_value = False
 
-    with patch("retro_98_ai_creator.web_browse.urlopen", return_value=resp):
+    with patch("synthetic_text_extruder.web_browse.urlopen", return_value=resp):
         result = browse_web("https://example.com/plain", include_links=False)
 
     assert result["ok"] is True
@@ -92,7 +92,7 @@ def test_browse_web_reports_http_error():
     from urllib.error import HTTPError
 
     err = HTTPError("https://example.com/missing", 404, "Not Found", hdrs=None, fp=BytesIO())
-    with patch("retro_98_ai_creator.web_browse.urlopen", side_effect=err):
+    with patch("synthetic_text_extruder.web_browse.urlopen", side_effect=err):
         result = browse_web("https://example.com/missing")
     assert result["ok"] is False
     assert "404" in result["error"]

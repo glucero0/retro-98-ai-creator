@@ -4,8 +4,8 @@ from __future__ import annotations
 
 from unittest.mock import MagicMock, patch
 
-from retro_98_ai_creator.config import DEFAULTS
-from retro_98_ai_creator.research_images import (
+from synthetic_text_extruder.config import DEFAULTS
+from synthetic_text_extruder.research_images import (
     discover_image_urls,
     domain_allowed,
     enrich_research_with_image_ocr,
@@ -67,15 +67,15 @@ def test_enrich_research_with_image_ocr_appends_block():
 
     with (
         patch(
-            "retro_98_ai_creator.research_images.discover_image_urls",
+            "synthetic_text_extruder.research_images.discover_image_urls",
             return_value=["https://example.com/bindings.png"],
         ),
         patch(
-            "retro_98_ai_creator.research_images.download_image",
+            "synthetic_text_extruder.research_images.download_image",
             return_value=(fake_png, "image/png"),
         ),
         patch(
-            "retro_98_ai_creator.research_images.ocr_image_bytes",
+            "synthetic_text_extruder.research_images.ocr_image_bytes",
             return_value=("Square = Jump", "gemini-2.5-flash"),
         ),
     ):
@@ -99,15 +99,15 @@ def test_enrich_skips_no_text_results():
 
     with (
         patch(
-            "retro_98_ai_creator.research_images.discover_image_urls",
+            "synthetic_text_extruder.research_images.discover_image_urls",
             return_value=["https://example.com/icon.png"],
         ),
         patch(
-            "retro_98_ai_creator.research_images.download_image",
+            "synthetic_text_extruder.research_images.download_image",
             return_value=(fake_png, "image/png"),
         ),
         patch(
-            "retro_98_ai_creator.research_images.ocr_image_bytes",
+            "synthetic_text_extruder.research_images.ocr_image_bytes",
             return_value=("(no text found)", "gemini-2.5-flash"),
         ),
     ):
@@ -125,7 +125,7 @@ def test_tools_pipeline_includes_ocr_block_in_research_context():
     """Research pass enrichment injects OCR text into the tool-loop prompt."""
     from types import SimpleNamespace
 
-    from retro_98_ai_creator import gemini_provider as gp
+    from synthetic_text_extruder import gemini_provider as gp
 
     research = SimpleNamespace(
         text="Research with https://example.com/table.png",
@@ -189,7 +189,7 @@ def test_tools_pipeline_includes_ocr_block_in_research_context():
         patch.object(gp, "resolve_api_key", return_value="fake-key"),
         patch("google.genai.Client", return_value=client),
         patch(
-            "retro_98_ai_creator.search_enrichment.apply_search_enrichment",
+            "synthetic_text_extruder.search_enrichment.apply_search_enrichment",
             return_value=(
                 "Research with https://example.com/table.png\n\n" + ocr_block,
                 ocr_block,

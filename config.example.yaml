@@ -32,7 +32,7 @@ ui:
   window_width: 1280
   window_height: 800
   studio_basis_width: 280  # Creation Studio Media basis pane width (px)
-  title: "Retro 98 AI Creator"
+  title: "Synthetic Text Extruder"
 
 paths:
   archives: archives.json
@@ -44,7 +44,7 @@ google_workspace:
   # OAuth client JSON from Google Cloud Console (Desktop application type)
   # One token covers Gmail, Drive, Docs, Calendar, and Tasks after Connect Google Workspace.
   credentials_path: null
-  token_path: .retro-98-ai-creator/google_workspace_token.json
+  token_path: .synthetic-text-extruder/google_workspace_token.json
 
 # Video Editor (Viewer → Edit on a video) requires ffmpeg + ffprobe on PATH
 # (or a common Windows install location). Install from https://ffmpeg.org/

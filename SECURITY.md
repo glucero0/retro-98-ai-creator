@@ -10,7 +10,7 @@ If you find a security flaw in this repository’s public code, please report it
 
 **Preferred:** use GitHub’s private vulnerability reporting for this repo:
 
-https://github.com/glucero0/retro-98-ai-creator/security/advisories/new
+https://github.com/glucero0/synthetic-text-extruder/security/advisories/new
 
 If private reporting is unavailable, contact the repository owner ([@glucero0](https://github.com/glucero0)) through a private GitHub channel (for example a maintainer-only email or direct message you already use with them). Do not post exploit details, secrets, or proof-of-concept payloads in public.
 

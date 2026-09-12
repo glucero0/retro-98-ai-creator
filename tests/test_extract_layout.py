@@ -6,9 +6,9 @@ import base64
 import threading
 from struct import pack
 
-from retro_98_ai_creator.api import Api
-from retro_98_ai_creator.creation_utils import build_media_creation
-from retro_98_ai_creator.extract_layout import (
+from synthetic_text_extruder.api import Api
+from synthetic_text_extruder.creation_utils import build_media_creation
+from synthetic_text_extruder.extract_layout import (
     apply_layout_fields,
     clear_layout_fields,
     format_layout_basis_prompt,
@@ -16,7 +16,7 @@ from retro_98_ai_creator.extract_layout import (
     image_size_from_bytes,
     normalize_layout,
 )
-from retro_98_ai_creator.storage import ArchiveStore
+from synthetic_text_extruder.storage import ArchiveStore
 
 
 def _api_with_tmp_store(tmp_path, monkeypatch) -> Api:
@@ -27,9 +27,9 @@ def _api_with_tmp_store(tmp_path, monkeypatch) -> Api:
         "paths": {"archives": str(tmp_path / "archives.json"), "media": "media"},
     }
     api.store = ArchiveStore(path=tmp_path / "archives.json")
-    monkeypatch.setattr("retro_98_ai_creator.media_store.PROJECT_ROOT", tmp_path)
+    monkeypatch.setattr("synthetic_text_extruder.media_store.PROJECT_ROOT", tmp_path)
     monkeypatch.setattr(
-        "retro_98_ai_creator.media_store.load_config",
+        "synthetic_text_extruder.media_store.load_config",
         lambda: api.config,
     )
     return api
@@ -244,7 +244,7 @@ def test_extract_creation_layout_job_persists(tmp_path, monkeypatch):
         )
 
     monkeypatch.setattr(
-        "retro_98_ai_creator.extract_layout.extract_layout_from_creation",
+        "synthetic_text_extruder.extract_layout.extract_layout_from_creation",
         fake_extract,
     )
 

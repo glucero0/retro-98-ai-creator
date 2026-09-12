@@ -1,6 +1,6 @@
 """Creation description placeholders."""
 
-from retro_98_ai_creator.presets import (
+from synthetic_text_extruder.presets import (
     apply_creation_placeholders,
     resolve_creation_description,
 )

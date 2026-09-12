@@ -2,19 +2,19 @@
 
 from pathlib import Path
 
-from retro_98_ai_creator.creation_utils import (
+from synthetic_text_extruder.creation_utils import (
     build_media_creation,
     build_text_creation_from_plain,
     is_generic_studio_request,
     title_from_prompt,
 )
-from retro_98_ai_creator.media_store import (
+from synthetic_text_extruder.media_store import (
     _join_under_dir,
     resolve_media_path,
     stored_media_path,
     write_media_bytes,
 )
-from retro_98_ai_creator.modality import (
+from synthetic_text_extruder.modality import (
     check_prompt_model_compatibility,
     classify_model_modality,
     infer_prompt_modality,
@@ -156,10 +156,10 @@ def test_title_from_prompt():
 
 def test_build_text_and_media_creation(tmp_path, monkeypatch):
     monkeypatch.setattr(
-        "retro_98_ai_creator.media_store.PROJECT_ROOT", tmp_path
+        "synthetic_text_extruder.media_store.PROJECT_ROOT", tmp_path
     )
     monkeypatch.setattr(
-        "retro_98_ai_creator.media_store.load_config",
+        "synthetic_text_extruder.media_store.load_config",
         lambda: {"paths": {"media": "media"}},
     )
     text = build_text_creation_from_plain(
@@ -190,7 +190,7 @@ def test_build_text_and_media_creation(tmp_path, monkeypatch):
 
 
 def test_resolve_media_path_finds_legacy_after_folder_switch(tmp_path, monkeypatch):
-    monkeypatch.setattr("retro_98_ai_creator.media_store.PROJECT_ROOT", tmp_path)
+    monkeypatch.setattr("synthetic_text_extruder.media_store.PROJECT_ROOT", tmp_path)
     leftover = tmp_path / "media" / "doc_x.png"
     leftover.parent.mkdir(parents=True, exist_ok=True)
     leftover.write_bytes(b"png-bytes")
@@ -212,7 +212,7 @@ def test_join_under_dir_stays_in_root(tmp_path):
 
 
 def test_stored_media_path_uses_basename_only(tmp_path, monkeypatch):
-    monkeypatch.setattr("retro_98_ai_creator.media_store.PROJECT_ROOT", tmp_path)
+    monkeypatch.setattr("synthetic_text_extruder.media_store.PROJECT_ROOT", tmp_path)
     dest = tmp_path / "media" / "clip.png"
     dest.parent.mkdir(parents=True, exist_ok=True)
     dest.write_bytes(b"x")

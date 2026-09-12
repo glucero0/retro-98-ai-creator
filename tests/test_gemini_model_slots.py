@@ -1,6 +1,6 @@
 """Gemini modality model resolution."""
 
-from retro_98_ai_creator.gemini_provider import (
+from synthetic_text_extruder.gemini_provider import (
     DEFAULT_GEMINI_AUDIO_MODEL,
     DEFAULT_GEMINI_IMAGE_MODEL,
     DEFAULT_GEMINI_TEXT_MODEL,

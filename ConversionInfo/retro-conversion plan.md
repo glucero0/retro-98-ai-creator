@@ -64,8 +64,8 @@ flowchart TB
   Pages -->|"ask Python to do work"| Brain
 ```
 
-- **The picture frame** is [retro_98_ai_creator/app.py](retro_98_ai_creator/app.py) (`pywebview`). One native window showing a local web page.
-- **The screens** are [retro_98_ai_creator/ui/](retro_98_ai_creator/ui/) — `index.html`, `styles.css`, `app.js`, plus 98.css. Almost all of the Win98 feel lives here: teal desktop, taskbar, Start menu, draggable windows.
+- **The picture frame** is [synthetic_text_extruder/app.py](synthetic_text_extruder/app.py) (`pywebview`). One native window showing a local web page.
+- **The screens** are [synthetic_text_extruder/ui/](synthetic_text_extruder/ui/) — `index.html`, `styles.css`, `app.js`, plus 98.css. Almost all of the Win98 feel lives here: teal desktop, taskbar, Start menu, draggable windows.
 - **Why it is a web UI:** [98.css](https://jdan.github.io/98.css/) is a stylesheet for HTML. Choosing it meant the screens had to be a web page (then shown in `pywebview`). That was the easy way to get a real Win98 look. It was not the *only* possible way (you can paint a similar look in Kivy, Qt, or Kotlin), but 98.css itself does not work in those toolkits.
 - **The brain** is the rest of the Python package: Gemini, Archives, settings, tools.
 
@@ -87,7 +87,7 @@ Kivy *can* be a good fit when you are starting a **new** Python app and have no 
 
 **What you already have**
 
-Almost every screen the user sees is already HTML, CSS, and JavaScript in [retro_98_ai_creator/ui/](retro_98_ai_creator/ui/). Python does the “brain” work (Gemini, files, Archives). Windows only provides a picture frame (`pywebview`) around those pages.
+Almost every screen the user sees is already HTML, CSS, and JavaScript in [synthetic_text_extruder/ui/](synthetic_text_extruder/ui/). Python does the “brain” work (Gemini, files, Archives). Windows only provides a picture frame (`pywebview`) around those pages.
 
 So “convert to Android” does not require a new drawing toolkit. It requires:
 
@@ -177,7 +177,7 @@ Hamburger (not a left sidebar) is the Windows design for now so Android can reus
 
 ### Control Panel — five tabs instead of two
 
-Today everything is crammed into **AI Model** and **Display & Sound** ([index.html](retro_98_ai_creator/ui/index.html) Control Panel). Split by job:
+Today everything is crammed into **AI Model** and **Display & Sound** ([index.html](synthetic_text_extruder/ui/index.html) Control Panel). Split by job:
 
 - **Models** — API key; Text / Image / Video / Audio pickers; Refresh; Recommend Models
 - **Generation** — Search grounding, two-pass verify, Use Tools default, OCR-from-search, YouTube captions, temperature, extra system instructions
@@ -220,7 +220,7 @@ Drop **CRT scanlines** (desktop-metaphor leftover). Custom colors become page / 
 
 Android: same hamburger and menus; hide Image Editor, Video Editor, Viewer **Edit**, and PowerShell. Phone file pickers and APK come after this Windows UI feels right.
 
-The Python brain stays. The rewrite is [index.html](retro_98_ai_creator/ui/index.html), [styles.css](retro_98_ai_creator/ui/styles.css), [app.js](retro_98_ai_creator/ui/app.js) (today’s window manager goes away), plus [README.md](README.md) in the same change.
+The Python brain stays. The rewrite is [index.html](synthetic_text_extruder/ui/index.html), [styles.css](synthetic_text_extruder/ui/styles.css), [app.js](synthetic_text_extruder/ui/app.js) (today’s window manager goes away), plus [README.md](README.md) in the same change.
 
 ---
 

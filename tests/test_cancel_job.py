@@ -7,7 +7,7 @@ import time
 
 import pytest
 
-from retro_98_ai_creator.cancellation import (
+from synthetic_text_extruder.cancellation import (
     GenerationCancelled,
     raise_if_cancelled,
     run_cancellable,
@@ -67,7 +67,7 @@ def test_run_cancellable_raises_if_already_cancelled():
 
 
 def test_cancel_job_marks_cancelling():
-    from retro_98_ai_creator.api import Api
+    from synthetic_text_extruder.api import Api
 
     api = Api()
     evt = threading.Event()
@@ -84,7 +84,7 @@ def test_cancel_job_marks_cancelling():
 
 
 def test_cancel_job_unknown():
-    from retro_98_ai_creator.api import Api
+    from synthetic_text_extruder.api import Api
 
     api = Api()
     res = api.cancel_job("missing")

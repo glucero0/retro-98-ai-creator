@@ -8,9 +8,9 @@ from unittest.mock import MagicMock
 
 import pytest
 
-from retro_98_ai_creator.api import Api, _safe_dialog_save_path
-from retro_98_ai_creator.creation_utils import build_media_creation
-from retro_98_ai_creator.storage import ArchiveStore
+from synthetic_text_extruder.api import Api, _safe_dialog_save_path
+from synthetic_text_extruder.creation_utils import build_media_creation
+from synthetic_text_extruder.storage import ArchiveStore
 
 
 def _api_with_tmp_store(tmp_path, monkeypatch) -> Api:
@@ -20,10 +20,10 @@ def _api_with_tmp_store(tmp_path, monkeypatch) -> Api:
     }
     api.store = ArchiveStore(path=tmp_path / "archives.json")
     monkeypatch.setattr(
-        "retro_98_ai_creator.media_store.PROJECT_ROOT", tmp_path
+        "synthetic_text_extruder.media_store.PROJECT_ROOT", tmp_path
     )
     monkeypatch.setattr(
-        "retro_98_ai_creator.media_store.load_config",
+        "synthetic_text_extruder.media_store.load_config",
         lambda: api.config,
     )
     return api
@@ -221,7 +221,7 @@ def test_import_text_file_into_prompt(tmp_path, monkeypatch):
 
 
 def test_modality_for_path_detects_supported_types(tmp_path):
-    from retro_98_ai_creator.media_store import modality_for_path
+    from synthetic_text_extruder.media_store import modality_for_path
 
     assert modality_for_path(tmp_path / "notes.txt") == "text"
     assert modality_for_path(tmp_path / "readme.markdown") == "text"
@@ -538,11 +538,11 @@ def test_relocate_media_collision_uses_unique_name(tmp_path, monkeypatch):
 def test_save_settings_offers_move_decline_leaves_files(tmp_path, monkeypatch):
     import copy
 
-    from retro_98_ai_creator.config import DEFAULTS
+    from synthetic_text_extruder.config import DEFAULTS
 
     api = _api_with_tmp_store(tmp_path, monkeypatch)
     dest_cfg = tmp_path / "config.yaml"
-    monkeypatch.setattr("retro_98_ai_creator.config.DEFAULT_CONFIG_PATH", dest_cfg)
+    monkeypatch.setattr("synthetic_text_extruder.config.DEFAULT_CONFIG_PATH", dest_cfg)
     old = tmp_path / "media"
     old.mkdir(parents=True, exist_ok=True)
     leftover = old / "doc_stay.png"

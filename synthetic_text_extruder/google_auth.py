@@ -58,7 +58,8 @@ SCOPE_PRODUCTS: list[tuple[str, tuple[str, ...]]] = [
     ("Tasks", (TASKS, TASKS_READONLY)),
 ]
 
-DEFAULT_TOKEN_REL = ".retro-98-ai-creator/google_workspace_token.json"
+DEFAULT_TOKEN_REL = ".synthetic-text-extruder/google_workspace_token.json"
+PREVIOUS_TOKEN_REL = ".retro-98-ai-creator/google_workspace_token.json"
 LEGACY_TOKEN_REL = ".retro-98-ai-creator/gmail_token.json"
 CONNECT_HINT = (
     "Google Workspace is not authorized. Open Settings → Gemini → "
@@ -80,8 +81,8 @@ def token_path(cfg: dict[str, Any] | None = None) -> Path:
     return expand_path(rel)
 
 
-def _legacy_token_path() -> Path:
-    return expand_path(LEGACY_TOKEN_REL)
+def _legacy_token_paths() -> list[Path]:
+    return [expand_path(PREVIOUS_TOKEN_REL), expand_path(LEGACY_TOKEN_REL)]
 
 
 def credentials_path(cfg: dict[str, Any] | None = None) -> Path | None:
@@ -159,11 +160,13 @@ def get_google_credentials(
     path = token_path(cfg)
     creds = _load_stored_credentials(path)
     if not creds and path == expand_path(DEFAULT_TOKEN_REL):
-        legacy = _legacy_token_path()
-        if legacy != path:
+        for legacy in _legacy_token_paths():
+            if legacy == path:
+                continue
             creds = _load_stored_credentials(legacy)
             if creds and getattr(creds, "valid", False):
                 _save_credentials(creds, path)
+                break
     if not creds:
         return None
     if not creds.valid:

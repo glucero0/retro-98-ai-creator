@@ -1,13 +1,13 @@
 """Gemini live model listing helpers + modality classification."""
 
-from retro_98_ai_creator.gemini_provider import (
+from synthetic_text_extruder.gemini_provider import (
     _gemini_model_id,
     _gemini_model_label,
     _gemini_model_notes,
     _is_studio_gemini_model,
     _is_text_generation_gemini_model,
 )
-from retro_98_ai_creator.modality import classify_model_modality
+from synthetic_text_extruder.modality import classify_model_modality
 
 
 def test_gemini_model_id_strips_prefix():
@@ -43,7 +43,7 @@ def test_retired_gemini_2_0_models_are_hidden():
 
 
 def test_normalize_remaps_retired_gemini_models():
-    from retro_98_ai_creator.gemini_provider import normalize_gemini_model
+    from synthetic_text_extruder.gemini_provider import normalize_gemini_model
 
     assert normalize_gemini_model("gemini-2.0-flash-lite") == "gemini-3.1-flash-lite"
     assert (

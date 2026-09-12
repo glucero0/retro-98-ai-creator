@@ -8,7 +8,7 @@ import threading
 from http.client import HTTPConnection
 from http.server import ThreadingHTTPServer
 
-import retro_98_ai_creator.app as app_mod
+import synthetic_text_extruder.app as app_mod
 
 
 class _FakeApi:

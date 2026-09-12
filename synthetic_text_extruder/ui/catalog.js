@@ -1,4 +1,4 @@
-/* Shared catalogs — mirrors retro_98_ai_creator/data/creation_types.json
+/* Shared catalogs — mirrors synthetic_text_extruder/data/creation_types.json
    (and presets.py platforms/presets) so the UI works even before (or without)
    the Python bridge answering get_bootstrap. */
 window.RGC_CATALOG = {

@@ -6087,7 +6087,7 @@
           ($("#google-workspace-credentials-path") &&
             $("#google-workspace-credentials-path").value.trim()) ||
           null,
-        token_path: ".retro-98-ai-creator/google_workspace_token.json",
+        token_path: ".synthetic-text-extruder/google_workspace_token.json",
       },
       paths: {
         media:
@@ -6727,7 +6727,7 @@
     try {
       const a = api();
       if (!a) {
-        showToast("Python bridge not ready. Launch via: python -m retro_98_ai_creator");
+        showToast("Python bridge not ready. Launch via: python -m synthetic_text_extruder");
         return;
       }
 
@@ -9114,7 +9114,7 @@
       if (!a) return;
       const json = await a.export_creations_json();
       const date = new Date().toISOString().slice(0, 10);
-      await a.save_file_dialog("retro_98_ai_creator_archives_" + date + ".json", json);
+      await a.save_file_dialog("synthetic_text_extruder_archives_" + date + ".json", json);
     });
 
     $("#btn-import").addEventListener("click", async () => {
@@ -9518,7 +9518,7 @@
     const a = await waitForApi();
     if (!a) {
       showToast(
-        "Running without Python bridge — open via: python -m retro_98_ai_creator"
+        "Running without Python bridge — open via: python -m synthetic_text_extruder"
       );
       return;
     }

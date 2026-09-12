@@ -7,8 +7,8 @@ from types import SimpleNamespace
 
 import pytest
 
-from retro_98_ai_creator.creation_utils import build_media_creation
-from retro_98_ai_creator.gemini_audio import (
+from synthetic_text_extruder.creation_utils import build_media_creation
+from synthetic_text_extruder.gemini_audio import (
     extract_lyria_output,
     generate_audio_with_gemini,
     is_lyria_modality_schema_error,
@@ -22,7 +22,7 @@ _AUDIO_SCHEMA_ERROR = (
     "supported for 'response_modalities[0]'. Supported values: 'text', "
     "'image', 'audio', 'video', 'document'.\", 'code': 'invalid_request'}}"
 )
-from retro_98_ai_creator.gemini_provider import generate_with_gemini
+from synthetic_text_extruder.gemini_provider import generate_with_gemini
 
 
 def test_lyria_model_candidates_retries_full_song_sibling():
@@ -135,9 +135,9 @@ def test_generate_audio_with_gemini_writes_mp3(tmp_path, monkeypatch):
 
     monkeypatch.setitem(sys.modules, "google", SimpleNamespace(genai=fake_genai))
     monkeypatch.setitem(sys.modules, "google.genai", fake_genai)
-    monkeypatch.setattr("retro_98_ai_creator.media_store.PROJECT_ROOT", tmp_path)
+    monkeypatch.setattr("synthetic_text_extruder.media_store.PROJECT_ROOT", tmp_path)
     monkeypatch.setattr(
-        "retro_98_ai_creator.media_store.load_config",
+        "synthetic_text_extruder.media_store.load_config",
         lambda: {"paths": {"media": "media"}},
     )
 
@@ -177,9 +177,9 @@ def test_generate_audio_with_image_basis(tmp_path, monkeypatch):
 
     monkeypatch.setitem(sys.modules, "google", SimpleNamespace(genai=fake_genai))
     monkeypatch.setitem(sys.modules, "google.genai", fake_genai)
-    monkeypatch.setattr("retro_98_ai_creator.media_store.PROJECT_ROOT", tmp_path)
+    monkeypatch.setattr("synthetic_text_extruder.media_store.PROJECT_ROOT", tmp_path)
     monkeypatch.setattr(
-        "retro_98_ai_creator.media_store.load_config",
+        "synthetic_text_extruder.media_store.load_config",
         lambda: {"paths": {"media": "media"}},
     )
 
@@ -222,9 +222,9 @@ def test_generate_audio_retries_pro_on_policy_block(tmp_path, monkeypatch):
     )
     monkeypatch.setitem(sys.modules, "google", SimpleNamespace(genai=fake_genai))
     monkeypatch.setitem(sys.modules, "google.genai", fake_genai)
-    monkeypatch.setattr("retro_98_ai_creator.media_store.PROJECT_ROOT", tmp_path)
+    monkeypatch.setattr("synthetic_text_extruder.media_store.PROJECT_ROOT", tmp_path)
     monkeypatch.setattr(
-        "retro_98_ai_creator.media_store.load_config",
+        "synthetic_text_extruder.media_store.load_config",
         lambda: {"paths": {"media": "media"}},
     )
 
@@ -284,9 +284,9 @@ def test_generate_audio_retries_without_modalities_on_schema_error(
     )
     monkeypatch.setitem(sys.modules, "google", SimpleNamespace(genai=fake_genai))
     monkeypatch.setitem(sys.modules, "google.genai", fake_genai)
-    monkeypatch.setattr("retro_98_ai_creator.media_store.PROJECT_ROOT", tmp_path)
+    monkeypatch.setattr("synthetic_text_extruder.media_store.PROJECT_ROOT", tmp_path)
     monkeypatch.setattr(
-        "retro_98_ai_creator.media_store.load_config",
+        "synthetic_text_extruder.media_store.load_config",
         lambda: {"paths": {"media": "media"}},
     )
 
@@ -333,9 +333,9 @@ def test_generate_audio_drops_unknown_create_kwargs(tmp_path, monkeypatch):
     )
     monkeypatch.setitem(sys.modules, "google", SimpleNamespace(genai=fake_genai))
     monkeypatch.setitem(sys.modules, "google.genai", fake_genai)
-    monkeypatch.setattr("retro_98_ai_creator.media_store.PROJECT_ROOT", tmp_path)
+    monkeypatch.setattr("synthetic_text_extruder.media_store.PROJECT_ROOT", tmp_path)
     monkeypatch.setattr(
-        "retro_98_ai_creator.media_store.load_config",
+        "synthetic_text_extruder.media_store.load_config",
         lambda: {"paths": {"media": "media"}},
     )
 
@@ -363,9 +363,9 @@ def test_generate_audio_schema_error_does_not_retry_sibling(tmp_path, monkeypatc
     )
     monkeypatch.setitem(sys.modules, "google", SimpleNamespace(genai=fake_genai))
     monkeypatch.setitem(sys.modules, "google.genai", fake_genai)
-    monkeypatch.setattr("retro_98_ai_creator.media_store.PROJECT_ROOT", tmp_path)
+    monkeypatch.setattr("synthetic_text_extruder.media_store.PROJECT_ROOT", tmp_path)
     monkeypatch.setattr(
-        "retro_98_ai_creator.media_store.load_config",
+        "synthetic_text_extruder.media_store.load_config",
         lambda: {"paths": {"media": "media"}},
     )
 
@@ -387,7 +387,7 @@ def test_generate_with_gemini_routes_audio(monkeypatch):
         return {"modality": "audio", "prompt": prompt}
 
     monkeypatch.setattr(
-        "retro_98_ai_creator.gemini_audio.generate_audio_with_gemini",
+        "synthetic_text_extruder.gemini_audio.generate_audio_with_gemini",
         fake_audio,
     )
     out = generate_with_gemini(
@@ -410,7 +410,7 @@ def test_generate_with_gemini_layout_basis_routes_text(monkeypatch):
         return {"modality": "text", "prompt": kwargs.get("prompt_text")}
 
     monkeypatch.setattr(
-        "retro_98_ai_creator.gemini_provider._generate_text_with_gemini",
+        "synthetic_text_extruder.gemini_provider._generate_text_with_gemini",
         fake_text,
     )
     out = generate_with_gemini(

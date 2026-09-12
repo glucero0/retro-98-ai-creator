@@ -11,8 +11,8 @@ from unittest.mock import MagicMock, patch
 
 import subprocess
 
-from retro_98_ai_creator.config import DEFAULTS
-from retro_98_ai_creator.gemini_tools import (
+from synthetic_text_extruder.config import DEFAULTS
+from synthetic_text_extruder.gemini_tools import (
     MAX_FILE_BYTES,
     execute_tool,
     extract_function_calls,
@@ -22,7 +22,7 @@ from retro_98_ai_creator.gemini_tools import (
     response_text,
     tools_config_for,
 )
-from retro_98_ai_creator.prompts import build_general_text_prompt, local_clock_context
+from synthetic_text_extruder.prompts import build_general_text_prompt, local_clock_context
 
 
 def test_use_tools_default_is_false():
@@ -131,7 +131,7 @@ def test_unknown_tool():
 
 def test_execute_search_gmail_delegates():
     with patch(
-        "retro_98_ai_creator.gmail_client.search_gmail",
+        "synthetic_text_extruder.gmail_client.search_gmail",
         return_value={"ok": True, "query": "is:unread", "count": 0, "messages": []},
     ) as mock_search:
         result = execute_tool("search_gmail", {"query": "is:unread"})
@@ -145,7 +145,7 @@ def test_execute_search_gmail_delegates():
 
 def test_execute_search_drive_delegates():
     with patch(
-        "retro_98_ai_creator.drive_client.search_drive",
+        "synthetic_text_extruder.drive_client.search_drive",
         return_value={"ok": True, "query": "name contains 'x'", "count": 0, "files": []},
     ) as mock_search:
         result = execute_tool("search_drive", {"query": "name contains 'x'"})
@@ -159,7 +159,7 @@ def test_execute_search_drive_delegates():
 
 def test_execute_create_google_doc_delegates():
     with patch(
-        "retro_98_ai_creator.docs_client.create_google_doc",
+        "synthetic_text_extruder.docs_client.create_google_doc",
         return_value={"ok": True, "document_id": "d1", "title": "Notes"},
     ) as mock_create:
         result = execute_tool(
@@ -171,7 +171,7 @@ def test_execute_create_google_doc_delegates():
 
 def test_execute_list_calendar_events_delegates():
     with patch(
-        "retro_98_ai_creator.calendar_client.list_calendar_events",
+        "synthetic_text_extruder.calendar_client.list_calendar_events",
         return_value={"ok": True, "count": 0, "events": []},
     ) as mock_list:
         result = execute_tool(
@@ -190,7 +190,7 @@ def test_execute_list_calendar_events_delegates():
 
 def test_execute_create_task_delegates():
     with patch(
-        "retro_98_ai_creator.tasks_client.create_task",
+        "synthetic_text_extruder.tasks_client.create_task",
         return_value={"ok": True, "id": "t1", "title": "Buy milk"},
     ) as mock_create:
         result = execute_tool(
@@ -208,7 +208,7 @@ def test_execute_create_task_delegates():
 
 def test_execute_browse_web_delegates():
     with patch(
-        "retro_98_ai_creator.web_browse.browse_web",
+        "synthetic_text_extruder.web_browse.browse_web",
         return_value={"ok": True, "url": "https://example.com/", "text": "Hello", "links": []},
     ) as mock_browse:
         result = execute_tool(
@@ -233,8 +233,8 @@ def test_execute_powershell_returns_stdout(tmp_path: Path):
         stderr=b"",
     )
     with (
-        patch("retro_98_ai_creator.gemini_tools.sys.platform", "win32"),
-        patch("retro_98_ai_creator.gemini_tools.subprocess.run", return_value=fake),
+        patch("synthetic_text_extruder.gemini_tools.sys.platform", "win32"),
+        patch("synthetic_text_extruder.gemini_tools.subprocess.run", return_value=fake),
     ):
         result = execute_tool(
             "execute_powershell",
@@ -256,8 +256,8 @@ def test_execute_powershell_nonzero_exit_still_returns_output(tmp_path: Path):
         stderr=b"oops\r\n",
     )
     with (
-        patch("retro_98_ai_creator.gemini_tools.sys.platform", "win32"),
-        patch("retro_98_ai_creator.gemini_tools.subprocess.run", return_value=fake),
+        patch("synthetic_text_extruder.gemini_tools.sys.platform", "win32"),
+        patch("synthetic_text_extruder.gemini_tools.subprocess.run", return_value=fake),
     ):
         result = execute_tool(
             "execute_powershell",
@@ -271,7 +271,7 @@ def test_execute_powershell_nonzero_exit_still_returns_output(tmp_path: Path):
 def test_execute_powershell_requires_ps1_extension(tmp_path: Path):
     script = tmp_path / "getdir.bat"
     script.write_text("@echo off", encoding="utf-8")
-    with patch("retro_98_ai_creator.gemini_tools.sys.platform", "win32"):
+    with patch("synthetic_text_extruder.gemini_tools.sys.platform", "win32"):
         result = execute_tool("execute_powershell", {"path": str(script.resolve())})
     assert result["ok"] is False
     assert ".ps1" in result["error"]
@@ -510,7 +510,7 @@ def test_function_declarations_include_local_clock():
 
 def test_tool_loop_mock(tmp_path: Path):
     """Mock generate_content: function_call then final text."""
-    from retro_98_ai_creator import gemini_provider as gp
+    from synthetic_text_extruder import gemini_provider as gp
 
     src = tmp_path / "step1.json"
     src.write_text(json.dumps({"items": [{"date": "1990-01-01"}]}), encoding="utf-8")
@@ -569,7 +569,7 @@ def test_tool_loop_mock(tmp_path: Path):
 
 def test_tool_loop_runs_when_aliases_sent_even_if_config_use_tools_false(tmp_path: Path):
     """Studio Enable Tools override sends aliases without Control Panel use_tools."""
-    from retro_98_ai_creator import gemini_provider as gp
+    from synthetic_text_extruder import gemini_provider as gp
 
     src = tmp_path / "step1.json"
     src.write_text(json.dumps({"ok": True}), encoding="utf-8")
@@ -624,7 +624,7 @@ def test_tool_loop_runs_when_aliases_sent_even_if_config_use_tools_false(tmp_pat
 
 def test_tools_with_search_uses_search_query_for_research():
     """Dedicated Search field text drives the research pass, not Tool Use."""
-    from retro_98_ai_creator import gemini_provider as gp
+    from synthetic_text_extruder import gemini_provider as gp
 
     research = SimpleNamespace(
         text="Research brief",
@@ -696,7 +696,7 @@ def test_tools_with_search_uses_search_query_for_research():
 
 def test_tools_with_search_skips_research_when_search_query_empty():
     """Blank Search skips the research pass; only the tool loop runs."""
-    from retro_98_ai_creator import gemini_provider as gp
+    from synthetic_text_extruder import gemini_provider as gp
 
     final = SimpleNamespace(
         text="Done.",
@@ -738,7 +738,7 @@ def test_tools_with_search_skips_research_when_search_query_empty():
 
 def test_tools_with_search_runs_research_first():
     """Search+tools: dedicated Google Search research pass, then file-tool loop."""
-    from retro_98_ai_creator import gemini_provider as gp
+    from synthetic_text_extruder import gemini_provider as gp
 
     research = SimpleNamespace(
         text="Research brief with https://ign.com/watch-dogs-ps4-controls",
@@ -841,7 +841,7 @@ def test_tools_with_search_runs_research_first():
 
 
 def test_tools_research_prompt_targets_complete_sources():
-    from retro_98_ai_creator.prompts import build_tools_research_prompt
+    from synthetic_text_extruder.prompts import build_tools_research_prompt
 
     text = build_tools_research_prompt(
         "step1 search then step2 filter sequels then write files"
