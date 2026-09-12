@@ -133,7 +133,7 @@ def provider_status(config: dict[str, Any]) -> dict[str, Any]:
     detail = (
         f"Gemini ready · text {text_m} · image {image_m} · video {video_m} · audio {audio_m}"
         if has_key
-        else "Paste your Gemini API key in Control Panel"
+        else "Paste your Gemini API key in Settings"
     )
     return {
         "state": "ready" if has_key else "needs_key",

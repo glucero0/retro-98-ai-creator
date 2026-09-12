@@ -1,4 +1,4 @@
-/* Retro 98 AI Creator — desktop chrome on top of 98.css */
+/* Retro 98 AI Creator — single-window app frame (modern.css overrides Win98 leftovers) */
 
 :root {
   --desktop-bg: #008080;
@@ -12,7 +12,9 @@
   --icon-fg: #ffffff;
   --icon-shadow: #000000;
   --icon-glyph-bg: #c0c0c0;
-  --taskbar-h: 36px;
+  --app-frame-h: 40px;
+  --app-menu-h: 32px;
+  --app-status-h: 28px;
 
   /* Full app chrome (windows, controls, text) */
   --ui-window: #c0c0c0;
@@ -126,28 +128,145 @@ body {
   line-height: 1.2;
 }
 
-#windows-layer {
+#app-shell {
   position: absolute;
-  top: 0;
-  left: 0;
-  right: 0;
-  bottom: var(--taskbar-h);
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
   z-index: 5;
-  pointer-events: none;
+  background: var(--ui-window);
+  color: var(--ui-text);
+}
+
+#app-frame-top {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: var(--app-frame-h);
+  padding: 6px 10px;
+  background: var(--ui-title);
+  color: var(--ui-title-text);
+}
+
+#app-frame-top label {
+  font-weight: 700;
+}
+
+#app-frame-top select {
+  min-width: 200px;
+}
+
+#app-menubar {
+  flex-shrink: 0;
+  display: flex;
+  align-items: stretch;
+  gap: 2px;
+  min-height: var(--app-menu-h);
+  padding: 2px 6px;
+  background: var(--ui-window);
+  border-bottom: 1px solid var(--ui-border-dark);
+}
+
+#app-menubar[data-empty="1"] {
+  display: none;
+}
+
+.app-menu {
+  position: relative;
+}
+
+.app-menu-btn {
+  min-width: 48px;
+}
+
+.app-menu-panel {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  z-index: 40;
+  min-width: 220px;
+  display: flex;
+  flex-direction: column;
+  padding: 4px;
+  background: var(--ui-window);
+  box-shadow:
+    inset -1px -1px var(--ui-border-darker),
+    inset 1px 1px var(--ui-border-mid),
+    inset -2px -2px var(--ui-border-dark),
+    inset 2px 2px var(--ui-border-light);
+}
+
+.app-menu-panel[hidden] {
+  display: none !important;
+}
+
+.app-menu-panel .menu-group {
+  display: none;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.app-menu-panel .menu-group[data-active="1"] {
+  display: flex;
+}
+
+.app-menu-panel button[hidden] {
+  display: none !important;
+}
+
+.app-menu-panel button {
+  justify-content: flex-start;
+  text-align: left;
+}
+
+#app-status {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: var(--app-status-h);
+  padding: 2px 8px;
+  background: var(--ui-window);
+  border-top: 1px solid var(--ui-border-dark);
+}
+
+#app-status .status-bar-field {
+  margin: 0;
+}
+
+#windows-layer {
+  position: relative;
+  flex: 1 1 auto;
+  min-height: 0;
+  z-index: 5;
   overflow: hidden;
 }
 
 .app-window {
   position: absolute;
-  pointer-events: auto;
+  inset: 0;
+  width: 100% !important;
+  height: 100% !important;
   max-width: 100%;
   max-height: 100%;
   z-index: 10;
   display: flex;
   flex-direction: column;
   overflow: hidden;
-  min-width: min(320px, 100%);
-  min-height: min(180px, 100%);
+  min-width: 0;
+  min-height: 0;
+  box-shadow: none;
+}
+
+.app-window > .title-bar,
+.app-window .window-resize-handle {
+  display: none !important;
+}
+
+.mission-line {
+  margin: 0 0 10px;
 }
 
 .app-window .window-resize-handle {
@@ -483,12 +602,17 @@ select {
 
 select:focus,
 select:focus-visible {
-  background-color: navy;
+  background-color: var(--ui-input);
   background-image: var(--combo-arrow);
   background-repeat: no-repeat;
   background-position: top 2px right 2px;
   background-size: 16px 17px;
-  color: #fff;
+  color: var(--ui-input-text);
+}
+
+option {
+  background-color: var(--ui-input);
+  color: var(--ui-input-text);
 }
 
 select:active {
@@ -1835,10 +1959,7 @@ html[data-reading-surface="dark"] .doc-canvas.doc-canvas-reading {
 #crt-overlay {
   pointer-events: none;
   position: absolute;
-  top: 0;
-  left: 0;
-  right: 0;
-  bottom: var(--taskbar-h);
+  inset: 0;
   z-index: 90;
   background: repeating-linear-gradient(
     to bottom,

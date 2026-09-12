@@ -4,72 +4,94 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Retro 98 AI Creator</title>
-  <link rel="stylesheet" href="vendor/98.css" />
-  <link rel="stylesheet" href="styles.css?v=viewer-layout8" />
+  <link rel="stylesheet" href="styles.css?v=modern2" />
+  <link rel="stylesheet" href="modern.css?v=modern2" />
 </head>
 <body>
   <div id="desktop">
-    <div id="windows-layer">
-      <div class="desktop-icons" id="desktop-icons">
-        <button type="button" class="desktop-icon" data-open="form" title="Creation Studio">
-          <div class="icon-glyph">✨</div>
-          <span>Creation Studio</span>
-        </button>
-        <button type="button" class="desktop-icon" data-open="library" title="Archives">
-          <div class="icon-glyph">📁</div>
-          <span>Archives</span>
-        </button>
-        <button type="button" class="desktop-icon" data-open="viewer" title="Viewer">
-          <div class="icon-glyph">👁️</div>
-          <span>Viewer</span>
-        </button>
-        <button type="button" class="desktop-icon" data-open="image-edit" title="Image Editor">
-          <div class="icon-glyph">🖼️</div>
-          <span>Image Editor</span>
-        </button>
-        <button type="button" class="desktop-icon" data-open="video-edit" title="Video Editor">
-          <div class="icon-glyph">🎬</div>
-          <span>Video Editor</span>
-        </button>
-        <button type="button" class="desktop-icon" data-open="prompt-editor" title="Prompt Editor">
-          <div class="icon-glyph">📝</div>
-          <span>Prompt Editor</span>
-        </button>
-        <button type="button" class="desktop-icon" data-open="control" title="Control Panel">
-          <div class="icon-glyph">⚙️</div>
-          <span>Control Panel</span>
-        </button>
-      </div>
-
-      <!-- Creation Studio -->
-      <div class="window app-window" id="win-form" data-window="form" style="left:100px;top:12px;width:720px;height:560px;">
-        <div class="title-bar">
-          <div class="title-bar-text">Creation Studio</div>
-          <div class="title-bar-controls">
-            <button aria-label="Minimize" data-action="minimize"></button>
-            <button aria-label="Maximize" data-action="maximize"></button>
-            <button aria-label="Close" data-action="close"></button>
+    <div id="app-shell">
+      <header id="app-frame-top">
+        <label for="screen-select">Screen</label>
+        <select id="screen-select" aria-label="Switch screen">
+          <option value="form">Creation Studio</option>
+          <option value="library">Archives</option>
+          <option value="viewer">Viewer</option>
+          <option value="image-edit">Image Editor</option>
+          <option value="video-edit">Video Editor</option>
+          <option value="prompt-editor">Prompt Editor</option>
+          <option value="control">Settings</option>
+        </select>
+      </header>
+      <nav id="app-menubar" aria-label="Menus">
+        <div class="app-menu" id="menu-file" hidden>
+          <button type="button" class="app-menu-btn" id="menu-file-btn" aria-haspopup="true" aria-expanded="false">File</button>
+          <div class="app-menu-panel" id="menu-file-panel" hidden role="menu">
+            <div class="menu-group" data-screen="form">
+              <button type="button" id="btn-studio-load-text" role="menuitem">Load Text…</button>
+              <button type="button" id="btn-studio-load-image" role="menuitem">Load Image…</button>
+              <button type="button" id="btn-studio-load-video" role="menuitem">Load Video…</button>
+            </div>
+            <div class="menu-group" data-screen="library">
+              <button type="button" id="btn-import" role="menuitem">Import JSON…</button>
+              <button type="button" id="btn-export-all" role="menuitem">Export All…</button>
+              <button type="button" id="btn-import-text" role="menuitem">Import Text…</button>
+              <button type="button" id="btn-import-image" role="menuitem">Import Image…</button>
+              <button type="button" id="btn-import-video" role="menuitem">Import Video…</button>
+              <button type="button" id="btn-import-audio" role="menuitem">Import Audio…</button>
+            </div>
+            <div class="menu-group" data-screen="viewer">
+              <button type="button" id="btn-viewer-open" role="menuitem">Open…</button>
+              <button type="button" id="btn-export-txt" hidden role="menuitem">Export TXT</button>
+              <button type="button" id="btn-export-json" hidden role="menuitem">Export Metadata</button>
+              <button type="button" id="btn-export-png" hidden role="menuitem">Export PNG</button>
+              <button type="button" id="btn-export-pdf" hidden role="menuitem">Export PDF</button>
+              <button type="button" id="btn-export-media" hidden role="menuitem">Save MP4…</button>
+            </div>
+            <div class="menu-group" data-screen="image-edit">
+              <button type="button" id="btn-iedit-load" role="menuitem">Load Image…</button>
+              <button type="button" id="btn-edit-save" class="default" hidden role="menuitem">Save</button>
+              <button type="button" id="btn-edit-save-as" role="menuitem">Save As…</button>
+              <button type="button" id="btn-edit-send-creator" role="menuitem">Save and Send to Creator</button>
+            </div>
+            <div class="menu-group" data-screen="video-edit">
+              <button type="button" id="btn-vedit-load" role="menuitem">Load Video…</button>
+              <button type="button" id="btn-vedit-save" class="default" hidden role="menuitem">Save</button>
+              <button type="button" id="btn-vedit-save-as" role="menuitem">Save As…</button>
+              <button type="button" id="btn-vedit-send-creator" role="menuitem">Save and Send to Creator</button>
+            </div>
           </div>
         </div>
+        <div class="app-menu" id="menu-ai" hidden>
+          <button type="button" class="app-menu-btn" id="menu-ai-btn" aria-haspopup="true" aria-expanded="false">AI</button>
+          <div class="app-menu-panel" id="menu-ai-panel" hidden role="menu">
+            <div class="menu-group" data-screen="viewer">
+              <button type="button" id="btn-extract-text" hidden role="menuitem">Extract Text…</button>
+              <button type="button" id="btn-extract-layout" hidden role="menuitem">Extract Layout…</button>
+              <button type="button" id="btn-use-basis" hidden role="menuitem">Use as Basis</button>
+              <button type="button" id="btn-viewer-send-creator" hidden role="menuitem">Save and Send to Creator</button>
+              <button type="button" id="btn-voice" hidden role="menuitem">Voice Reader</button>
+            </div>
+          </div>
+        </div>
+        <div class="app-menu" id="menu-edit" hidden>
+          <button type="button" class="app-menu-btn" id="menu-edit-btn" aria-haspopup="true" aria-expanded="false">Edit</button>
+          <div class="app-menu-panel" id="menu-edit-panel" hidden role="menu">
+            <div class="menu-group" data-screen="viewer">
+              <button type="button" id="btn-edit-image" hidden role="menuitem">Edit Image</button>
+              <button type="button" id="btn-edit-video" hidden role="menuitem">Edit Video</button>
+            </div>
+          </div>
+        </div>
+      </nav>
+      <div id="windows-layer">
+
+      <!-- Creation Studio -->
+      <div class="window app-window" id="win-form" data-window="form">
         <div class="window-body">
-          <fieldset class="mission-banner">
-            <legend>Studio Mission</legend>
-            <p>
-              A general AI studio for generating <strong>text</strong>, <strong>images</strong>,
-              <strong>video</strong>, and <strong>music</strong>. Write what you want in the
-              Prompt field below — “compose a song” or “chiptune title theme” routes to
-              <strong>Lyria</strong> (pick Clip or Pro / 3.5 in Control Panel).
-              Studio uses <strong>Google Gemini</strong> — paste a key in Control Panel
-              and pick Text, Image, Video, and Audio models.
-              Viewer <strong>Extract Layout</strong> plus <strong>Use as Basis</strong> sends a
-              screenshot and its coordinate JSON so Studio can recreate the UI
-              (HTML/CSS or an app) unless you ask for an image or video instead.
-            </p>
-            <p class="hint disclaimer">
-              Always review generated output before relying on it — especially facts,
-              media details, and anything you plan to publish or ship.
-            </p>
-          </fieldset>
+          <p class="hint mission-line" id="studio-mission-line">
+            Generate text, images, video, or music with Gemini. Pick models in
+            <strong>Settings</strong>. Review output before you rely on it.
+          </p>
 
           <div class="studio-layout" id="studio-layout">
             <div class="studio-main">
@@ -79,8 +101,8 @@
                   <label for="studio-enable-tools">Enable Tools</label>
                 </div>
                 <p class="hint" id="studio-enable-tools-hint">
-                  Toggle tools for this Studio session without opening Control Panel.
-                  Control Panel → Use Tools is the default on launch.
+                  Toggle tools for this Studio session without opening Settings.
+                  Settings → Use Tools is the default on launch.
                 </p>
                 <div id="studio-saved-prompt-wrap" class="field-row-stacked">
                   <label for="studio-saved-prompt">Saved prompt</label>
@@ -138,17 +160,12 @@
                 <div class="form-actions">
                   <button type="button" id="btn-generate" class="default">⚡ CREATE</button>
                 </div>
-                <div class="form-actions studio-load-actions">
-                  <button type="button" id="btn-studio-load-text">Load Text…</button>
-                  <button type="button" id="btn-studio-load-image">Load Image…</button>
-                  <button type="button" id="btn-studio-load-video">Load Video…</button>
-                </div>
                 <p class="hint" id="studio-load-hint">
-                  Load Text into the prompt. Load Image / Video sets a media basis shown on
-                  the right — then describe the change and CREATE. The Viewer can
-                  <strong>Open…</strong> a text, image, video, or song file itself (tabs and
-                  tools switch to that type). On an image or video, Viewer
-                  <strong>Extract Layout…</strong> finds UI chrome; <strong>Use as Basis</strong>
+                  File → Load Text puts text in the prompt. File → Load Image / Video sets a
+                  media basis shown on the right — then describe the change and CREATE.
+                  The Viewer can <strong>Open…</strong> a text, image, video, or song file
+                  (tabs and tools switch to that type). On an image or video, Viewer
+                  <strong>Extract Layout…</strong> finds UI regions; <strong>Use as Basis</strong>
                   then sends the screenshot plus layout JSON so Studio can recreate it as
                   HTML/CSS or an app (ask for an image if you want another mockup instead).
                   For a song, Use as Basis reloads the prompt and lyrics as text — not the MP3.
@@ -169,24 +186,11 @@
               </fieldset>
             </aside>
           </div>
-
-          <div class="status-bar" id="studio-status-bar">
-            <p class="status-bar-field" id="gen-status-text">Ready</p>
-            <p class="status-bar-field" id="studio-model-field">Backend: Gemini</p>
-          </div>
         </div>
       </div>
 
       <!-- Viewer -->
-      <div class="window app-window" id="win-viewer" data-window="viewer" hidden style="left:480px;top:24px;width:720px;height:560px;">
-        <div class="title-bar">
-          <div class="title-bar-text" id="viewer-title">Viewer</div>
-          <div class="title-bar-controls">
-            <button aria-label="Minimize" data-action="minimize"></button>
-            <button aria-label="Maximize" data-action="maximize"></button>
-            <button aria-label="Close" data-action="close"></button>
-          </div>
-        </div>
+      <div class="window app-window" id="win-viewer" data-window="viewer" hidden>
         <div class="window-body viewer-body">
           <div class="viewer-tabs" id="viewer-tabs" role="tablist" hidden>
             <button type="button" class="viewer-tab" data-tab="doc" role="tab" id="tab-doc" hidden>Document</button>
@@ -194,23 +198,6 @@
             <button type="button" class="viewer-tab" data-tab="extracted" role="tab" id="tab-extracted" hidden>Extracted</button>
             <button type="button" class="viewer-tab" data-tab="layout" role="tab" id="tab-layout" hidden>Layout</button>
             <button type="button" class="viewer-tab" data-tab="grounding" role="tab" id="tab-grounding" hidden>Sources (0)</button>
-          </div>
-          <div class="viewer-toolbar">
-            <button type="button" id="btn-viewer-open">Open…</button>
-            <div class="viewer-toolbar-actions">
-            <button type="button" id="btn-export-txt" hidden>Export TXT</button>
-            <button type="button" id="btn-export-json" hidden>Export Metadata</button>
-            <button type="button" id="btn-export-png" hidden>Export PNG</button>
-            <button type="button" id="btn-export-pdf" hidden>Export PDF</button>
-            <button type="button" id="btn-export-media" hidden>Save MP4…</button>
-            <button type="button" id="btn-extract-text" hidden>Extract Text…</button>
-            <button type="button" id="btn-extract-layout" hidden>Extract Layout…</button>
-            <button type="button" id="btn-edit-image" hidden>Edit</button>
-            <button type="button" id="btn-edit-video" hidden>Edit</button>
-            <button type="button" id="btn-use-basis" hidden>Use as Basis</button>
-            <button type="button" id="btn-viewer-send-creator" hidden>Save and Send to Creator</button>
-            <button type="button" id="btn-voice" hidden>Voice Reader</button>
-            </div>
           </div>
           <div id="doc-canvas" class="doc-canvas">
             <div class="viewer-empty">
@@ -230,27 +217,11 @@
       </div>
 
       <!-- Archives -->
-      <div class="window app-window" id="win-library" data-window="library" hidden style="left:80px;top:80px;width:560px;height:420px;">
-        <div class="title-bar">
-          <div class="title-bar-text">Archives</div>
-          <div class="title-bar-controls">
-            <button aria-label="Minimize" data-action="minimize"></button>
-            <button aria-label="Maximize" data-action="maximize"></button>
-            <button aria-label="Close" data-action="close"></button>
-          </div>
-        </div>
+      <div class="window app-window" id="win-library" data-window="library" hidden>
         <div class="window-body">
           <div class="field-row">
             <label for="archive-search">Search</label>
             <input id="archive-search" type="text" />
-          </div>
-          <div class="archive-actions">
-            <button type="button" id="btn-import">Import JSON…</button>
-            <button type="button" id="btn-export-all">Export All…</button>
-            <button type="button" id="btn-import-text">Import Text…</button>
-            <button type="button" id="btn-import-image">Import Image…</button>
-            <button type="button" id="btn-import-video">Import Video…</button>
-            <button type="button" id="btn-import-audio">Import Audio…</button>
           </div>
           <div class="archive-list-wrap">
             <table class="archive-table">
@@ -274,30 +245,25 @@
         </div>
       </div>
 
-      <!-- Control Panel -->
-      <div class="window app-window control-tab-ai" id="win-control" data-window="control" hidden style="left:120px;top:40px;width:820px;">
-        <div class="title-bar">
-          <div class="title-bar-text">Control Panel</div>
-        </div>
-        <div class="window-body">
-          <menu role="tablist" class="control-tabs">
-            <li role="tab" aria-selected="true" data-control-tab="ai">
-              <a href="#control-pane-ai">AI Model</a>
-            </li>
-            <li role="tab" aria-selected="false" data-control-tab="display">
-              <a href="#control-pane-display">Display &amp; Sound</a>
-            </li>
-          </menu>
-
-          <div class="window control-tab-panel" role="tabpanel">
-            <div class="window-body">
-              <div id="control-pane-ai" class="control-pane" data-control-pane="ai">
+      <!-- Settings -->
+      <div class="window app-window" id="win-control" data-window="control" hidden>
+        <div class="window-body settings-body">
+          <div class="settings-layout">
+            <nav class="settings-nav" id="settings-nav" aria-label="Settings pages">
+              <button type="button" class="settings-nav-item" data-settings-page="models" aria-current="page">Models</button>
+              <button type="button" class="settings-nav-item" data-settings-page="generation">Generation</button>
+              <button type="button" class="settings-nav-item" data-settings-page="google">Google</button>
+              <button type="button" class="settings-nav-item" data-settings-page="storage">Storage</button>
+              <button type="button" class="settings-nav-item" data-settings-page="appearance">Appearance</button>
+            </nav>
+            <div class="settings-pages">
+              <section id="control-pane-models" class="control-pane" data-control-pane="models">
                 <fieldset id="gemini-settings">
-                  <legend>Gemini</legend>
+                  <legend>Models</legend>
                   <p class="hint">
                     Get a key at
                     <a href="https://aistudio.google.com/apikey" target="_blank" rel="noreferrer">aistudio.google.com/apikey</a>.
-                    Paste it below and save — it is stored in <code>config.yaml</code>.
+                    Paste it below — it is stored in <code>config.yaml</code> when you leave this page.
                     Studio picks the Text / Image / Video / Audio model from your prompt.
                     Defaults are the cheapest options in each slot — customize anytime.
                     Music uses Lyria (enable the music models for your Gemini API key).
@@ -338,6 +304,12 @@
                     <input id="gemini-key" type="password" placeholder="Paste Gemini API key" />
                   </div>
                   <p class="hint" id="gemini-key-status"></p>
+                </fieldset>
+              </section>
+
+              <section id="control-pane-generation" class="control-pane" data-control-pane="generation" hidden>
+                <fieldset>
+                  <legend>Generation</legend>
                   <div class="field-row">
                     <input type="checkbox" id="gemini-search" checked />
                     <label for="gemini-search">Google Search grounding (text)</label>
@@ -365,40 +337,6 @@
                     when on, Creator can run a deep Search (+ URL context) research pass
                     before file tools; when off, only Tool Use runs. Text prompts only.
                   </p>
-                  <fieldset id="google-workspace-settings">
-                    <legend>Google Workspace</legend>
-                    <p class="hint">
-                      One OAuth token for Gmail, Drive, Docs, Calendar, and Tasks tools.
-                      Create a Google Cloud project, enable the <strong>Gmail</strong>,
-                      <strong>Google Drive</strong>, <strong>Google Docs</strong>,
-                      <strong>Google Calendar</strong>, and <strong>Google Tasks</strong>
-                      APIs, and download an OAuth client
-                      JSON (<strong>Desktop application</strong> type). Pick it below,
-                      Save, then Connect Google Workspace once (re-connect after adding
-                      APIs so new scopes are granted). Access tokens last about an hour;
-                      Creator refreshes them automatically. If you have to reconnect
-                      every week, publish the OAuth consent screen (Testing → In
-                      production) in Google Cloud Console, then Connect Google Workspace
-                      again.
-                    </p>
-                    <div class="field-row-stacked">
-                      <label for="google-workspace-credentials-path">
-                        <span>OAuth client JSON</span>
-                        <span class="label-hint" id="google-workspace-auth-badge">Not configured</span>
-                      </label>
-                      <input
-                        id="google-workspace-credentials-path"
-                        type="text"
-                        readonly
-                        placeholder="Pick OAuth client JSON…"
-                      />
-                    </div>
-                    <div class="form-actions">
-                      <button type="button" id="btn-google-workspace-pick-credentials">Pick OAuth JSON…</button>
-                      <button type="button" id="btn-google-workspace-connect">Connect Google Workspace…</button>
-                    </div>
-                    <p class="hint" id="google-workspace-auth-status"></p>
-                  </fieldset>
                   <div class="field-row">
                     <input type="checkbox" id="gemini-ocr-search-images" checked />
                     <label for="gemini-ocr-search-images">OCR images from search</label>
@@ -428,14 +366,83 @@
                     <label for="system-extra">Extra system instructions</label>
                     <textarea id="system-extra" rows="3" placeholder="Optional custom prompt additions…"></textarea>
                   </div>
-                  <div class="form-actions">
-                    <button type="button" id="btn-save-model">Save</button>
-                    <button type="button" class="btn-cancel-control">Cancel</button>
-                  </div>
+                  <p class="hint">Settings save when you switch pages or leave Settings.</p>
                 </fieldset>
-              </div>
+              </section>
 
-              <div id="control-pane-display" class="control-pane" data-control-pane="display" hidden>
+              <section id="control-pane-google" class="control-pane" data-control-pane="google" hidden>
+                <fieldset id="google-workspace-settings">
+                  <legend>Google Workspace</legend>
+                  <p class="hint">
+                    One OAuth token for Gmail, Drive, Docs, Calendar, and Tasks tools.
+                    Create a Google Cloud project, enable the <strong>Gmail</strong>,
+                    <strong>Google Drive</strong>, <strong>Google Docs</strong>,
+                    <strong>Google Calendar</strong>, and <strong>Google Tasks</strong>
+                    APIs, and download an OAuth client
+                    JSON (<strong>Desktop application</strong> type). Pick it below,
+                    then Connect Google Workspace once (re-connect after adding
+                    APIs so new scopes are granted). Access tokens last about an hour;
+                    Creator refreshes them automatically. If you have to reconnect
+                    every week, publish the OAuth consent screen (Testing → In
+                    production) in Google Cloud Console, then Connect Google Workspace
+                    again.
+                  </p>
+                  <div class="field-row-stacked">
+                    <label for="google-workspace-credentials-path">
+                      <span>OAuth client JSON</span>
+                      <span class="label-hint" id="google-workspace-auth-badge">Not configured</span>
+                    </label>
+                    <input
+                      id="google-workspace-credentials-path"
+                      type="text"
+                      readonly
+                      placeholder="Pick OAuth client JSON…"
+                    />
+                  </div>
+                  <div class="form-actions">
+                    <button type="button" id="btn-google-workspace-pick-credentials">Pick OAuth JSON…</button>
+                    <button type="button" id="btn-google-workspace-connect">Connect Google Workspace…</button>
+                  </div>
+                  <p class="hint" id="google-workspace-auth-status"></p>
+                </fieldset>
+              </section>
+
+              <section id="control-pane-storage" class="control-pane" data-control-pane="storage" hidden>
+                <fieldset>
+                  <legend>Storage</legend>
+                  <div class="field-row-stacked">
+                    <label for="media-folder-path">Media folder</label>
+                    <input
+                      id="media-folder-path"
+                      type="text"
+                      spellcheck="false"
+                      placeholder="media"
+                    />
+                  </div>
+                  <div class="form-actions">
+                    <button type="button" id="btn-pick-media-folder">Browse…</button>
+                    <button type="button" id="btn-reset-media-folder">Use project default</button>
+                  </div>
+                  <p class="hint" id="media-folder-hint">
+                    Only image, video, and song files go here (PNG, MP4, MP3).
+                    Text, lyrics, prompts, and metadata stay in
+                    <code>archives.json</code> — you do not need to Export to
+                    keep them. Default is the <code>media</code> folder next
+                    to the app. When you change the folder you can move
+                    existing media files into the new folder; declining leaves
+                    them where they are. Archives still opens items left in
+                    the old project <code>media</code> folder.
+                  </p>
+                  <p class="hint">
+                    Video Editor requires a <strong>current ffmpeg</strong> on PATH
+                    (https://ffmpeg.org/ or <code>winget install ffmpeg</code>).
+                    Avoid outdated copies under <code>Python\Scripts</code>
+                    (see <code>config.example.yaml</code>).
+                  </p>
+                </fieldset>
+              </section>
+
+              <section id="control-pane-appearance" class="control-pane" data-control-pane="appearance" hidden>
                 <fieldset>
                   <legend>Theme</legend>
                   <div class="field-row-stacked">
@@ -446,29 +453,28 @@
                       <option value="custom">Customize…</option>
                     </select>
                     <p class="hint">
-                      Recolors the whole app — desktop, windows, title bars, buttons, and text.
+                      Recolors the whole app — page, panels, buttons, and text.
                     </p>
                   </div>
                   <div id="app-theme-custom" class="theme-custom-controls" hidden>
                     <div class="field-row">
-                      <label for="custom-desktop-color">Desktop</label>
-                      <input type="color" id="custom-desktop-color" value="#008080" />
+                      <label for="custom-desktop-color">Page</label>
+                      <input type="color" id="custom-desktop-color" value="#f4f6f8" />
                     </div>
                     <div class="field-row">
-                      <label for="custom-window-color">Window</label>
-                      <input type="color" id="custom-window-color" value="#c0c0c0" />
+                      <label for="custom-window-color">Panel</label>
+                      <input type="color" id="custom-window-color" value="#ffffff" />
                     </div>
                     <div class="field-row">
-                      <label for="custom-title-color">Title bar</label>
-                      <input type="color" id="custom-title-color" value="#000080" />
+                      <label for="custom-title-color">Accent</label>
+                      <input type="color" id="custom-title-color" value="#1565c0" />
                     </div>
                     <div class="field-row">
                       <label for="custom-text-color">Text</label>
-                      <input type="color" id="custom-text-color" value="#222222" />
+                      <input type="color" id="custom-text-color" value="#1c1c1c" />
                     </div>
                     <p class="hint">
                       Customize is only available when selected above. Light and Dark use fixed palettes.
-                      App font is set under Font below.
                     </p>
                   </div>
                 </fieldset>
@@ -479,8 +485,7 @@
                     <label for="ui-font">UI font</label>
                     <select id="ui-font"></select>
                     <p class="hint" id="ui-font-hint">
-                      Applies to windows, buttons, and labels. Open-source fonts load from the
-                      network the first time you pick them. Retro Pixel is the classic Win98 look.
+                      Open-source fonts load from the network the first time you pick them.
                     </p>
                   </div>
                 </fieldset>
@@ -506,95 +511,19 @@
                     </div>
                   </div>
                   <p class="hint">
-                    Sparse Win95/98-style cues for create / extract success, errors, and cancel —
-                    not click chirps. Synthesized in-app (no Microsoft system WAVs).
+                    Sparse cues for create / extract success, errors, and cancel —
+                    not click chirps. Synthesized in-app.
                   </p>
                 </fieldset>
-
-                <fieldset>
-                  <legend>Storage</legend>
-                  <div class="field-row-stacked">
-                    <label for="media-folder-path">Media folder</label>
-                    <input
-                      id="media-folder-path"
-                      type="text"
-                      spellcheck="false"
-                      placeholder="media"
-                    />
-                  </div>
-                  <div class="form-actions">
-                    <button type="button" id="btn-pick-media-folder">Browse…</button>
-                    <button type="button" id="btn-reset-media-folder">Use project default</button>
-                  </div>
-                  <p class="hint" id="media-folder-hint">
-                    Only image, video, and song files go here (PNG, MP4, MP3).
-                    Text, lyrics, prompts, and metadata stay in
-                    <code>archives.json</code> — you do not need to Export to
-                    keep them. Default is the <code>media</code> folder next
-                    to the app. After <strong>Save</strong> you can move
-                    existing media files into the new folder; declining leaves
-                    them where they are. Archives still opens items left in
-                    the old project <code>media</code> folder.
-                  </p>
-                </fieldset>
-
-                <fieldset>
-                  <legend>Display</legend>
-                  <div class="field-row">
-                    <input type="checkbox" id="opt-crt" />
-                    <label for="opt-crt">CRT scanlines</label>
-                  </div>
-                  <div class="field-row-stacked">
-                    <label for="ui-scale">Display scaling (DPI)</label>
-                    <div class="field-row scale-row">
-                      <select id="ui-scale">
-                        <option value="0.75">75%</option>
-                        <option value="0.9">90%</option>
-                        <option value="1" selected>100% (default)</option>
-                        <option value="1.1">110%</option>
-                        <option value="1.25">125%</option>
-                        <option value="1.5">150%</option>
-                        <option value="1.75">175%</option>
-                        <option value="2">200%</option>
-                      </select>
-                      <span id="ui-scale-label" class="hint">100%</span>
-                    </div>
-                    <p class="hint">
-                      Like Windows display scaling: fonts, windows, and chrome grow together,
-                      and the desktop still fills the screen. Maximize a window to use the
-                      leftover space — its contents reflow instead of scrolling the desktop.
-                    </p>
-                  </div>
-                  <p class="hint">
-                    Video Editor requires a <strong>current ffmpeg</strong> on PATH
-                    (https://ffmpeg.org/ or <code>winget install ffmpeg</code>).
-                    Avoid outdated copies under <code>Python\Scripts</code>
-                    (see <code>config.example.yaml</code>).
-                  </p>
-                </fieldset>
-
-                <div class="form-actions">
-                  <button type="button" id="btn-save-settings">Save</button>
-                  <button type="button" class="btn-cancel-control">Cancel</button>
-                </div>
-              </div>
+              </section>
             </div>
           </div>
         </div>
       </div>
       <!-- Image Edit (ReFrame-style adjustments) -->
-      <div class="window app-window" id="win-image-edit" data-window="image-edit" hidden style="left:80px;top:30px;width:920px;height:640px;">
-        <div class="title-bar">
-          <div class="title-bar-text">Image Editor</div>
-          <div class="title-bar-controls">
-            <button aria-label="Minimize" data-action="minimize"></button>
-            <button aria-label="Maximize" data-action="maximize"></button>
-            <button aria-label="Close" data-action="close"></button>
-          </div>
-        </div>
+      <div class="window app-window" id="win-image-edit" data-window="image-edit" hidden>
         <div class="window-body image-edit-body">
           <div class="editor-app-toolbar form-actions">
-            <button type="button" id="btn-iedit-load">Load Image…</button>
             <span class="label-hint" id="iedit-loaded-label">No image loaded</span>
           </div>
           <div class="image-edit-layout">
@@ -728,9 +657,6 @@
                 <button type="button" id="btn-edit-reset">Reset</button>
                 <button type="button" id="btn-edit-cancel">Cancel</button>
                 <button type="button" id="btn-edit-apply" class="default">Apply</button>
-                <button type="button" id="btn-edit-save" class="default" hidden>Save</button>
-                <button type="button" id="btn-edit-save-as">Save As…</button>
-                <button type="button" id="btn-edit-send-creator">Save and Send to Creator</button>
               </div>
             </div>
           </div>
@@ -738,18 +664,9 @@
       </div>
 
       <!-- Video Edit (ffmpeg filters + trim/split/splice) -->
-      <div class="window app-window" id="win-video-edit" data-window="video-edit" hidden style="left:60px;top:20px;width:960px;height:680px;">
-        <div class="title-bar">
-          <div class="title-bar-text">Video Editor</div>
-          <div class="title-bar-controls">
-            <button aria-label="Minimize" data-action="minimize"></button>
-            <button aria-label="Maximize" data-action="maximize"></button>
-            <button aria-label="Close" data-action="close"></button>
-          </div>
-        </div>
+      <div class="window app-window" id="win-video-edit" data-window="video-edit" hidden>
         <div class="window-body image-edit-body">
           <div class="editor-app-toolbar form-actions">
-            <button type="button" id="btn-vedit-load">Load Video…</button>
             <span class="label-hint" id="vedit-loaded-label">No video loaded</span>
           </div>
           <div class="image-edit-layout">
@@ -891,9 +808,6 @@
                 <button type="button" id="btn-vedit-reset">Reset</button>
                 <button type="button" id="btn-vedit-cancel">Cancel</button>
                 <button type="button" id="btn-vedit-apply" class="default">Apply</button>
-                <button type="button" id="btn-vedit-save" class="default" hidden>Save</button>
-                <button type="button" id="btn-vedit-save-as">Save As…</button>
-                <button type="button" id="btn-vedit-send-creator">Save and Send to Creator</button>
               </div>
             </div>
           </div>
@@ -901,15 +815,7 @@
       </div>
 
       <!-- Prompt Editor (named snippets for Creation Studio) -->
-      <div class="window app-window" id="win-prompt-editor" data-window="prompt-editor" hidden style="left:80px;top:30px;width:720px;height:560px;">
-        <div class="title-bar">
-          <div class="title-bar-text">Prompt Editor</div>
-          <div class="title-bar-controls">
-            <button aria-label="Minimize" data-action="minimize"></button>
-            <button aria-label="Maximize" data-action="maximize"></button>
-            <button aria-label="Close" data-action="close"></button>
-          </div>
-        </div>
+      <div class="window app-window" id="win-prompt-editor" data-window="prompt-editor" hidden>
         <div class="window-body prompt-editor-body">
           <div class="field-row-stacked">
             <label for="prompt-editor-list">Prompts</label>
@@ -945,25 +851,12 @@
         </div>
       </div>
 
-    </div>
+      </div>
 
-    <div id="crt-overlay" hidden></div>
-
-    <div id="taskbar">
-      <button type="button" id="start-btn">Start</button>
-      <div id="taskbar-windows"></div>
-      <div id="taskbar-clock"></div>
-    </div>
-
-    <div id="start-menu" hidden>
-      <div class="start-banner">Start Here</div>
-      <button type="button" data-open="form">✨ Creation Studio</button>
-      <button type="button" data-open="library">📁 Archives</button>
-      <button type="button" data-open="viewer">👁️ Viewer</button>
-      <button type="button" data-open="image-edit">🖼️ Image Editor</button>
-      <button type="button" data-open="video-edit">🎬 Video Editor</button>
-      <button type="button" data-open="prompt-editor">📝 Prompt Editor</button>
-      <button type="button" data-open="control">⚙️ Control Panel</button>
+      <footer id="app-status">
+        <p class="status-bar-field" id="app-status-text">Ready</p>
+        <p class="status-bar-field" id="studio-model-field">Backend: Gemini</p>
+      </footer>
     </div>
 
     <div id="busy-overlay" hidden>
@@ -1073,6 +966,6 @@
   <script src="vendor/jspdf.umd.min.js"></script>
   <script src="catalog.js"></script>
   <script src="image_edit.js"></script>
-  <script src="app.js?v=viewer-layout8"></script>
+  <script src="app.js?v=modern1"></script>
 </body>
 </html>

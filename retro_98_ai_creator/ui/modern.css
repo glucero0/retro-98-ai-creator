@@ -1,0 +1,293 @@
+/* Modern controls and Settings layout — replaces 98.css */
+
+:root {
+  --radius: 8px;
+  --radius-sm: 6px;
+  --shadow: 0 8px 24px rgba(0, 0, 0, 0.12);
+}
+
+html,
+body,
+button,
+input,
+select,
+textarea,
+label,
+legend,
+table {
+  font-family: var(--ui-font);
+  -webkit-font-smoothing: antialiased;
+}
+
+button,
+input[type="button"],
+input[type="submit"],
+input[type="reset"] {
+  appearance: none;
+  background: var(--ui-button);
+  color: var(--ui-button-text);
+  text-shadow: none;
+  border: 1px solid var(--ui-border-dark);
+  border-radius: var(--radius-sm);
+  padding: 6px 12px;
+  min-height: 32px;
+  box-shadow: none;
+  cursor: pointer;
+}
+
+button:not(:disabled):hover,
+input[type="button"]:not(:disabled):hover {
+  filter: brightness(1.04);
+}
+
+button:not(:disabled):active,
+input[type="button"]:not(:disabled):active {
+  box-shadow: none;
+  filter: brightness(0.96);
+}
+
+button.default,
+input[type="submit"].default {
+  background: var(--ui-accent);
+  color: var(--ui-accent-text);
+  border-color: transparent;
+  box-shadow: none;
+}
+
+input[type="text"],
+input[type="password"],
+input[type="number"],
+input[type="search"],
+input[type="email"],
+input:not([type]),
+textarea,
+select {
+  appearance: none;
+  background: var(--ui-input);
+  background-image: none;
+  color: var(--ui-input-text);
+  border: 1px solid var(--ui-border-dark);
+  border-radius: var(--radius-sm);
+  box-shadow: none;
+  padding: 6px 10px;
+  min-height: 32px;
+}
+
+select {
+  padding-right: 28px;
+  background-image: url("data:image/svg+xml;charset=utf-8,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath fill='%23555' d='M1 1l5 5 5-5'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 10px center;
+  background-size: 12px 8px;
+}
+
+select:focus,
+select:focus-visible,
+input:focus,
+textarea:focus {
+  outline: 2px solid var(--ui-accent);
+  outline-offset: 1px;
+  background-color: var(--ui-input);
+  color: var(--ui-input-text);
+}
+
+option {
+  background-color: var(--ui-input);
+  color: var(--ui-input-text);
+}
+
+.window {
+  background: var(--ui-window);
+  color: var(--ui-text);
+  box-shadow: none;
+  border: 0;
+}
+
+.window-body {
+  margin: 0;
+  padding: 12px 16px;
+  color: var(--ui-text);
+}
+
+.title-bar {
+  background: var(--ui-title);
+  color: var(--ui-title-text);
+  padding: 8px 12px;
+  border-radius: var(--radius) var(--radius) 0 0;
+}
+
+.title-bar-text {
+  font-weight: 600;
+}
+
+fieldset {
+  border: 1px solid var(--ui-border-mid);
+  border-radius: var(--radius);
+  padding: 12px 14px 14px;
+  margin: 0 0 14px;
+}
+
+legend {
+  padding: 0 6px;
+  font-weight: 600;
+}
+
+.field-row,
+.field-row-stacked {
+  margin: 8px 0;
+}
+
+.field-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.field-row-stacked {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 4px;
+}
+
+.hint,
+.label-hint,
+.muted {
+  color: var(--ui-muted);
+  font-size: 0.92em;
+}
+
+.status-bar,
+#app-status {
+  background: var(--ui-window);
+  border-top: 1px solid var(--ui-border-mid);
+}
+
+#app-frame-top {
+  background: var(--ui-title);
+  color: var(--ui-title-text);
+}
+
+#app-menubar {
+  background: var(--ui-window);
+  border-bottom: 1px solid var(--ui-border-mid);
+}
+
+.app-menu-panel {
+  border: 1px solid var(--ui-border-mid);
+  border-radius: var(--radius-sm);
+  box-shadow: var(--shadow);
+  background: var(--ui-window);
+  padding: 6px;
+}
+
+.app-window {
+  box-shadow: none;
+  border: 0;
+}
+
+#busy-overlay .window,
+#confirm-overlay .window,
+#recommend-models-overlay .window,
+#search-results-overlay .window,
+#studio-add-tool-overlay .window {
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+  min-width: min(420px, 92vw);
+  overflow: hidden;
+}
+
+.progress-indicator {
+  height: 8px;
+  background: var(--ui-border-mid);
+  border-radius: 99px;
+  overflow: hidden;
+}
+
+.progress-indicator-bar {
+  display: block;
+  height: 100%;
+  background: var(--ui-accent);
+}
+
+.viewer-tabs {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+  margin-bottom: 8px;
+}
+
+.viewer-tab[aria-selected="true"],
+.viewer-tab.active {
+  background: var(--ui-accent);
+  color: var(--ui-accent-text);
+  border-color: transparent;
+}
+
+.archive-table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.archive-table th,
+.archive-table td {
+  text-align: left;
+  padding: 8px 6px;
+  border-bottom: 1px solid var(--ui-border-mid);
+}
+
+.settings-body {
+  padding: 0 !important;
+  display: flex;
+  min-height: 0;
+}
+
+.settings-layout {
+  display: flex;
+  flex: 1;
+  min-height: 0;
+  width: 100%;
+}
+
+.settings-nav {
+  flex: 0 0 200px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 12px 8px;
+  border-right: 1px solid var(--ui-border-mid);
+  background: var(--desktop-bg);
+  overflow: auto;
+}
+
+.settings-nav-item {
+  justify-content: flex-start;
+  text-align: left;
+  border: 0;
+  background: transparent;
+  color: var(--ui-text);
+  border-radius: var(--radius-sm);
+}
+
+.settings-nav-item[aria-current="page"] {
+  background: var(--ui-accent);
+  color: var(--ui-accent-text);
+}
+
+.settings-pages {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: auto;
+  padding: 16px 18px 24px;
+}
+
+.control-pane[hidden] {
+  display: none !important;
+}
+
+#desktop {
+  width: 100%;
+  height: 100%;
+  transform: none;
+}

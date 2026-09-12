@@ -62,7 +62,7 @@ def generate_image_with_gemini(
     api_key = resolve_api_key(gemini_cfg)
     if not api_key:
         raise RuntimeError(
-            "Gemini API key missing. Paste your key in Control Panel → AI Model (Gemini)."
+            "Gemini API key missing. Paste your key in Settings → AI Model (Gemini)."
         )
     prompt = (prompt or "").strip()
     if not prompt:
@@ -210,7 +210,7 @@ def generate_video_with_gemini(
     api_key = resolve_api_key(gemini_cfg)
     if not api_key:
         raise RuntimeError(
-            "Gemini API key missing. Paste your key in Control Panel → AI Model (Gemini)."
+            "Gemini API key missing. Paste your key in Settings → AI Model (Gemini)."
         )
     prompt = (prompt or "").strip()
     if not prompt:

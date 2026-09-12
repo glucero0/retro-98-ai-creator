@@ -23,7 +23,7 @@
     config: null,
     viewerTab: "doc",
     speechPlaying: false,
-    controlTab: "ai",
+    settingsPage: "models",
     archiveSort: { key: "created", dir: "desc" },
     presets: [],
     creationTypes: [],
@@ -42,25 +42,18 @@
     studioCaret: { fieldId: "studio-prompt", start: 0, end: 0 },
     appTheme: "light",
     customTheme: {
-      desktopColor: "#008080",
-      windowColor: "#c0c0c0",
-      titleColor: "#000080",
-      textColor: "#222222",
+      desktopColor: "#f4f6f8",
+      windowColor: "#ffffff",
+      titleColor: "#1565c0",
+      textColor: "#1c1c1c",
       font: "sans",
     },
   };
 
   /**
-   * App chrome fonts. "retro-pixel" is local (98.css). Others are open-source
-   * faces loaded from Bunny Fonts (Google Fonts mirror) on demand.
+   * Open-source UI fonts loaded from Bunny Fonts (Google Fonts mirror) on demand.
    */
   const UI_FONTS = {
-    "retro-pixel": {
-      label: "Retro Pixel (Win98)",
-      stack: '"Pixelated MS Sans Serif", "MS Sans Serif", Tahoma, sans-serif',
-      google: null,
-      pixel: true,
-    },
     inter: {
       label: "Inter",
       stack: 'Inter, "Segoe UI", Tahoma, sans-serif',
@@ -165,7 +158,7 @@
 
   // Legacy stacks for Viewer document themes (not app chrome)
   const UI_FONT_STACKS = {
-    sans: UI_FONTS["retro-pixel"].stack,
+    sans: UI_FONTS.inter.stack,
     serif: 'Georgia, "Times New Roman", Times, serif',
     mono: '"Courier New", Courier, monospace',
   };
@@ -173,7 +166,7 @@
   const FONT_STACKS = {
     mono: '"Courier New", Courier, monospace',
     serif: 'Georgia, "Times New Roman", serif',
-    sans: UI_FONTS["retro-pixel"].stack,
+    sans: UI_FONTS.inter.stack,
   };
 
   const _loadedUiFontLinks = Object.create(null);
@@ -184,7 +177,7 @@
     // Legacy custom_theme.font values
     if (raw === "serif") return "merriweather";
     if (raw === "mono") return "ibm-plex-sans";
-    if (raw === "sans") return "retro-pixel";
+    if (raw === "sans" || raw === "retro-pixel") return "inter";
     return "inter";
   }
 
@@ -498,11 +491,11 @@
   const APP_THEME_PRESETS = {
     light: {
       themeName: "Light Mode (Day)",
-      bgColor: "#d8dee6",
-      cardBg: "#f0f0f0",
-      textColor: "#1a1a1a",
-      accentColor: "#0b5cab",
-      headerBg: "#0a5aab",
+      bgColor: "#f4f6f8",
+      cardBg: "#ffffff",
+      textColor: "#1c1c1c",
+      accentColor: "#1565c0",
+      headerBg: "#1565c0",
       fontStyle: "sans",
     },
     dark: {
@@ -660,10 +653,7 @@
     const lightDesktop = _luminance(t.bgColor) > 0.55;
 
     // Window surface: prefer cardBg; nudge pure white toward classic silver for chrome feel
-    let windowBg = t.cardBg || "#c0c0c0";
-    if (_normHex(windowBg) === "ffffff") {
-      windowBg = _mixHex(windowBg, "#c0c0c0", 0.55);
-    }
+    let windowBg = t.cardBg || "#ffffff";
     const text = t.textColor || "#222222";
     const title = t.headerBg || t.accentColor || "#000080";
     const accent = t.accentColor || "#000080";
@@ -997,7 +987,7 @@
   }
 
   function setProgress(msg) {
-    const text = $("#gen-status-text");
+    const text = $("#app-status-text") || $("#gen-status-text");
     if (text) text.textContent = msg || "Ready";
   }
 
@@ -1418,7 +1408,7 @@
     }
     if (hint) {
       hint.textContent =
-        "Toggle tools for this Studio session without opening Control Panel. Control Panel → Use Tools is the default on launch.";
+        "Toggle tools for this Studio session without opening Settings. Settings → Use Tools is the default on launch.";
       hint.classList.toggle("muted", !available);
     }
 
@@ -1432,13 +1422,13 @@
     if (loadHint) {
       if (!enabled) {
         loadHint.textContent =
-          "Load Text into the prompt. Load Image / Video sets a media basis shown on the right — then describe the change and CREATE. On an image or video in Viewer, Extract Layout… finds UI chrome; Use as Basis then sends the screenshot plus layout JSON so Studio can recreate it as HTML/CSS or an app (or another mockup if you ask for an image). For a song, Use as Basis reloads the prompt and lyrics as text — not the MP3.";
+          "File → Load Text puts text in the prompt. File → Load Image / Video sets a media basis shown on the right — then describe the change and CREATE. On an image or video in Viewer, Extract Layout… finds UI regions; Use as Basis then sends the screenshot plus layout JSON so Studio can recreate it as HTML/CSS or an app (or another mockup if you ask for an image). For a song, Use as Basis reloads the prompt and lyrics as text — not the MP3.";
       } else if (searchOn) {
         loadHint.textContent =
-          "Load Text into Search (optional). Load Image / Video sets a media basis shown on the right — then describe the change and CREATE. On an image or video in Viewer, Extract Layout… finds UI chrome; Use as Basis then sends the screenshot plus layout JSON so Studio can recreate it as HTML/CSS or an app (or another mockup if you ask for an image). For a song, Use as Basis reloads the prompt and lyrics as text — not the MP3.";
+          "File → Load Text puts text in Search (optional). File → Load Image / Video sets a media basis shown on the right — then describe the change and CREATE. On an image or video in Viewer, Extract Layout… finds UI regions; Use as Basis then sends the screenshot plus layout JSON so Studio can recreate it as HTML/CSS or an app (or another mockup if you ask for an image). For a song, Use as Basis reloads the prompt and lyrics as text — not the MP3.";
       } else {
         loadHint.textContent =
-          "Google Search is off — only Tool Use runs. Load Image / Video sets a media basis shown on the right — then describe the change and CREATE. On an image or video in Viewer, Extract Layout… finds UI chrome; Use as Basis then sends the screenshot plus layout JSON so Studio can recreate it as HTML/CSS or an app (or another mockup if you ask for an image). For a song, Use as Basis reloads the prompt and lyrics as text — not the MP3.";
+          "Google Search is off — only Tool Use runs. File → Load Image / Video sets a media basis shown on the right — then describe the change and CREATE. On an image or video in Viewer, Extract Layout… finds UI regions; Use as Basis then sends the screenshot plus layout JSON so Studio can recreate it as HTML/CSS or an app (or another mockup if you ask for an image). For a song, Use as Basis reloads the prompt and lyrics as text — not the MP3.";
       }
     }
     renderStudioToolsList();
@@ -1577,14 +1567,20 @@
     }
   }
 
+  let _settingsSaving = false;
+  let _settingsSaveTimer = null;
+
   async function saveControlPanelSettings(opts) {
     opts = opts || {};
     const a = api();
     if (!a) {
-      showToast("Python bridge not ready.");
+      if (!opts.silent) showToast("Python bridge not ready.");
       return;
     }
-    if (!ensureApiKeyBeforeSave()) return;
+    if (_settingsSaving) return;
+    if (!opts.silent && !ensureApiKeyBeforeSave()) return;
+    _settingsSaving = true;
+    try {
 
     if (opts.applyDisplay) applyDisplaySettingsFromControls();
 
@@ -1592,24 +1588,31 @@
 
     if (res.config) {
       state.config = res.config;
-      try {
-        const boot = await a.get_bootstrap();
-        state.config = boot.config || res.config;
-        fillControlPanel(boot);
-      } catch (_) {
-        fillControlPanel({
-          config: res.config,
-          suggestedGeminiModels: [],
-          modelStatus: res.modelStatus,
-        });
-        updateApiKeyIndicators();
+      if (!opts.silent) {
+        try {
+          const boot = await a.get_bootstrap();
+          state.config = boot.config || res.config;
+          fillControlPanel(boot);
+        } catch (_) {
+          fillControlPanel({
+            config: res.config,
+            suggestedGeminiModels: [],
+            modelStatus: res.modelStatus,
+          });
+        }
       }
-      if ($("#gemini-key")) $("#gemini-key").value = "";
+      updateApiKeyIndicators();
+      if ($("#gemini-key") && document.activeElement !== $("#gemini-key")) {
+        $("#gemini-key").value = "";
+      }
       syncStudioToolsPanel();
     }
 
-    closeWindow("control");
-    showToast(res.message || "Saved");
+    if (opts.silent) {
+      setProgress(res.message || "Settings saved");
+    } else {
+      showToast(res.message || "Saved");
+    }
 
     const mediaMove = res.mediaMove;
     if (res.ok && mediaMove && mediaMove.offered && mediaMove.count > 0) {
@@ -1644,7 +1647,7 @@
       }
     }
 
-    if (!offerDownload) return;
+    if (opts.silent || !offerDownload) return;
 
     const go = await showConfirm(
       "Download local models?",
@@ -1659,6 +1662,21 @@
     }
 
     await startLocalModelDownload();
+    } finally {
+      _settingsSaving = false;
+    }
+  }
+
+  function persistSettingsSoon(opts) {
+    clearTimeout(_settingsSaveTimer);
+    _settingsSaveTimer = setTimeout(() => {
+      void saveControlPanelSettings(Object.assign({ silent: true }, opts || {}));
+    }, 250);
+  }
+
+  function persistSettingsNow(opts) {
+    clearTimeout(_settingsSaveTimer);
+    return saveControlPanelSettings(Object.assign({ silent: true }, opts || {}));
   }
 
   function formatElapsed(ms) {
@@ -3152,48 +3170,109 @@
     active.blur();
   }
 
-  function focusWindow(id) {
-    if (!id) return;
-    const already = state.focused === id;
-    state.focused = id;
-    bringWindowToFront(id);
-    if (!(already && document.querySelector(".app-window.focused")?.dataset.window === id)) {
-      document.querySelectorAll(".app-window").forEach((w) => {
-        const title = w.querySelector(".title-bar");
-        if (w.dataset.window === id) {
-          w.classList.add("focused");
-          if (title) title.classList.remove("inactive");
-        } else {
-          w.classList.remove("focused");
-          if (title) title.classList.add("inactive");
-        }
-      });
-      renderTaskbar();
-    }
-    hideCaretOutsideWindow(id);
+  const SCREEN_IDS = [
+    "form",
+    "library",
+    "viewer",
+    "image-edit",
+    "video-edit",
+    "prompt-editor",
+    "control",
+  ];
+  const SCREEN_MENUS = {
+    form: ["file"],
+    library: ["file"],
+    viewer: ["file", "ai", "edit"],
+    "image-edit": ["file"],
+    "video-edit": ["file"],
+    "prompt-editor": [],
+    control: [],
+  };
+
+  function closeAppMenus() {
+    document.querySelectorAll(".app-menu-panel").forEach((p) => {
+      p.hidden = true;
+    });
+    document.querySelectorAll(".app-menu-btn").forEach((b) => {
+      b.setAttribute("aria-expanded", "false");
+    });
   }
 
-  function openWindow(id) {
+  function toggleAppMenu(name, force) {
+    const panel = $("#menu-" + name + "-panel");
+    const btn = $("#menu-" + name + "-btn");
+    if (!panel || !btn) return;
+    const open = typeof force === "boolean" ? force : panel.hidden;
+    closeAppMenus();
+    if (open) {
+      panel.hidden = false;
+      btn.setAttribute("aria-expanded", "true");
+    }
+  }
+
+  function syncAppMenus(id) {
+    const wanted = SCREEN_MENUS[id] || [];
+    ["file", "ai", "edit"].forEach((name) => {
+      const wrap = $("#menu-" + name);
+      if (!wrap) return;
+      wrap.hidden = wanted.indexOf(name) === -1;
+      const panel = $("#menu-" + name + "-panel");
+      if (!panel) return;
+      panel.querySelectorAll(".menu-group").forEach((g) => {
+        g.setAttribute(
+          "data-active",
+          g.getAttribute("data-screen") === id ? "1" : "0"
+        );
+      });
+    });
+    const bar = $("#app-menubar");
+    if (bar) bar.setAttribute("data-empty", wanted.length ? "0" : "1");
+    closeAppMenus();
+  }
+
+  function pauseViewerMedia() {
+    const root = $("#win-viewer");
+    if (!root) return;
+    root.querySelectorAll("audio, video").forEach((el) => {
+      try {
+        el.pause();
+      } catch (_) {
+        /* ignore */
+      }
+    });
+  }
+
+  function showScreen(id) {
+    if (!id || SCREEN_IDS.indexOf(id) === -1) return;
+    const prev = state.focused;
+    if (prev === "control" && id !== "control") {
+      void persistSettingsNow({ applyDisplay: true });
+    }
+    if (prev === "viewer" && id !== "viewer") pauseViewerMedia();
+    if (prev === "video-edit" && id !== "video-edit") {
+      const player = $("#video-edit-player");
+      if (player) {
+        try {
+          player.pause();
+        } catch (_) {
+          /* ignore */
+        }
+      }
+    }
+    state.focused = id;
     state.open[id] = true;
     state.minimized[id] = false;
-    const el = document.getElementById("win-" + id);
-    if (el) {
-      el.hidden = false;
-      el.classList.remove("minimized");
-    }
-    focusWindow(id);
-    if (id === "control") {
-      syncControlPanelWidth();
-    }
-    if (id === "image-edit" && !imageEdit.creationId) {
-      prepareEmptyImageEditor();
-    }
-    if (id === "video-edit" && !videoEdit.creationId) {
-      prepareEmptyVideoEditor();
-    }
-    if (id === "form") {
-      syncStudioToolsPanel();
-    }
+    document.querySelectorAll(".app-window").forEach((w) => {
+      const match = w.dataset.window === id;
+      w.hidden = !match;
+      w.classList.toggle("focused", match);
+    });
+    const sel = $("#screen-select");
+    if (sel && sel.value !== id) sel.value = id;
+    syncAppMenus(id);
+    hideCaretOutsideWindow(id);
+    if (id === "control") syncControlPanelWidth();
+    if (id === "form") syncStudioToolsPanel();
     if (id === "prompt-editor") {
       syncPromptEditorUi();
       refreshSavedPrompts();
@@ -3203,11 +3282,20 @@
       if (!state.active) prepareEmptyViewer();
       else syncViewerChrome(state.active);
     }
-    if (el && !state.maximized[id]) layoutWindowInWorkArea(el);
-    requestAnimationFrame(() => {
-      if (el && !state.maximized[id]) layoutWindowInWorkArea(el);
-      syncDesktopScrollExtent();
-    });
+    if (id === "image-edit" && !imageEdit.creationId) {
+      prepareEmptyImageEditor();
+    }
+    if (id === "video-edit" && !videoEdit.creationId) {
+      prepareEmptyVideoEditor();
+    }
+  }
+
+  function focusWindow(id) {
+    showScreen(id);
+  }
+
+  function openWindow(id) {
+    showScreen(id);
   }
 
   let _geminiModelsRefreshSeq = 0;
@@ -3544,11 +3632,6 @@
   }
 
   function closeWindow(id) {
-    if (id === "viewer") {
-      stopSpeech();
-      stopViewerMedia();
-      renderDocument(null);
-    }
     if (id === "image-edit") {
       imageEdit.sourceImg = null;
       imageEdit.creationId = null;
@@ -3570,34 +3653,11 @@
     if (id === "prompt-editor") {
       resetPromptEditor();
     }
-    state.open[id] = false;
-    state.minimized[id] = false;
-    state.maximized[id] = false;
-    const el = document.getElementById("win-" + id);
-    if (el) {
-      el.hidden = true;
-      el.classList.remove("minimized");
-      el.classList.remove("maximized");
-    }
-    updateMaximizeButton(id);
-    // Focus another already-open window — never open a closed one
-    if (state.focused === id) {
-      const preferred =
-        (id === "image-edit" || id === "video-edit") &&
-        state.open.viewer &&
-        !state.minimized.viewer
-          ? "viewer"
-          : null;
-      const next =
-        preferred ||
-        ["form", "viewer", "library", "control", "image-edit", "video-edit", "prompt-editor"].find(
-          (wid) => wid !== id && state.open[wid] && !state.minimized[wid]
-        );
-      if (next) focusWindow(next);
-      else state.focused = null;
-    }
-    renderTaskbar();
-    syncDesktopScrollExtent();
+    const next =
+      (id === "image-edit" || id === "video-edit") && state.active
+        ? "viewer"
+        : "form";
+    showScreen(next);
   }
 
   function minimizeWindow(id) {
@@ -4316,7 +4376,7 @@
       "</div>";
     if (!sources.length) {
       html +=
-        '<p class="muted">No grounding sources on this document. Enable Google Search grounding in Control Panel and regenerate, or import a document that includes sources.</p>';
+        '<p class="muted">No grounding sources on this document. Enable Google Search grounding in Settings and regenerate, or import a document that includes sources.</p>';
       return html;
     }
     html += '<p><strong>Verified archival web citations:</strong></p><ul class="sources-list">';
@@ -4632,10 +4692,11 @@
     if (groundingTab) groundingTab.textContent = "Sources (" + sources.length + ")";
 
     const title = creationTitle(creation);
-    $("#viewer-title").textContent = "Viewer — " + title;
+    if ($("#viewer-title")) $("#viewer-title").textContent = "Viewer — " + title;
     const model = (creation._model && creation._model.repo_id) || "model";
     const created = formatCreatedAt(creation.createdAt);
-    $("#viewer-status").textContent =
+    if ($("#app-status-text")) $("#app-status-text").textContent = title;
+    if ($("#viewer-status")) $("#viewer-status").textContent =
       (creation.creationType || modality) +
       " · " +
       modality +
@@ -5812,35 +5873,22 @@
 
     if ($("#system-extra")) $("#system-extra").value = promptCfg.extra_instructions || "";
     $("#opt-sound").checked = ui.sound_enabled !== false;
-    $("#opt-crt").checked = !!ui.crt_enabled;
     state.soundEnabled = $("#opt-sound").checked;
     applySoundVolume(ui.sound_volume != null ? ui.sound_volume : 100);
     if ($("#opt-sound-volume")) {
       $("#opt-sound-volume").disabled = !state.soundEnabled;
     }
-    state.crtEnabled = $("#opt-crt").checked;
-    $("#crt-overlay").hidden = !state.crtEnabled;
-    applyUiScale(ui.ui_scale != null ? ui.ui_scale : 1);
-    if ($("#ui-scale")) {
-      const scaleVal = String(state.uiScale);
-      const sel = $("#ui-scale");
-      if (![...sel.options].some((o) => o.value === scaleVal)) {
-        const opt = document.createElement("option");
-        opt.value = scaleVal;
-        opt.textContent = Math.round(state.uiScale * 100) + "%";
-        sel.appendChild(opt);
-      }
-      sel.value = scaleVal;
-    }
+    state.crtEnabled = false;
+    applyUiScale(1);
 
     fillAppThemeSelect();
     fillUiFontSelect();
     const custom = ui.custom_theme || {};
     state.customTheme = {
-      desktopColor: normalizeHexColor(custom.desktop_color, "#008080"),
-      windowColor: normalizeHexColor(custom.window_color, "#c0c0c0"),
-      titleColor: normalizeHexColor(custom.title_color, "#000080"),
-      textColor: normalizeHexColor(custom.text_color, "#222222"),
+      desktopColor: normalizeHexColor(custom.desktop_color, "#f4f6f8"),
+      windowColor: normalizeHexColor(custom.window_color, "#ffffff"),
+      titleColor: normalizeHexColor(custom.title_color, "#1565c0"),
+      textColor: normalizeHexColor(custom.text_color, "#1c1c1c"),
       font: resolveCustomFontKey(custom.font || "sans"),
     };
     writeCustomThemeToControls(state.customTheme);
@@ -6138,8 +6186,8 @@
         sound_volume: clampSoundVolume(
           $("#opt-sound-volume") ? $("#opt-sound-volume").value : state.soundVolume
         ),
-        crt_enabled: $("#opt-crt").checked,
-        ui_scale: readUiScaleFromControl(),
+        crt_enabled: false,
+        ui_scale: 1,
         ui_font:
           ($("#ui-font") && $("#ui-font").value) || state.uiFont || "inter",
         app_theme: ($("#app-theme") && $("#app-theme").value) || state.appTheme || "light",
@@ -6181,20 +6229,37 @@
     });
   }
 
-  function setControlTab(tab) {
-    const allowed = { ai: true, display: true };
-    state.controlTab = allowed[tab] ? tab : "ai";
-    document.querySelectorAll('.control-tabs [role="tab"]').forEach((tabEl) => {
-      const selected =
-        tabEl.getAttribute("data-control-tab") === state.controlTab;
-      tabEl.setAttribute("aria-selected", selected ? "true" : "false");
+  function setSettingsPage(page, opts) {
+    opts = opts || {};
+    const allowed = {
+      models: true,
+      generation: true,
+      google: true,
+      storage: true,
+      appearance: true,
+      ai: true,
+      display: true,
+    };
+    let next = allowed[page] ? page : "models";
+    if (next === "ai") next = "models";
+    if (next === "display") next = "appearance";
+    if (!opts.skipSave && state.settingsPage && state.settingsPage !== next) {
+      void persistSettingsNow({ applyDisplay: true });
+    }
+    state.settingsPage = next;
+    document.querySelectorAll(".settings-nav-item").forEach((btn) => {
+      const selected = btn.getAttribute("data-settings-page") === next;
+      if (selected) btn.setAttribute("aria-current", "page");
+      else btn.removeAttribute("aria-current");
     });
     document.querySelectorAll(".control-pane").forEach((pane) => {
       const id = pane.getAttribute("data-control-pane");
-      pane.hidden = id !== state.controlTab;
+      pane.hidden = id !== next;
     });
-    syncControlPanelWidth();
-    requestAnimationFrame(() => syncDesktopScrollExtent());
+  }
+
+  function setControlTab(tab) {
+    setSettingsPage(tab);
   }
 
   function syncControlPanelWidth() {
@@ -6213,9 +6278,8 @@
     if ($("#opt-sound-volume")) {
       $("#opt-sound-volume").disabled = !state.soundEnabled;
     }
-    state.crtEnabled = $("#opt-crt").checked;
-    $("#crt-overlay").hidden = !state.crtEnabled;
-    applyUiScale(readUiScaleFromControl());
+    state.crtEnabled = false;
+    applyUiScale(1);
     applyUiFont(
       ($("#ui-font") && $("#ui-font").value) || state.uiFont || "inter"
     );
@@ -6358,7 +6422,7 @@
     }
     const msg =
       (info && info.message) ||
-      "A Gemini model was retired. Open Control Panel → AI Model to pick another.";
+      "A Gemini model was retired. Open Settings → AI Model to pick another.";
     showToast(msg, 16000);
     playUiSound("error");
     openWindow("control");
@@ -6736,7 +6800,7 @@
   function applyModalityMismatch(res) {
     const msg =
       (res && res.error) ||
-      "This prompt needs a Gemini image or video model. Pick one in Control Panel.";
+      "This prompt needs a Gemini image or video model. Pick one in Settings.";
     showToast(msg, 14000);
     setProgress("Stopped");
     playUiSound("error");
@@ -8912,65 +8976,28 @@
   }
 
   function wireEvents() {
-    const activateLauncher = (openEl, e) => {
-      e.preventDefault();
-      e.stopPropagation();
-      openWindow(openEl.getAttribute("data-open"));
-      toggleStartMenu(false);
-    };
+    if ($("#screen-select")) {
+      $("#screen-select").addEventListener("change", () => {
+        showScreen($("#screen-select").value);
+      });
+    }
 
-    // Desktop icons + Start menu items (event delegation)
+    ["file", "ai", "edit"].forEach((name) => {
+      const btn = $("#menu-" + name + "-btn");
+      if (!btn) return;
+      btn.addEventListener("click", (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        toggleAppMenu(name);
+      });
+    });
+
     document.addEventListener("click", (e) => {
-      const openEl = e.target.closest("[data-open]");
-      if (openEl) {
-        activateLauncher(openEl, e);
+      if (e.target.closest(".app-menu")) {
+        if (e.target.closest(".app-menu-panel button")) closeAppMenus();
         return;
       }
-
-      // Title-bar minimize / close — must win over long title text
-      const chromeBtn = e.target.closest(".title-bar-controls button");
-      if (chromeBtn) {
-        e.preventDefault();
-        e.stopPropagation();
-        const win = chromeBtn.closest(".app-window");
-        if (!win) return;
-        const id = win.dataset.window;
-        const action =
-          chromeBtn.getAttribute("data-action") ||
-          chromeBtn.getAttribute("aria-label") ||
-          "";
-        const a = action.toLowerCase();
-        if (a === "close") requestCloseWindow(id);
-        else if (a === "minimize") minimizeWindow(id);
-        else if (a === "maximize") toggleMaximizeWindow(id);
-        return;
-      }
-
-      if (e.target.closest("#start-btn")) {
-        e.preventDefault();
-        e.stopPropagation();
-        toggleStartMenu();
-        return;
-      }
-
-      if (!e.target.closest("#start-menu") && !e.target.closest("#start-btn")) {
-        toggleStartMenu(false);
-      }
-    });
-
-    document.addEventListener("dblclick", (e) => {
-      const openEl = e.target.closest("[data-open]");
-      if (openEl) activateLauncher(openEl, e);
-    });
-
-    document.addEventListener("mousedown", (e) => {
-      if (e.target.closest("[data-open], .task-btn, #taskbar, #start-menu, #start-btn")) {
-        return;
-      }
-      const win = e.target.closest(".app-window");
-      if (win && win.dataset.window && state.focused !== win.dataset.window) {
-        focusWindow(win.dataset.window);
-      }
+      closeAppMenus();
     });
 
     document.addEventListener("focusin", (e) => {
@@ -9062,13 +9089,10 @@
         showToast("Media basis cleared");
       });
     }
-    const viewerRoot = $("#win-viewer");
-    if (viewerRoot) {
-      viewerRoot.addEventListener("click", (e) => {
-        if (e.target.closest("#btn-viewer-open")) {
-          e.preventDefault();
-          viewerOpenFile();
-        }
+    if ($("#btn-viewer-open")) {
+      $("#btn-viewer-open").addEventListener("click", (e) => {
+        e.preventDefault();
+        viewerOpenFile();
       });
     }
     if ($("#btn-use-basis")) {
@@ -9345,12 +9369,9 @@
       });
     }
 
-    $("#btn-save-model").addEventListener("click", async () => {
-      await saveControlPanelSettings();
-    });
-
     if ($("#btn-gemini-refresh-models")) {
-      $("#btn-gemini-refresh-models").addEventListener("click", () => {
+      $("#btn-gemini-refresh-models").addEventListener("click", async () => {
+        await persistSettingsNow({ applyDisplay: false });
         void refreshGeminiModelsForControlPanel();
       });
     }
@@ -9371,6 +9392,7 @@
         if ($("#media-folder-path")) {
           $("#media-folder-path").value = res.path || "media";
         }
+        void persistSettingsNow({ applyDisplay: false });
       });
     }
 
@@ -9379,6 +9401,7 @@
         if ($("#media-folder-path")) {
           $("#media-folder-path").value = "media";
         }
+        void persistSettingsNow({ applyDisplay: false });
       });
     }
 
@@ -9400,6 +9423,7 @@
           $("#google-workspace-credentials-path").value = res.path || "";
         }
         updateGoogleWorkspaceAuthIndicators();
+        void persistSettingsNow({ applyDisplay: false });
       });
     }
 
@@ -9425,8 +9449,7 @@
               (state.config.gmail && state.config.gmail.credentials_path))) ||
           "";
         if (saved !== path) {
-          showToast("Save settings first so the OAuth JSON path is stored.");
-          return;
+          await persistSettingsNow({ applyDisplay: false });
         }
         const authorize = a.authorize_google_workspace || a.authorize_gmail;
         const res = await authorize.call(a);
@@ -9440,29 +9463,16 @@
     }
 
     if ($("#btn-gemini-recommend-models")) {
-      $("#btn-gemini-recommend-models").addEventListener("click", () => {
+      $("#btn-gemini-recommend-models").addEventListener("click", async () => {
+        await persistSettingsNow({ applyDisplay: false });
         void runRecommendModels("gemini");
       });
     }
 
-    $("#btn-save-settings").addEventListener("click", async () => {
-      await saveControlPanelSettings({ applyDisplay: true });
-    });
-
-    document.querySelectorAll(".btn-cancel-control").forEach((btn) => {
+    document.querySelectorAll(".settings-nav-item").forEach((btn) => {
       btn.addEventListener("click", () => {
-        cancelControlPanel();
+        setSettingsPage(btn.getAttribute("data-settings-page"));
       });
-    });
-
-    document.querySelectorAll('.control-tabs [role="tab"]').forEach((tabEl) => {
-      const activate = (e) => {
-        e.preventDefault();
-        setControlTab(tabEl.getAttribute("data-control-tab"));
-      };
-      const link = tabEl.querySelector("a");
-      if (link) link.addEventListener("click", activate);
-      else tabEl.addEventListener("click", activate);
     });
 
     $("#opt-sound").addEventListener("change", () => {
@@ -9487,15 +9497,6 @@
         // Final settle after drag; input debounce may already have previewed.
         clearTimeout(_soundVolPreviewTimer);
         applySoundVolume($("#opt-sound-volume").value, { preview: true });
-      });
-    }
-    $("#opt-crt").addEventListener("change", () => {
-      state.crtEnabled = $("#opt-crt").checked;
-      $("#crt-overlay").hidden = !state.crtEnabled;
-    });
-    if ($("#ui-scale")) {
-      $("#ui-scale").addEventListener("change", () => {
-        applyUiScale(readUiScaleFromControl());
       });
     }
     if ($("#app-theme")) {
@@ -9538,17 +9539,9 @@
     adoptWindowsIntoLayer();
     ensureImeBridge();
     wireEvents();
-    enableWindowDragging();
-    enableWindowResizing();
-    tickClock();
-    setInterval(tickClock, 15000);
-    layoutWindowInWorkArea(document.getElementById("win-form"));
-    focusWindow("form");
-    renderTaskbar();
-    layoutOpenWindowsInWorkArea();
-    syncDesktopScrollExtent();
+    setSettingsPage("models", { skipSave: true });
+    showScreen("form");
     window.addEventListener("resize", () => {
-      layoutOpenWindowsInWorkArea();
       syncDesktopScrollExtent();
     });
 

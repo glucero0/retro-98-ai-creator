@@ -162,7 +162,7 @@ def build_emergency_creation(game: str, platform: str, creation_type: str) -> di
                 "content": (
                     f"{game} was developed by {meta['developer']} and published by "
                     f"{meta['publisher']}. Re-run generation after the model finishes "
-                    "downloading, or try a different instruct model in Control Panel."
+                    "downloading, or try a different instruct model in Settings."
                 ),
                 "keyValues": [
                     {"label": "Release Year", "value": meta["releaseYear"]},
@@ -177,7 +177,7 @@ def build_emergency_creation(game: str, platform: str, creation_type: str) -> di
                 "content": (
                     "Phi-3.5-mini and other small models occasionally wrap JSON in "
                     "markdown or truncate mid-object. Raise max_new_tokens, lower "
-                    "temperature, or switch to Qwen2.5-3B-Instruct in Control Panel."
+                    "temperature, or switch to Qwen2.5-3B-Instruct in Settings."
                 ),
                 "keyValues": [],
             },

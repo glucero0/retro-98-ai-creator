@@ -1,4 +1,4 @@
-"""JavaScript ↔ Python bridge exposed to the 98.css UI via pywebview."""
+"""JavaScript ↔ Python bridge exposed to the web UI via pywebview."""
 
 from __future__ import annotations
 

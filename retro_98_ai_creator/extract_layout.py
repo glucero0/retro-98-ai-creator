@@ -478,7 +478,7 @@ def extract_layout_from_creation(
     model_id, provider = _active_model_and_provider(config)
     if provider != "gemini":
         raise RuntimeError(
-            "Extract Layout requires Gemini. Paste a Gemini API key in Control Panel."
+            "Extract Layout requires Gemini. Paste a Gemini API key in Settings."
         )
 
     path = media_path
